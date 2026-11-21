@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/backup/merge.dart';
 import 'package:grain/exposure/mode.dart';
 import 'package:grain/gear/model.dart';
 import 'package:grain/rolls/model.dart';
@@ -361,6 +362,115 @@ void main() {
     expect(rolls.readings.single.location, isNull);
     expect((await repo.frames(roll.id)).single.location, isNull);
   });
+  test(
+    'late snapshots and locations landing during an import stay in memory',
+    () async {
+      await settings.setLocation(true);
+      final fixGate = Completer<GeoFix?>();
+      final gated = _GatedRepository();
+      repo = gated;
+      rolls = RollController(
+        repository: gated,
+        snapshots: store,
+        settings: settings,
+        takeSnapshot: (id) {
+          final c = Completer<String?>();
+          snaps.add(c);
+          return c.future;
+        },
+        location: _SlowLocation(fixGate.future),
+        now: () => DateTime.utc(2026, 11, 21, 13, 3, 22),
+        newId: () => 'id${ids++}',
+      );
+      await rolls.load();
+      final roll = await start();
+      final f = await rolls.logFrame(e);
+      final r = await rolls.saveReading(e, body: null, format: FilmFormat.f135);
+      expect(snaps, hasLength(2));
+      final t = DateTime.utc(2026, 10, 1, 12);
+      final incoming = SavedReading(
+        id: 'imported',
+        format: FilmFormat.f135,
+        exposure: e,
+        takenAt: t,
+        utcOffsetMinutes: 0,
+        updatedAt: t,
+      );
+      // The reload after the import's write is held while the attaches land.
+      gated.hold = Completer<void>();
+      final import = rolls.importRecords(
+        MergePlan(
+          rolls: const [],
+          readings: [incoming],
+          snapshots: const {},
+          report: const ImportReport(readingsAdded: 1),
+        ),
+      );
+      await gated.entered.future;
+      snaps[0].complete('${store.dir.path}/frame.jpg');
+      snaps[1].complete('${store.dir.path}/reading.jpg');
+      const fix = GeoFix(latitude: 1, longitude: 2);
+      fixGate.complete(fix);
+      await pumpEventQueue();
+      gated.hold!.complete();
+      await import;
+
+      final here = rolls.readings.firstWhere((x) => x.id == r.id);
+      expect(here.snapshot, 'reading.jpg');
+      expect(here.location, fix);
+      expect(rolls.readings.map((x) => x.id), [r.id, 'imported']);
+      expect(rolls.activeFrames.single.snapshot, 'frame.jpg');
+      expect(rolls.activeFrames.single.location, fix);
+
+      // A later edit keeps the attachments on disk too.
+      await rolls.updateReading(here.copyWith(note: () => 'edited'));
+      await rolls.updateFrame(f.copyWith(note: () => 'edited'));
+      final stored = (await repo.readings()).firstWhere((x) => x.id == r.id);
+      expect(stored.snapshot, 'reading.jpg');
+      expect(stored.location, fix);
+      expect(stored.note, 'edited');
+      final frame = (await repo.frames(roll.id)).single;
+      expect(frame.snapshot, 'frame.jpg');
+      expect(frame.location, fix);
+    },
+  );
+
+  test('a record deleted while an import reloads stays deleted', () async {
+    final gated = _GatedRepository();
+    repo = gated;
+    rolls = make();
+    await rolls.load();
+    final mine = await rolls.saveReading(
+      e,
+      body: null,
+      format: FilmFormat.f135,
+    );
+    final t = DateTime.utc(2026, 10, 1, 12);
+    gated.hold = Completer<void>();
+    final import = rolls.importRecords(
+      MergePlan(
+        rolls: const [],
+        readings: [
+          SavedReading(
+            id: 'imported',
+            format: FilmFormat.f135,
+            exposure: e,
+            takenAt: t,
+            utcOffsetMinutes: 0,
+            updatedAt: t,
+          ),
+        ],
+        snapshots: const {},
+        report: const ImportReport(readingsAdded: 1),
+      ),
+    );
+    await gated.entered.future;
+    final deleted = rolls.deleteReading(mine.id);
+    gated.hold!.complete();
+    await import;
+    await deleted;
+    expect(rolls.readings.map((x) => x.id), ['imported']);
+  });
 }
 
 class _SlowLocation extends FakeLocation {
@@ -368,4 +478,20 @@ class _SlowLocation extends FakeLocation {
   final Future<GeoFix?> _f;
   @override
   Future<GeoFix?> current() => _f;
+}
+
+/// Holds the next [readings] call until [hold] completes.
+class _GatedRepository extends MemoryRollRepository {
+  Completer<void>? hold;
+  final entered = Completer<void>();
+
+  @override
+  Future<List<SavedReading>> readings() async {
+    final h = hold;
+    if (h != null && !entered.isCompleted) {
+      entered.complete();
+      await h.future;
+    }
+    return super.readings();
+  }
 }

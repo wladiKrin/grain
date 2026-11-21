@@ -273,11 +273,13 @@ class RollController extends ChangeNotifier {
   Future<List<Frame>> _loadFrames(String rollId) =>
       _enqueue(() => _repo.frames(rollId));
 
-  /// Stores the records of an import in one transaction, then reloads the
-  /// roll and reading lists (loaded frames stay cached, so a late snapshot or
-  /// location for a frame logged just before still lands). The plan only
-  /// holds new records. An imported active roll is stored finished if a roll
-  /// became active here since the plan was made; returns how many were.
+  /// Stores the records of an import in one transaction, then adds them to
+  /// the roll and reading lists (records already in memory keep their
+  /// in-memory state, see [_mergeStored]; loaded frames stay cached, so a
+  /// late snapshot or location for a frame logged just before still lands).
+  /// The plan only holds new records. An imported active roll is stored
+  /// finished if a roll became active here since the plan was made; returns
+  /// how many were.
   Future<int> importRecords(MergePlan plan) async {
     var activeId = active?.id;
     var finished = 0;
@@ -312,14 +314,39 @@ class RollController extends ChangeNotifier {
       _enqueue(_repo.rolls),
       _enqueue(_repo.readings),
     ).wait;
-    _rolls = all;
-    _readings = readings;
+    _rolls = _mergeStored(_rolls, all, {
+      for (final (r, _) in rolls) r.id,
+    }, (r) => r.id);
+    _readings = _mergeStored(_readings, readings, {
+      for (final s in plan.readings) s.id,
+    }, (s) => s.id);
     final a = active;
     if (a != null && !_frames.containsKey(a.id)) {
       _frames[a.id] = await _loadFrames(a.id);
     }
     notifyListeners();
     return finished;
+  }
+
+  /// The list after an import: memory stays authoritative for records it
+  /// holds (a late snapshot or location, an edit or a delete may have landed
+  /// while the stored lists were read; their writes are queued behind the
+  /// read). From [stored] only the [imported] records are taken, in stored
+  /// order; records saved here after the read come first.
+  List<T> _mergeStored<T extends Object>(
+    List<T> memory,
+    List<T> stored,
+    Set<String> imported,
+    String Function(T) id,
+  ) {
+    final here = {for (final x in memory) id(x): x};
+    final storedIds = {for (final x in stored) id(x)};
+    return [
+      for (final x in memory)
+        if (!storedIds.contains(id(x))) x,
+      for (final x in stored)
+        if (imported.contains(id(x))) x else ?here[id(x)],
+    ];
   }
 
   // ---- logging -----------------------------------------------------------
