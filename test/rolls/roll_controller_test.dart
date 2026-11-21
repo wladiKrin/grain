@@ -319,4 +319,53 @@ void main() {
       expect(rolls.activeFrames.single.snapshot, isNull);
     },
   );
+
+  test('remove location on a frame and a reading persists', () async {
+    await settings.setLocation(true);
+    loc.fix = const GeoFix(latitude: 1, longitude: 2);
+    final roll = await start();
+    final f = await rolls.logFrame(e);
+    final r = await rolls.saveReading(e, body: null, format: FilmFormat.f135);
+    await pumpEventQueue();
+    expect(rolls.activeFrames.single.location, isNotNull);
+    expect(rolls.readings.single.location, isNotNull);
+    await rolls.deleteFrameLocation(roll.id, f.id);
+    await rolls.deleteReadingLocation(r.id);
+    expect(rolls.activeFrames.single.location, isNull);
+    expect(rolls.readings.single.location, isNull);
+    expect((await repo.frames(roll.id)).single.location, isNull);
+    expect((await repo.readings()).single.location, isNull);
+  });
+
+  test('a location removed while in flight is not attached', () async {
+    await settings.setLocation(true);
+    final gate = Completer<GeoFix?>();
+    final slow = _SlowLocation(gate.future);
+    rolls = RollController(
+      repository: repo,
+      snapshots: store,
+      settings: settings,
+      location: slow,
+      now: () => DateTime.utc(2026, 11, 21, 13, 3, 22),
+      newId: () => 'id${ids++}',
+    );
+    await rolls.load();
+    final roll = await start();
+    final f = await rolls.logFrame(e);
+    final r = await rolls.saveReading(e, body: null, format: FilmFormat.f135);
+    await rolls.deleteFrameLocation(roll.id, f.id);
+    await rolls.deleteReadingLocation(r.id);
+    gate.complete(const GeoFix(latitude: 1, longitude: 2));
+    await pumpEventQueue();
+    expect(rolls.activeFrames.single.location, isNull);
+    expect(rolls.readings.single.location, isNull);
+    expect((await repo.frames(roll.id)).single.location, isNull);
+  });
+}
+
+class _SlowLocation extends FakeLocation {
+  _SlowLocation(this._f);
+  final Future<GeoFix?> _f;
+  @override
+  Future<GeoFix?> current() => _f;
 }

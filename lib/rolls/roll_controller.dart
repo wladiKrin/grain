@@ -62,6 +62,10 @@ class RollController extends ChangeNotifier {
   final Set<String> _pendingSnapshots = {};
   final Set<String> _discardSnapshot = {};
 
+  /// Same for locations: fixes in flight, and those to drop on arrival.
+  final Set<String> _pendingFixes = {};
+  final Set<String> _discardFix = {};
+
   SnapshotStore get snapshots => _snapshots;
 
   DateTime _now() => ids.atSecond(_clock());
@@ -348,12 +352,18 @@ class RollController extends ChangeNotifier {
     }
     final loc = _location;
     if (_settings.location && loc != null) {
+      _pendingFixes.add(id);
       unawaited(() async {
         try {
           final fix = await loc.current();
-          if (fix != null && _settings.location) attachFix(fix);
+          if (fix != null && _settings.location && !_discardFix.contains(id)) {
+            attachFix(fix);
+          }
         } catch (e) {
           debugPrint('Location failed: $e');
+        } finally {
+          _pendingFixes.remove(id);
+          _discardFix.remove(id);
         }
       }());
     }
@@ -508,6 +518,14 @@ class RollController extends ChangeNotifier {
     await _snapshots.delete(name);
   }
 
+  Future<void> deleteFrameLocation(String rollId, String frameId) async {
+    final f = _findFrame(frameId);
+    if (f == null) return;
+    if (_pendingFixes.contains(frameId)) _discardFix.add(frameId);
+    if (f.location == null) return;
+    await _writeFrame(f.copyWith(location: () => null, updatedAt: _now()));
+  }
+
   // ---- readings ----------------------------------------------------------
 
   /// As [updateFrame]: snapshot and location are kept as they are now.
@@ -541,6 +559,14 @@ class RollController extends ChangeNotifier {
     notifyListeners();
     await _enqueue(() => _repo.deleteReading(id));
     if (name != null) await _snapshots.delete(name);
+  }
+
+  Future<void> deleteReadingLocation(String id) async {
+    final r = _readings.where((x) => x.id == id).firstOrNull;
+    if (r == null) return;
+    if (_pendingFixes.contains(id)) _discardFix.add(id);
+    if (r.location == null) return;
+    await _writeReading(r.copyWith(location: () => null, updatedAt: _now()));
   }
 
   Future<void> deleteReadingSnapshot(String id) async {
