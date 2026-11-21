@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:grain/gear/model.dart';
+
 const focalStops = [
   12, 14, 16, 18, 20, 21, 24, 28, 35, 40, 45, 50, 55, 58, 60, 70, 85, 90, //
   100, 105, 120, 135, 150, 180, 200, 250, 300, 400, 500, 600,
@@ -29,3 +31,7 @@ Rect lensCrop({
   final nw = w / preview.width, nh = h / preview.height;
   return Rect.fromLTWH((1 - nw) / 2, (1 - nh) / 2, nw, nh);
 }
+
+/// Focal length on 135 film that frames like [focal] on [format].
+double equivalentFocal(double focal, FilmFormat format) =>
+    focal * 43.27 / format.diagonalMm;

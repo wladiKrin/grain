@@ -54,19 +54,19 @@ MeterStats stats({
   int exposureNs = 30518,
   double aperture = 1.0,
 }) => MeterStats.fromMap({
-      'exposureNs': exposureNs,
-      'sensitivity': 100,
-      'boost': 100,
-      'aperture': aperture,
-      'minExposureNs': 10000,
-      'maxExposureNs': 1000000000,
-      'minIso': 50,
-      'maxIso': 3200,
-      'frameLuma': .18,
-      'cropLuma': region,
-      'spotLuma': region,
-      'histogram': List<int>.filled(64, 0),
-    });
+  'exposureNs': exposureNs,
+  'sensitivity': 100,
+  'boost': 100,
+  'aperture': aperture,
+  'minExposureNs': 10000,
+  'maxExposureNs': 1000000000,
+  'minIso': 50,
+  'maxIso': 3200,
+  'frameLuma': .18,
+  'cropLuma': region,
+  'spotLuma': region,
+  'histogram': List<int>.filled(64, 0),
+});
 
 Future<void> settle() => Future<void>.delayed(Duration.zero);
 

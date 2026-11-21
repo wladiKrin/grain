@@ -111,9 +111,13 @@ void main() {
     // Left of centre by a quarter of the box width.
     await t.tapAt(box.center - Offset(box.width / 4, 0));
     final content = t.getRect(find.byType(Texture));
-    expect(tapped!.dx,
-        closeTo((box.center.dx - box.width / 4 - content.left) / content.width,
-            1e-6));
+    expect(
+      tapped!.dx,
+      closeTo(
+        (box.center.dx - box.width / 4 - content.left) / content.width,
+        1e-6,
+      ),
+    );
     expect(tapped!.dy, closeTo(.5, 1e-6));
   });
 }

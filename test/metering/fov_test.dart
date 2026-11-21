@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/gear/model.dart';
 import 'package:grain/metering/fov.dart';
 
 void main() {
@@ -34,5 +35,17 @@ void main() {
     expect(focalStops.first, 12);
     expect(focalStops.last, 600);
     expect(focalStops, contains(50));
+  });
+
+  test('6×6 80 mm on a 25 mm-equivalent phone', () {
+    expect(equivalentFocal(80, FilmFormat.f66), closeTo(43.71, .01));
+    final r = lensCrop(
+      preview: const Size(3, 4),
+      lensFocal: equivalentFocal(80, FilmFormat.f66),
+      phoneEqFocal: 25,
+      aspect: FilmFormat.f66.portraitAspect,
+    );
+    expect(r.width, closeTo(.6740, 1e-3));
+    expect(r.height, closeTo(.5055, 1e-3));
   });
 }
