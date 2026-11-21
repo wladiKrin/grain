@@ -9,6 +9,8 @@ class Settings extends ChangeNotifier {
     required int thirds,
     required this._haptics,
     required bool vf,
+    required this._snapshots,
+    required this._location,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -18,6 +20,8 @@ class Settings extends ChangeNotifier {
   static const _kCalibration = 'calibrationThirds';
   static const _kHaptics = 'haptics';
   static const _kViewfinder = 'viewfinderOn';
+  static const _kSnapshots = 'snapshots';
+  static const _kLocation = 'location';
 
   /// Calibration range in thirds of a stop (±3 EV).
   static const maxThirds = 9;
@@ -29,6 +33,8 @@ class Settings extends ChangeNotifier {
       thirds: (p.getInt(_kCalibration) ?? 0).clamp(-maxThirds, maxThirds),
       haptics: p.getBool(_kHaptics) ?? true,
       vf: p.getBool(_kViewfinder) ?? true,
+      snapshots: p.getBool(_kSnapshots) ?? true,
+      location: p.getBool(_kLocation) ?? false,
     );
   }
 
@@ -37,12 +43,20 @@ class Settings extends ChangeNotifier {
   int _calibrationThirds = 0;
   bool _haptics = true;
   bool _viewfinderOn = true;
+  bool _snapshots = true;
+  bool _location = false;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
   double get calibrationEv => _calibrationThirds / 3;
   bool get haptics => _haptics;
   bool get viewfinderOn => _viewfinderOn;
+
+  /// Take a snapshot with every logged frame or saved reading.
+  bool get snapshots => _snapshots;
+
+  /// Attach the location to every logged frame or saved reading.
+  bool get location => _location;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -64,5 +78,19 @@ class Settings extends ChangeNotifier {
     _viewfinderOn = v;
     notifyListeners();
     await _prefs?.setBool(_kViewfinder, v);
+  }
+
+  Future<void> setSnapshots(bool v) async {
+    if (v == _snapshots) return;
+    _snapshots = v;
+    notifyListeners();
+    await _prefs?.setBool(_kSnapshots, v);
+  }
+
+  Future<void> setLocation(bool v) async {
+    if (v == _location) return;
+    _location = v;
+    notifyListeners();
+    await _prefs?.setBool(_kLocation, v);
   }
 }

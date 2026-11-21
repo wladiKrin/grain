@@ -20,6 +20,18 @@ void main() {
     expect(s.viewfinderOn, isTrue);
   });
 
+  test('snapshots default on, location default off, both persist', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.snapshots, isTrue);
+    expect(s.location, isFalse);
+    await s.setSnapshots(false);
+    await s.setLocation(true);
+    final r = await Settings.load();
+    expect(r.snapshots, isFalse);
+    expect(r.location, isTrue);
+  });
+
   test('persists and reloads', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();
