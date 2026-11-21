@@ -7,7 +7,7 @@ import 'package:grain/metering/reading.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_repository.dart';
 
-final _t0 = DateTime(2026, 11, 21, 10);
+final _t0 = DateTime.utc(2026, 11, 21, 10);
 
 Roll _roll(String id, {int number = 1, String? bodyId}) => Roll(
   id: id,
@@ -74,7 +74,7 @@ void main() {
         );
         final c = _roll('c', number: 3).copyWith(
           status: RollStatus.finished,
-          finishedAt: () => DateTime(2026, 12, 1),
+          finishedAt: () => DateTime.utc(2026, 12, 1),
         );
         await repo.saveRoll(a);
         await repo.saveRoll(b);
@@ -193,6 +193,40 @@ void main() {
         expect((await repo.readings()).map((x) => x.id), ['new', 'old']);
       });
 
+      test('UTC sub-second times with an offset round-trip equal', () async {
+        final t = DateTime.utc(2026, 11, 21, 10, 0, 5, 678, 912);
+        final whole = DateTime.utc(2026, 11, 21, 10, 0, 5);
+        await repo.saveRoll(_roll('r').copyWith(startedAt: t, updatedAt: t));
+        final f = _frame('f', 'r', 0).copyWith(
+          takenAt: () => t,
+          utcOffsetMinutes: () => -330,
+          updatedAt: t,
+        );
+        await repo.saveFrames([f]);
+        final s = SavedReading(
+          id: 's',
+          format: FilmFormat.f135,
+          exposure: Exposure.blank,
+          takenAt: t,
+          utcOffsetMinutes: 330,
+          updatedAt: t,
+        );
+        await repo.saveReading(s);
+        final roll = (await repo.rolls()).single;
+        expect(roll.startedAt, whole);
+        expect(roll.startedAt.isUtc, isTrue);
+        final got = (await repo.frames('r')).single;
+        expect(got.takenAt, whole);
+        expect(got.utcOffsetMinutes, -330);
+        // a reloaded value saves and reloads unchanged
+        await repo.saveFrames([got]);
+        expect((await repo.frames('r')).single, got);
+        final reading = (await repo.readings()).single;
+        expect(reading.takenAt, whole);
+        expect(reading.utcOffsetMinutes, 330);
+        expect(reading.takenAt.isUtc, isTrue);
+      });
+
       test('transaction returns the action result', () async {
         final v = await repo.transaction(() async {
           await repo.saveRoll(_roll('r'));
@@ -203,4 +237,53 @@ void main() {
       });
     });
   }
+
+  group('drift only', () {
+    test(
+      'rows with unknown enum values or missing offsets are skipped',
+      () async {
+        final db = GrainDatabase(NativeDatabase.memory());
+        addTearDown(db.close);
+        final repo = DriftRollRepository(db);
+        await repo.saveRoll(_roll('good'));
+        await repo.saveRoll(_roll('bad', number: 2));
+        await db.customStatement(
+          "UPDATE rolls SET status = 'bogus' WHERE id = 'bad'",
+        );
+        expect((await repo.rolls()).map((r) => r.id), ['good']);
+
+        await repo.saveFrames([
+          _frame('f0', 'good', 0),
+          _frame('f1', 'good', 1).copyWith(exposure: _full),
+          _frame('f2', 'good', 2).copyWith(exposure: _full),
+        ]);
+        await db.customStatement(
+          "UPDATE frames SET mode = 'bogus' WHERE id = 'f1'",
+        );
+        await db.customStatement(
+          "UPDATE frames SET area = 'bogus' WHERE id = 'f2'",
+        );
+        expect((await repo.frames('good')).map((f) => f.id), ['f0']);
+
+        SavedReading r(String id) => SavedReading(
+          id: id,
+          format: FilmFormat.f135,
+          exposure: _full,
+          takenAt: _t0,
+          utcOffsetMinutes: 60,
+          updatedAt: _t0,
+        );
+        for (final id in ['ok', 'badmode', 'nooffset']) {
+          await repo.saveReading(r(id));
+        }
+        await db.customStatement(
+          "UPDATE saved_readings SET mode = 'bogus' WHERE id = 'badmode'",
+        );
+        await db.customStatement(
+          "UPDATE saved_readings SET utc_offset_minutes = NULL WHERE id = 'nooffset'",
+        );
+        expect((await repo.readings()).map((x) => x.id), ['ok']);
+      },
+    );
+  });
 }

@@ -1,9 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
-import 'package:grain/exposure/mode.dart';
 import 'package:grain/gear/model.dart';
-import 'package:grain/metering/reading.dart';
-import 'package:grain/rolls/model.dart';
 
 import 'database.steps.dart';
 
@@ -43,7 +40,8 @@ class GearSelections extends Table {
 
 /// Columns shared by logged frames and saved readings.
 mixin ExposureColumns on Table {
-  TextColumn get mode => textEnum<MeterMode>().nullable()();
+  /// MeterMode.name
+  TextColumn get mode => text().nullable()();
   RealColumn get aperture => real().nullable()();
   TextColumn get shutter => text().nullable()();
   RealColumn get exposureTime => real().nullable()();
@@ -54,7 +52,9 @@ mixin ExposureColumns on Table {
   RealColumn get focal => real().nullable()();
   RealColumn get meteredEv => real().nullable()();
   RealColumn get offsetStops => real().nullable()();
-  TextColumn get area => textEnum<MeterArea>().nullable()();
+
+  /// MeterArea.name
+  TextColumn get area => text().nullable()();
   DateTimeColumn get takenAt => dateTime().nullable()();
   IntColumn get utcOffsetMinutes => integer().nullable()();
   TextColumn get note => text().nullable()();
@@ -88,7 +88,9 @@ class Rolls extends Table {
   /// StartFrame.label
   TextColumn get startFrame => text()();
   TextColumn get notes => text().withDefault(const Constant(''))();
-  TextColumn get status => textEnum<RollStatus>()();
+
+  /// RollStatus.name
+  TextColumn get status => text()();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get finishedAt => dateTime().nullable()();
   DateTimeColumn get updatedAt => dateTime()();

@@ -1004,15 +1004,15 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
-  late final GeneratedColumnWithTypeConverter<RollStatus, String> status =
-      GeneratedColumn<String>(
-        'status',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
-      ).withConverter<RollStatus>($RollsTable.$converterstatus);
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _startedAtMeta = const VerificationMeta(
     'startedAt',
   );
@@ -1175,6 +1175,14 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
     if (data.containsKey('started_at')) {
       context.handle(
         _startedAtMeta,
@@ -1258,12 +1266,10 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       )!,
-      status: $RollsTable.$converterstatus.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}status'],
-        )!,
-      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
       startedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}started_at'],
@@ -1283,9 +1289,6 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
   $RollsTable createAlias(String alias) {
     return $RollsTable(attachedDatabase, alias);
   }
-
-  static JsonTypeConverter2<RollStatus, String, String> $converterstatus =
-      const EnumNameConverter<RollStatus>(RollStatus.values);
 }
 
 class RollRow extends DataClass implements Insertable<RollRow> {
@@ -1308,7 +1311,9 @@ class RollRow extends DataClass implements Insertable<RollRow> {
   /// StartFrame.label
   final String startFrame;
   final String notes;
-  final RollStatus status;
+
+  /// RollStatus.name
+  final String status;
   final DateTime startedAt;
   final DateTime? finishedAt;
   final DateTime updatedAt;
@@ -1349,11 +1354,7 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     map['size'] = Variable<int>(size);
     map['start_frame'] = Variable<String>(startFrame);
     map['notes'] = Variable<String>(notes);
-    {
-      map['status'] = Variable<String>(
-        $RollsTable.$converterstatus.toSql(status),
-      );
-    }
+    map['status'] = Variable<String>(status);
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || finishedAt != null) {
       map['finished_at'] = Variable<DateTime>(finishedAt);
@@ -1407,9 +1408,7 @@ class RollRow extends DataClass implements Insertable<RollRow> {
       size: serializer.fromJson<int>(json['size']),
       startFrame: serializer.fromJson<String>(json['startFrame']),
       notes: serializer.fromJson<String>(json['notes']),
-      status: $RollsTable.$converterstatus.fromJson(
-        serializer.fromJson<String>(json['status']),
-      ),
+      status: serializer.fromJson<String>(json['status']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -1432,9 +1431,7 @@ class RollRow extends DataClass implements Insertable<RollRow> {
       'size': serializer.toJson<int>(size),
       'startFrame': serializer.toJson<String>(startFrame),
       'notes': serializer.toJson<String>(notes),
-      'status': serializer.toJson<String>(
-        $RollsTable.$converterstatus.toJson(status),
-      ),
+      'status': serializer.toJson<String>(status),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1455,7 +1452,7 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     int? size,
     String? startFrame,
     String? notes,
-    RollStatus? status,
+    String? status,
     DateTime? startedAt,
     Value<DateTime?> finishedAt = const Value.absent(),
     DateTime? updatedAt,
@@ -1587,7 +1584,7 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
   final Value<int> size;
   final Value<String> startFrame;
   final Value<String> notes;
-  final Value<RollStatus> status;
+  final Value<String> status;
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
   final Value<DateTime> updatedAt;
@@ -1626,7 +1623,7 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     required int size,
     required String startFrame,
     this.notes = const Value.absent(),
-    required RollStatus status,
+    required String status,
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
     required DateTime updatedAt,
@@ -1701,7 +1698,7 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     Value<int>? size,
     Value<String>? startFrame,
     Value<String>? notes,
-    Value<RollStatus>? status,
+    Value<String>? status,
     Value<DateTime>? startedAt,
     Value<DateTime?>? finishedAt,
     Value<DateTime>? updatedAt,
@@ -1772,9 +1769,7 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
       map['notes'] = Variable<String>(notes.value);
     }
     if (status.present) {
-      map['status'] = Variable<String>(
-        $RollsTable.$converterstatus.toSql(status.value),
-      );
+      map['status'] = Variable<String>(status.value);
     }
     if (startedAt.present) {
       map['started_at'] = Variable<DateTime>(startedAt.value);
@@ -1822,15 +1817,15 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $FramesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
   @override
-  late final GeneratedColumnWithTypeConverter<MeterMode?, String> mode =
-      GeneratedColumn<String>(
-        'mode',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      ).withConverter<MeterMode?>($FramesTable.$convertermoden);
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _apertureMeta = const VerificationMeta(
     'aperture',
   );
@@ -1935,15 +1930,15 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _areaMeta = const VerificationMeta('area');
   @override
-  late final GeneratedColumnWithTypeConverter<MeterArea?, String> area =
-      GeneratedColumn<String>(
-        'area',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      ).withConverter<MeterArea?>($FramesTable.$converterarean);
+  late final GeneratedColumn<String> area = GeneratedColumn<String>(
+    'area',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _takenAtMeta = const VerificationMeta(
     'takenAt',
   );
@@ -2110,6 +2105,12 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    }
     if (data.containsKey('aperture')) {
       context.handle(
         _apertureMeta,
@@ -2174,6 +2175,12 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
           data['offset_stops']!,
           _offsetStopsMeta,
         ),
+      );
+    }
+    if (data.containsKey('area')) {
+      context.handle(
+        _areaMeta,
+        area.isAcceptableOrUnknown(data['area']!, _areaMeta),
       );
     }
     if (data.containsKey('taken_at')) {
@@ -2270,11 +2277,9 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
   FrameRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return FrameRow(
-      mode: $FramesTable.$convertermoden.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}mode'],
-        ),
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
       ),
       aperture: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
@@ -2316,11 +2321,9 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
         DriftSqlType.double,
         data['${effectivePrefix}offset_stops'],
       ),
-      area: $FramesTable.$converterarean.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}area'],
-        ),
+      area: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}area'],
       ),
       takenAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -2377,19 +2380,11 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
   $FramesTable createAlias(String alias) {
     return $FramesTable(attachedDatabase, alias);
   }
-
-  static JsonTypeConverter2<MeterMode, String, String> $convertermode =
-      const EnumNameConverter<MeterMode>(MeterMode.values);
-  static JsonTypeConverter2<MeterMode?, String?, String?> $convertermoden =
-      JsonTypeConverter2.asNullable($convertermode);
-  static JsonTypeConverter2<MeterArea, String, String> $converterarea =
-      const EnumNameConverter<MeterArea>(MeterArea.values);
-  static JsonTypeConverter2<MeterArea?, String?, String?> $converterarean =
-      JsonTypeConverter2.asNullable($converterarea);
 }
 
 class FrameRow extends DataClass implements Insertable<FrameRow> {
-  final MeterMode? mode;
+  /// MeterMode.name
+  final String? mode;
   final double? aperture;
   final String? shutter;
   final double? exposureTime;
@@ -2400,7 +2395,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   final double? focal;
   final double? meteredEv;
   final double? offsetStops;
-  final MeterArea? area;
+
+  /// MeterArea.name
+  final String? area;
   final DateTime? takenAt;
   final int? utcOffsetMinutes;
   final String? note;
@@ -2445,7 +2442,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (!nullToAbsent || mode != null) {
-      map['mode'] = Variable<String>($FramesTable.$convertermoden.toSql(mode));
+      map['mode'] = Variable<String>(mode);
     }
     if (!nullToAbsent || aperture != null) {
       map['aperture'] = Variable<double>(aperture);
@@ -2478,7 +2475,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       map['offset_stops'] = Variable<double>(offsetStops);
     }
     if (!nullToAbsent || area != null) {
-      map['area'] = Variable<String>($FramesTable.$converterarean.toSql(area));
+      map['area'] = Variable<String>(area);
     }
     if (!nullToAbsent || takenAt != null) {
       map['taken_at'] = Variable<DateTime>(takenAt);
@@ -2574,9 +2571,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return FrameRow(
-      mode: $FramesTable.$convertermoden.fromJson(
-        serializer.fromJson<String?>(json['mode']),
-      ),
+      mode: serializer.fromJson<String?>(json['mode']),
       aperture: serializer.fromJson<double?>(json['aperture']),
       shutter: serializer.fromJson<String?>(json['shutter']),
       exposureTime: serializer.fromJson<double?>(json['exposureTime']),
@@ -2587,9 +2582,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       focal: serializer.fromJson<double?>(json['focal']),
       meteredEv: serializer.fromJson<double?>(json['meteredEv']),
       offsetStops: serializer.fromJson<double?>(json['offsetStops']),
-      area: $FramesTable.$converterarean.fromJson(
-        serializer.fromJson<String?>(json['area']),
-      ),
+      area: serializer.fromJson<String?>(json['area']),
       takenAt: serializer.fromJson<DateTime?>(json['takenAt']),
       utcOffsetMinutes: serializer.fromJson<int?>(json['utcOffsetMinutes']),
       note: serializer.fromJson<String?>(json['note']),
@@ -2608,9 +2601,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'mode': serializer.toJson<String?>(
-        $FramesTable.$convertermoden.toJson(mode),
-      ),
+      'mode': serializer.toJson<String?>(mode),
       'aperture': serializer.toJson<double?>(aperture),
       'shutter': serializer.toJson<String?>(shutter),
       'exposureTime': serializer.toJson<double?>(exposureTime),
@@ -2621,9 +2612,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       'focal': serializer.toJson<double?>(focal),
       'meteredEv': serializer.toJson<double?>(meteredEv),
       'offsetStops': serializer.toJson<double?>(offsetStops),
-      'area': serializer.toJson<String?>(
-        $FramesTable.$converterarean.toJson(area),
-      ),
+      'area': serializer.toJson<String?>(area),
       'takenAt': serializer.toJson<DateTime?>(takenAt),
       'utcOffsetMinutes': serializer.toJson<int?>(utcOffsetMinutes),
       'note': serializer.toJson<String?>(note),
@@ -2640,7 +2629,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   }
 
   FrameRow copyWith({
-    Value<MeterMode?> mode = const Value.absent(),
+    Value<String?> mode = const Value.absent(),
     Value<double?> aperture = const Value.absent(),
     Value<String?> shutter = const Value.absent(),
     Value<double?> exposureTime = const Value.absent(),
@@ -2651,7 +2640,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     Value<double?> focal = const Value.absent(),
     Value<double?> meteredEv = const Value.absent(),
     Value<double?> offsetStops = const Value.absent(),
-    Value<MeterArea?> area = const Value.absent(),
+    Value<String?> area = const Value.absent(),
     Value<DateTime?> takenAt = const Value.absent(),
     Value<int?> utcOffsetMinutes = const Value.absent(),
     Value<String?> note = const Value.absent(),
@@ -2820,7 +2809,7 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
 }
 
 class FramesCompanion extends UpdateCompanion<FrameRow> {
-  final Value<MeterMode?> mode;
+  final Value<String?> mode;
   final Value<double?> aperture;
   final Value<String?> shutter;
   final Value<double?> exposureTime;
@@ -2831,7 +2820,7 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
   final Value<double?> focal;
   final Value<double?> meteredEv;
   final Value<double?> offsetStops;
-  final Value<MeterArea?> area;
+  final Value<String?> area;
   final Value<DateTime?> takenAt;
   final Value<int?> utcOffsetMinutes;
   final Value<String?> note;
@@ -2960,7 +2949,7 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
   }
 
   FramesCompanion copyWith({
-    Value<MeterMode?>? mode,
+    Value<String?>? mode,
     Value<double?>? aperture,
     Value<String?>? shutter,
     Value<double?>? exposureTime,
@@ -2971,7 +2960,7 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     Value<double?>? focal,
     Value<double?>? meteredEv,
     Value<double?>? offsetStops,
-    Value<MeterArea?>? area,
+    Value<String?>? area,
     Value<DateTime?>? takenAt,
     Value<int?>? utcOffsetMinutes,
     Value<String?>? note,
@@ -3019,9 +3008,7 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (mode.present) {
-      map['mode'] = Variable<String>(
-        $FramesTable.$convertermoden.toSql(mode.value),
-      );
+      map['mode'] = Variable<String>(mode.value);
     }
     if (aperture.present) {
       map['aperture'] = Variable<double>(aperture.value);
@@ -3054,9 +3041,7 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
       map['offset_stops'] = Variable<double>(offsetStops.value);
     }
     if (area.present) {
-      map['area'] = Variable<String>(
-        $FramesTable.$converterarean.toSql(area.value),
-      );
+      map['area'] = Variable<String>(area.value);
     }
     if (takenAt.present) {
       map['taken_at'] = Variable<DateTime>(takenAt.value);
@@ -3139,15 +3124,15 @@ class $SavedReadingsTable extends SavedReadings
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $SavedReadingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _modeMeta = const VerificationMeta('mode');
   @override
-  late final GeneratedColumnWithTypeConverter<MeterMode?, String> mode =
-      GeneratedColumn<String>(
-        'mode',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      ).withConverter<MeterMode?>($SavedReadingsTable.$convertermoden);
+  late final GeneratedColumn<String> mode = GeneratedColumn<String>(
+    'mode',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _apertureMeta = const VerificationMeta(
     'aperture',
   );
@@ -3252,15 +3237,15 @@ class $SavedReadingsTable extends SavedReadings
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _areaMeta = const VerificationMeta('area');
   @override
-  late final GeneratedColumnWithTypeConverter<MeterArea?, String> area =
-      GeneratedColumn<String>(
-        'area',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      ).withConverter<MeterArea?>($SavedReadingsTable.$converterarean);
+  late final GeneratedColumn<String> area = GeneratedColumn<String>(
+    'area',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _takenAtMeta = const VerificationMeta(
     'takenAt',
   );
@@ -3436,6 +3421,12 @@ class $SavedReadingsTable extends SavedReadings
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('mode')) {
+      context.handle(
+        _modeMeta,
+        mode.isAcceptableOrUnknown(data['mode']!, _modeMeta),
+      );
+    }
     if (data.containsKey('aperture')) {
       context.handle(
         _apertureMeta,
@@ -3500,6 +3491,12 @@ class $SavedReadingsTable extends SavedReadings
           data['offset_stops']!,
           _offsetStopsMeta,
         ),
+      );
+    }
+    if (data.containsKey('area')) {
+      context.handle(
+        _areaMeta,
+        area.isAcceptableOrUnknown(data['area']!, _areaMeta),
       );
     }
     if (data.containsKey('taken_at')) {
@@ -3602,11 +3599,9 @@ class $SavedReadingsTable extends SavedReadings
   SavedReadingRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return SavedReadingRow(
-      mode: $SavedReadingsTable.$convertermoden.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}mode'],
-        ),
+      mode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mode'],
       ),
       aperture: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
@@ -3648,11 +3643,9 @@ class $SavedReadingsTable extends SavedReadings
         DriftSqlType.double,
         data['${effectivePrefix}offset_stops'],
       ),
-      area: $SavedReadingsTable.$converterarean.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}area'],
-        ),
+      area: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}area'],
       ),
       takenAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -3713,19 +3706,11 @@ class $SavedReadingsTable extends SavedReadings
   $SavedReadingsTable createAlias(String alias) {
     return $SavedReadingsTable(attachedDatabase, alias);
   }
-
-  static JsonTypeConverter2<MeterMode, String, String> $convertermode =
-      const EnumNameConverter<MeterMode>(MeterMode.values);
-  static JsonTypeConverter2<MeterMode?, String?, String?> $convertermoden =
-      JsonTypeConverter2.asNullable($convertermode);
-  static JsonTypeConverter2<MeterArea, String, String> $converterarea =
-      const EnumNameConverter<MeterArea>(MeterArea.values);
-  static JsonTypeConverter2<MeterArea?, String?, String?> $converterarean =
-      JsonTypeConverter2.asNullable($converterarea);
 }
 
 class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
-  final MeterMode? mode;
+  /// MeterMode.name
+  final String? mode;
   final double? aperture;
   final String? shutter;
   final double? exposureTime;
@@ -3736,7 +3721,9 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
   final double? focal;
   final double? meteredEv;
   final double? offsetStops;
-  final MeterArea? area;
+
+  /// MeterArea.name
+  final String? area;
   final DateTime? takenAt;
   final int? utcOffsetMinutes;
   final String? note;
@@ -3785,9 +3772,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (!nullToAbsent || mode != null) {
-      map['mode'] = Variable<String>(
-        $SavedReadingsTable.$convertermoden.toSql(mode),
-      );
+      map['mode'] = Variable<String>(mode);
     }
     if (!nullToAbsent || aperture != null) {
       map['aperture'] = Variable<double>(aperture);
@@ -3820,9 +3805,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
       map['offset_stops'] = Variable<double>(offsetStops);
     }
     if (!nullToAbsent || area != null) {
-      map['area'] = Variable<String>(
-        $SavedReadingsTable.$converterarean.toSql(area),
-      );
+      map['area'] = Variable<String>(area);
     }
     if (!nullToAbsent || takenAt != null) {
       map['taken_at'] = Variable<DateTime>(takenAt);
@@ -3924,9 +3907,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return SavedReadingRow(
-      mode: $SavedReadingsTable.$convertermoden.fromJson(
-        serializer.fromJson<String?>(json['mode']),
-      ),
+      mode: serializer.fromJson<String?>(json['mode']),
       aperture: serializer.fromJson<double?>(json['aperture']),
       shutter: serializer.fromJson<String?>(json['shutter']),
       exposureTime: serializer.fromJson<double?>(json['exposureTime']),
@@ -3937,9 +3918,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
       focal: serializer.fromJson<double?>(json['focal']),
       meteredEv: serializer.fromJson<double?>(json['meteredEv']),
       offsetStops: serializer.fromJson<double?>(json['offsetStops']),
-      area: $SavedReadingsTable.$converterarean.fromJson(
-        serializer.fromJson<String?>(json['area']),
-      ),
+      area: serializer.fromJson<String?>(json['area']),
       takenAt: serializer.fromJson<DateTime?>(json['takenAt']),
       utcOffsetMinutes: serializer.fromJson<int?>(json['utcOffsetMinutes']),
       note: serializer.fromJson<String?>(json['note']),
@@ -3959,9 +3938,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'mode': serializer.toJson<String?>(
-        $SavedReadingsTable.$convertermoden.toJson(mode),
-      ),
+      'mode': serializer.toJson<String?>(mode),
       'aperture': serializer.toJson<double?>(aperture),
       'shutter': serializer.toJson<String?>(shutter),
       'exposureTime': serializer.toJson<double?>(exposureTime),
@@ -3972,9 +3949,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
       'focal': serializer.toJson<double?>(focal),
       'meteredEv': serializer.toJson<double?>(meteredEv),
       'offsetStops': serializer.toJson<double?>(offsetStops),
-      'area': serializer.toJson<String?>(
-        $SavedReadingsTable.$converterarean.toJson(area),
-      ),
+      'area': serializer.toJson<String?>(area),
       'takenAt': serializer.toJson<DateTime?>(takenAt),
       'utcOffsetMinutes': serializer.toJson<int?>(utcOffsetMinutes),
       'note': serializer.toJson<String?>(note),
@@ -3992,7 +3967,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
   }
 
   SavedReadingRow copyWith({
-    Value<MeterMode?> mode = const Value.absent(),
+    Value<String?> mode = const Value.absent(),
     Value<double?> aperture = const Value.absent(),
     Value<String?> shutter = const Value.absent(),
     Value<double?> exposureTime = const Value.absent(),
@@ -4003,7 +3978,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
     Value<double?> focal = const Value.absent(),
     Value<double?> meteredEv = const Value.absent(),
     Value<double?> offsetStops = const Value.absent(),
-    Value<MeterArea?> area = const Value.absent(),
+    Value<String?> area = const Value.absent(),
     Value<DateTime?> takenAt = const Value.absent(),
     Value<int?> utcOffsetMinutes = const Value.absent(),
     Value<String?> note = const Value.absent(),
@@ -4178,7 +4153,7 @@ class SavedReadingRow extends DataClass implements Insertable<SavedReadingRow> {
 }
 
 class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
-  final Value<MeterMode?> mode;
+  final Value<String?> mode;
   final Value<double?> aperture;
   final Value<String?> shutter;
   final Value<double?> exposureTime;
@@ -4189,7 +4164,7 @@ class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
   final Value<double?> focal;
   final Value<double?> meteredEv;
   final Value<double?> offsetStops;
-  final Value<MeterArea?> area;
+  final Value<String?> area;
   final Value<DateTime?> takenAt;
   final Value<int?> utcOffsetMinutes;
   final Value<String?> note;
@@ -4323,7 +4298,7 @@ class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
   }
 
   SavedReadingsCompanion copyWith({
-    Value<MeterMode?>? mode,
+    Value<String?>? mode,
     Value<double?>? aperture,
     Value<String?>? shutter,
     Value<double?>? exposureTime,
@@ -4334,7 +4309,7 @@ class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
     Value<double?>? focal,
     Value<double?>? meteredEv,
     Value<double?>? offsetStops,
-    Value<MeterArea?>? area,
+    Value<String?>? area,
     Value<DateTime?>? takenAt,
     Value<int?>? utcOffsetMinutes,
     Value<String?>? note,
@@ -4384,9 +4359,7 @@ class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (mode.present) {
-      map['mode'] = Variable<String>(
-        $SavedReadingsTable.$convertermoden.toSql(mode.value),
-      );
+      map['mode'] = Variable<String>(mode.value);
     }
     if (aperture.present) {
       map['aperture'] = Variable<double>(aperture.value);
@@ -4419,9 +4392,7 @@ class SavedReadingsCompanion extends UpdateCompanion<SavedReadingRow> {
       map['offset_stops'] = Variable<double>(offsetStops.value);
     }
     if (area.present) {
-      map['area'] = Variable<String>(
-        $SavedReadingsTable.$converterarean.toSql(area.value),
-      );
+      map['area'] = Variable<String>(area.value);
     }
     if (takenAt.present) {
       map['taken_at'] = Variable<DateTime>(takenAt.value);
@@ -5102,7 +5073,7 @@ typedef $$RollsTableCreateCompanionBuilder = RollsCompanion Function({
   required int size,
   required String startFrame,
   Value<String> notes,
-  required RollStatus status,
+  required String status,
   required DateTime startedAt,
   Value<DateTime?> finishedAt,
   required DateTime updatedAt,
@@ -5122,7 +5093,7 @@ typedef $$RollsTableUpdateCompanionBuilder = RollsCompanion Function({
   Value<int> size,
   Value<String> startFrame,
   Value<String> notes,
-  Value<RollStatus> status,
+  Value<String> status,
   Value<DateTime> startedAt,
   Value<DateTime?> finishedAt,
   Value<DateTime> updatedAt,
@@ -5227,11 +5198,10 @@ class $$RollsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnWithTypeConverterFilters<RollStatus, RollStatus, String> get status =>
-      $composableBuilder(
-        column: $table.status,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<DateTime> get startedAt => $composableBuilder(
     column: $table.startedAt,
@@ -5421,7 +5391,7 @@ class $$RollsTableAnnotationComposer
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
-  GeneratedColumnWithTypeConverter<RollStatus, String> get status =>
+  GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
 
   GeneratedColumn<DateTime> get startedAt =>
@@ -5502,7 +5472,7 @@ class $$RollsTableTableManager
                 Value<int> size = const Value.absent(),
                 Value<String> startFrame = const Value.absent(),
                 Value<String> notes = const Value.absent(),
-                Value<RollStatus> status = const Value.absent(),
+                Value<String> status = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
                 Value<DateTime?> finishedAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -5542,7 +5512,7 @@ class $$RollsTableTableManager
                 required int size,
                 required String startFrame,
                 Value<String> notes = const Value.absent(),
-                required RollStatus status,
+                required String status,
                 required DateTime startedAt,
                 Value<DateTime?> finishedAt = const Value.absent(),
                 required DateTime updatedAt,
@@ -5622,7 +5592,7 @@ typedef $$RollsTableProcessedTableManager =
       PrefetchHooks Function({bool framesRefs})
     >;
 typedef $$FramesTableCreateCompanionBuilder = FramesCompanion Function({
-  Value<MeterMode?> mode,
+  Value<String?> mode,
   Value<double?> aperture,
   Value<String?> shutter,
   Value<double?> exposureTime,
@@ -5633,7 +5603,7 @@ typedef $$FramesTableCreateCompanionBuilder = FramesCompanion Function({
   Value<double?> focal,
   Value<double?> meteredEv,
   Value<double?> offsetStops,
-  Value<MeterArea?> area,
+  Value<String?> area,
   Value<DateTime?> takenAt,
   Value<int?> utcOffsetMinutes,
   Value<String?> note,
@@ -5649,7 +5619,7 @@ typedef $$FramesTableCreateCompanionBuilder = FramesCompanion Function({
   Value<int> rowid,
 });
 typedef $$FramesTableUpdateCompanionBuilder = FramesCompanion Function({
-  Value<MeterMode?> mode,
+  Value<String?> mode,
   Value<double?> aperture,
   Value<String?> shutter,
   Value<double?> exposureTime,
@@ -5660,7 +5630,7 @@ typedef $$FramesTableUpdateCompanionBuilder = FramesCompanion Function({
   Value<double?> focal,
   Value<double?> meteredEv,
   Value<double?> offsetStops,
-  Value<MeterArea?> area,
+  Value<String?> area,
   Value<DateTime?> takenAt,
   Value<int?> utcOffsetMinutes,
   Value<String?> note,
@@ -5707,11 +5677,10 @@ class $$FramesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnWithTypeConverterFilters<MeterMode?, MeterMode, String> get mode =>
-      $composableBuilder(
-        column: $table.mode,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<double> get aperture => $composableBuilder(
     column: $table.aperture,
@@ -5763,11 +5732,10 @@ class $$FramesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnWithTypeConverterFilters<MeterArea?, MeterArea, String> get area =>
-      $composableBuilder(
-        column: $table.area,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnFilters<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<DateTime> get takenAt => $composableBuilder(
     column: $table.takenAt,
@@ -6005,7 +5973,7 @@ class $$FramesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumnWithTypeConverter<MeterMode?, String> get mode =>
+  GeneratedColumn<String> get mode =>
       $composableBuilder(column: $table.mode, builder: (column) => column);
 
   GeneratedColumn<double> get aperture =>
@@ -6042,7 +6010,7 @@ class $$FramesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumnWithTypeConverter<MeterArea?, String> get area =>
+  GeneratedColumn<String> get area =>
       $composableBuilder(column: $table.area, builder: (column) => column);
 
   GeneratedColumn<DateTime> get takenAt =>
@@ -6134,7 +6102,7 @@ class $$FramesTableTableManager
               $$FramesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<MeterMode?> mode = const Value.absent(),
+                Value<String?> mode = const Value.absent(),
                 Value<double?> aperture = const Value.absent(),
                 Value<String?> shutter = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
@@ -6145,7 +6113,7 @@ class $$FramesTableTableManager
                 Value<double?> focal = const Value.absent(),
                 Value<double?> meteredEv = const Value.absent(),
                 Value<double?> offsetStops = const Value.absent(),
-                Value<MeterArea?> area = const Value.absent(),
+                Value<String?> area = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<int?> utcOffsetMinutes = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -6188,7 +6156,7 @@ class $$FramesTableTableManager
               ),
           createCompanionCallback:
               ({
-                Value<MeterMode?> mode = const Value.absent(),
+                Value<String?> mode = const Value.absent(),
                 Value<double?> aperture = const Value.absent(),
                 Value<String?> shutter = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
@@ -6199,7 +6167,7 @@ class $$FramesTableTableManager
                 Value<double?> focal = const Value.absent(),
                 Value<double?> meteredEv = const Value.absent(),
                 Value<double?> offsetStops = const Value.absent(),
-                Value<MeterArea?> area = const Value.absent(),
+                Value<String?> area = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<int?> utcOffsetMinutes = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -6308,7 +6276,7 @@ typedef $$FramesTableProcessedTableManager =
     >;
 typedef $$SavedReadingsTableCreateCompanionBuilder =
     SavedReadingsCompanion Function({
-      Value<MeterMode?> mode,
+      Value<String?> mode,
       Value<double?> aperture,
       Value<String?> shutter,
       Value<double?> exposureTime,
@@ -6319,7 +6287,7 @@ typedef $$SavedReadingsTableCreateCompanionBuilder =
       Value<double?> focal,
       Value<double?> meteredEv,
       Value<double?> offsetStops,
-      Value<MeterArea?> area,
+      Value<String?> area,
       Value<DateTime?> takenAt,
       Value<int?> utcOffsetMinutes,
       Value<String?> note,
@@ -6337,7 +6305,7 @@ typedef $$SavedReadingsTableCreateCompanionBuilder =
     });
 typedef $$SavedReadingsTableUpdateCompanionBuilder =
     SavedReadingsCompanion Function({
-      Value<MeterMode?> mode,
+      Value<String?> mode,
       Value<double?> aperture,
       Value<String?> shutter,
       Value<double?> exposureTime,
@@ -6348,7 +6316,7 @@ typedef $$SavedReadingsTableUpdateCompanionBuilder =
       Value<double?> focal,
       Value<double?> meteredEv,
       Value<double?> offsetStops,
-      Value<MeterArea?> area,
+      Value<String?> area,
       Value<DateTime?> takenAt,
       Value<int?> utcOffsetMinutes,
       Value<String?> note,
@@ -6374,11 +6342,10 @@ class $$SavedReadingsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnWithTypeConverterFilters<MeterMode?, MeterMode, String> get mode =>
-      $composableBuilder(
-        column: $table.mode,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnFilters<String> get mode => $composableBuilder(
+    column: $table.mode,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<double> get aperture => $composableBuilder(
     column: $table.aperture,
@@ -6430,11 +6397,10 @@ class $$SavedReadingsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnWithTypeConverterFilters<MeterArea?, MeterArea, String> get area =>
-      $composableBuilder(
-        column: $table.area,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
+  ColumnFilters<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnFilters(column),
+  );
 
   ColumnFilters<DateTime> get takenAt => $composableBuilder(
     column: $table.takenAt,
@@ -6646,7 +6612,7 @@ class $$SavedReadingsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumnWithTypeConverter<MeterMode?, String> get mode =>
+  GeneratedColumn<String> get mode =>
       $composableBuilder(column: $table.mode, builder: (column) => column);
 
   GeneratedColumn<double> get aperture =>
@@ -6683,7 +6649,7 @@ class $$SavedReadingsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumnWithTypeConverter<MeterArea?, String> get area =>
+  GeneratedColumn<String> get area =>
       $composableBuilder(column: $table.area, builder: (column) => column);
 
   GeneratedColumn<DateTime> get takenAt =>
@@ -6767,7 +6733,7 @@ class $$SavedReadingsTableTableManager
               $$SavedReadingsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<MeterMode?> mode = const Value.absent(),
+                Value<String?> mode = const Value.absent(),
                 Value<double?> aperture = const Value.absent(),
                 Value<String?> shutter = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
@@ -6778,7 +6744,7 @@ class $$SavedReadingsTableTableManager
                 Value<double?> focal = const Value.absent(),
                 Value<double?> meteredEv = const Value.absent(),
                 Value<double?> offsetStops = const Value.absent(),
-                Value<MeterArea?> area = const Value.absent(),
+                Value<String?> area = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<int?> utcOffsetMinutes = const Value.absent(),
                 Value<String?> note = const Value.absent(),
@@ -6823,7 +6789,7 @@ class $$SavedReadingsTableTableManager
               ),
           createCompanionCallback:
               ({
-                Value<MeterMode?> mode = const Value.absent(),
+                Value<String?> mode = const Value.absent(),
                 Value<double?> aperture = const Value.absent(),
                 Value<String?> shutter = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
@@ -6834,7 +6800,7 @@ class $$SavedReadingsTableTableManager
                 Value<double?> focal = const Value.absent(),
                 Value<double?> meteredEv = const Value.absent(),
                 Value<double?> offsetStops = const Value.absent(),
-                Value<MeterArea?> area = const Value.absent(),
+                Value<String?> area = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<int?> utcOffsetMinutes = const Value.absent(),
                 Value<String?> note = const Value.absent(),

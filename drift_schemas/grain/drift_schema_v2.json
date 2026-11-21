@@ -324,11 +324,7 @@
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
-            "dsl_features": [],
-            "type_converter": {
-              "dart_expr": "const EnumNameConverter<RollStatus>(RollStatus.values)",
-              "dart_type_name": "RollStatus"
-            }
+            "dsl_features": []
           },
           {
             "name": "started_at",
@@ -387,11 +383,7 @@
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
-            "dsl_features": [],
-            "type_converter": {
-              "dart_expr": "const EnumNameConverter<MeterMode>(MeterMode.values)",
-              "dart_type_name": "MeterMode"
-            }
+            "dsl_features": []
           },
           {
             "name": "aperture",
@@ -501,11 +493,7 @@
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
-            "dsl_features": [],
-            "type_converter": {
-              "dart_expr": "const EnumNameConverter<MeterArea>(MeterArea.values)",
-              "dart_type_name": "MeterArea"
-            }
+            "dsl_features": []
           },
           {
             "name": "taken_at",
@@ -668,11 +656,7 @@
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
-            "dsl_features": [],
-            "type_converter": {
-              "dart_expr": "const EnumNameConverter<MeterMode>(MeterMode.values)",
-              "dart_type_name": "MeterMode"
-            }
+            "dsl_features": []
           },
           {
             "name": "aperture",
@@ -782,11 +766,7 @@
             "customConstraints": null,
             "default_dart": null,
             "default_client_dart": null,
-            "dsl_features": [],
-            "type_converter": {
-              "dart_expr": "const EnumNameConverter<MeterArea>(MeterArea.values)",
-              "dart_type_name": "MeterArea"
-            }
+            "dsl_features": []
           },
           {
             "name": "taken_at",
