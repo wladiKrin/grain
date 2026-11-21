@@ -1,6 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/exposure/scales.dart';
+
+import 'dart:async';
+
 import 'package:grain/gear/gear_controller.dart';
+import 'package:grain/gear/gear_repository.dart';
 import 'package:grain/gear/model.dart';
 import 'package:grain/gear/ui/body_editor.dart';
 import 'package:grain/gear/ui/lens_editor.dart';
@@ -38,6 +42,66 @@ Future<void> open(WidgetTester t, Widget Function() screen) async {
 }
 
 Finder field(String label) => find.widgetWithText(TextField, label);
+
+/// Holds every save until [gate] completes, and counts them.
+class _GatedGear extends GearController {
+  _GatedGear()
+    : super(library: fixtureLibrary(), repository: MemoryGearRepository());
+
+  final gate = Completer<void>();
+  var saves = 0;
+
+  @override
+  Future<T> saveUser<T extends GearProfile>(T p) async {
+    saves++;
+    await gate.future;
+    return super.saveUser(p);
+  }
+}
+
+/// Opens [screen] above a "below" route, counting the editor's pops.
+Future<List<Object?>> openAbove(
+  WidgetTester t,
+  Widget Function() screen,
+) async {
+  t.view.physicalSize = const Size(800, 3000);
+  t.view.devicePixelRatio = 1;
+  addTearDown(t.view.reset);
+  final results = <Object?>[];
+  await t.pumpWidget(
+    MaterialApp(
+      theme: grainTheme(),
+      home: Builder(
+        builder: (c) => Scaffold(
+          body: TextButton(
+            onPressed: () => Navigator.push<void>(
+              c,
+              MaterialPageRoute(
+                builder: (c) => Scaffold(
+                  body: TextButton(
+                    onPressed: () async => results.add(
+                      await Navigator.push<Object>(
+                        c,
+                        MaterialPageRoute(builder: (_) => screen()),
+                      ),
+                    ),
+                    child: const Text('below'),
+                  ),
+                ),
+              ),
+            ),
+            child: const Text('home'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await t.tap(find.text('home'));
+  await t.pumpAndSettle();
+  await t.tap(find.text('below'));
+  await t.pumpAndSettle();
+  return results;
+}
 
 void main() {
   setUp(() => gear = GearController.inMemory(library: fixtureLibrary()));
@@ -201,5 +265,49 @@ void main() {
     await t.tap(find.text('Save'));
     await t.pumpAndSettle();
     expect(find.text('minAperture: must be a number'), findsOneWidget);
+  });
+
+  testWidgets('a double tap on Save stores the body once and pops once', (
+    t,
+  ) async {
+    final g = _GatedGear();
+    final b = newBodyTemplate().copyWith(
+      make: 'Zenit',
+      model: 'E',
+      mount: 'm42',
+    );
+    final results = await openAbove(
+      t,
+      () => BodyEditorScreen(gear: g, initial: b, isNew: true),
+    );
+    await t.tap(find.text('Save'));
+    await t.tap(find.text('Save'), warnIfMissed: false);
+    await t.pump();
+    g.gate.complete();
+    await t.pumpAndSettle();
+    expect(g.saves, 1);
+    expect(results, hasLength(1));
+    expect((results.single as Body).id, 'zenit-e');
+    expect(find.text('below'), findsOneWidget);
+  });
+
+  testWidgets('a double tap on Save stores the lens once and pops once', (
+    t,
+  ) async {
+    final g = _GatedGear();
+    final l = newLensTemplate('canon-fd').copyWith(make: 'Canon', name: 'T 50');
+    final results = await openAbove(
+      t,
+      () => LensEditorScreen(gear: g, initial: l, isNew: true),
+    );
+    await t.tap(find.text('Save'));
+    await t.tap(find.text('Save'), warnIfMissed: false);
+    await t.pump();
+    g.gate.complete();
+    await t.pumpAndSettle();
+    expect(g.saves, 1);
+    expect(results, hasLength(1));
+    expect(results.single, isA<Lens>());
+    expect(find.text('below'), findsOneWidget);
   });
 }

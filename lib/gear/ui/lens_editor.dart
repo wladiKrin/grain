@@ -87,7 +87,12 @@ class _LensEditorScreenState extends State<LensEditorScreen> {
   double? _d(TextEditingController c) =>
       double.tryParse(c.text.trim().replaceAll(',', '.'));
 
+  /// Set once a valid profile is being stored: a second tap neither saves
+  /// again nor pops the screen below.
+  bool _saving = false;
+
   Future<void> _save() async {
+    if (_saving) return;
     final focalMin = _d(_focal);
     final focalMax = _zoom ? _d(_focalTo) : focalMin;
     final wide = _d(_wide);
@@ -124,6 +129,7 @@ class _LensEditorScreenState extends State<LensEditorScreen> {
       setState(() => _error = e.errors.first);
       return;
     }
+    setState(() => _saving = true);
     final saved = await widget.gear.saveUser(parsed);
     if (mounted) Navigator.pop(context, saved);
   }
@@ -133,7 +139,12 @@ class _LensEditorScreenState extends State<LensEditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isNew ? 'New lens' : 'Edit lens'),
-        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: const Text('Save'),
+          ),
+        ],
       ),
       body: Column(
         children: [

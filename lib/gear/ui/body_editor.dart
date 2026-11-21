@@ -95,7 +95,12 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
     });
   }
 
+  /// Set once a valid profile is being stored: a second tap neither saves
+  /// again nor pops the screen below.
+  bool _saving = false;
+
   Future<void> _save() async {
+    if (_saving) return;
     final make = _make.text.trim();
     final model = _model.text.trim();
     final frames = int.tryParse(_frames.text.trim());
@@ -124,6 +129,7 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
       setState(() => _error = e.errors.first);
       return;
     }
+    setState(() => _saving = true);
     final saved = await widget.gear.saveUser(parsed);
     if (mounted) Navigator.pop(context, saved);
   }
@@ -133,7 +139,12 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isNew ? 'New body' : 'Edit body'),
-        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: const Text('Save'),
+          ),
+        ],
       ),
       body: Column(
         children: [
