@@ -13,11 +13,21 @@ Install JDK 17, the Flutter stable SDK
 accept licences with `flutter doctor --android-licenses` and check
 `flutter doctor`.
 
+On the maintainer's machine, `source ~/.grain-env.sh` sets up the user-space
+toolchain (JDK 17, Android SDK, Flutter at `~/flutter`).
+
 ## Run and test
 
 ```
 flutter run
 flutter test
+```
+
+## Install from APK
+
+```
+flutter build apk --release --split-per-abi
+adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
 ## Licence

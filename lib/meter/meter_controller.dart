@@ -144,8 +144,15 @@ class MeterController extends ChangeNotifier {
     if (wasRunning) await _source.stop();
   }
 
+  bool _loggedFirstStats = false;
+
   void _onStats(MeterStats s) {
     if (!_running) return;
+    if (!_loggedFirstStats) {
+      _loggedFirstStats = true;
+      // Cold-start timing: compare this logcat timestamp with the launch.
+      debugPrint('GRAIN first EV');
+    }
     _latest = s;
     if (held) return;
     _derive();
