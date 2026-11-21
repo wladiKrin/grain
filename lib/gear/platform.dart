@@ -14,6 +14,16 @@ abstract class GearPlatform {
   /// Lets the user pick a file and returns its text; null when cancelled.
   /// Throws [GearFormatException] for a file that is too large.
   Future<String?> pickTextFile();
+
+  /// Offers the files at [paths] to the share sheet.
+  Future<void> sharePaths(List<String> paths, {required String subject});
+
+  /// Lets the user pick a file and returns a readable path; null when
+  /// cancelled.
+  Future<String?> pickFilePath();
+
+  /// An empty `<temp>/exports` directory for files about to be shared.
+  Future<Directory> exportDirectory();
 }
 
 class SystemGearPlatform implements GearPlatform {
@@ -46,5 +56,32 @@ class SystemGearPlatform implements GearPlatform {
       throw GearFormatException(['file: larger than 256 KB']);
     }
     return file.readAsString();
+  }
+
+  @override
+  Future<void> sharePaths(List<String> paths, {required String subject}) =>
+      SharePlus.instance.share(
+        ShareParams(files: [for (final p in paths) XFile(p)], subject: subject),
+      );
+
+  @override
+  Future<String?> pickFilePath() async {
+    final file = await openFile();
+    if (file == null) return null;
+    if (await File(file.path).exists()) return file.path;
+    final dir = await getTemporaryDirectory();
+    final copy = File(
+      '${dir.path}/picked-${DateTime.now().microsecondsSinceEpoch}',
+    );
+    await copy.writeAsBytes(await file.readAsBytes());
+    return copy.path;
+  }
+
+  @override
+  Future<Directory> exportDirectory() async {
+    final tmp = await getTemporaryDirectory();
+    final dir = Directory('${tmp.path}/exports');
+    if (await dir.exists()) await dir.delete(recursive: true);
+    return dir.create(recursive: true);
   }
 }

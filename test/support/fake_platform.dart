@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:grain/gear/platform.dart';
 
 /// Records shared `(fileName, text)` and returns a preset pick result.
@@ -7,6 +9,10 @@ class FakeGearPlatform implements GearPlatform {
   final shared = <(String, String)>[];
   String? picked;
   Object? pickError;
+  final sharedPaths = <List<String>>[];
+  final sharedSubjects = <String>[];
+  String? pickedPath;
+  Directory? exportDir;
 
   @override
   Future<void> shareFile({
@@ -20,5 +26,21 @@ class FakeGearPlatform implements GearPlatform {
   Future<String?> pickTextFile() async {
     if (pickError != null) throw pickError!;
     return picked;
+  }
+
+  @override
+  Future<void> sharePaths(List<String> paths, {required String subject}) async {
+    sharedPaths.add(paths);
+    sharedSubjects.add(subject);
+  }
+
+  @override
+  Future<String?> pickFilePath() async => pickedPath;
+
+  @override
+  Future<Directory> exportDirectory() async {
+    final d = exportDir ?? Directory.systemTemp.createTempSync('grain-export');
+    exportDir = d;
+    return d;
   }
 }

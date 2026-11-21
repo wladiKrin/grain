@@ -41,3 +41,12 @@ Device: Pixel 10, release build
 | Rolls screen with several rolls and 40+ saved readings with snapshots: scroll both tabs | Smooth scrolling; Active tag and frame counts (e.g. 12/36) are right | |
 | Meter: tap the Rolls button | The Rolls screen opens; no camera indicator while it is open; the meter preview returns on going back | |
 | Saved reading: edit the note, press back; reopen | The note is kept; "Remove location" and "Delete snapshot" work and the thumbnail disappears from the list | |
+
+## Export (Task 11)
+
+| check | expected | result |
+| --- | --- | --- |
+| Export a roll with snapshots, share to Files and to a messaging app | Both receive roll-N-<film>.csv, .json and -snapshots.zip; the sheet closes after sharing | |
+| Open the CSV in LibreOffice and in Excel | Umlauts intact; a note with commas, quotes or line breaks stays in one cell; date_time shows the time the frame was logged | |
+| Open the snapshots zip | One JPEG per frame that has a snapshot, named frame-<number>.jpg | |
+| Export a roll of 200+ frames with snapshots | The sheet stays responsive while the zip is built | |

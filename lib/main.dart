@@ -24,6 +24,7 @@ import 'rolls/roll_controller.dart';
 import 'rolls/roll_repository.dart';
 import 'rolls/snapshot_store.dart';
 import 'rolls/ui/body_change_dialog.dart';
+import 'rolls/ui/export_sheet.dart';
 import 'rolls/ui/roll_editor.dart';
 import 'rolls/ui/rolls_screen.dart';
 import 'settings/settings.dart';
@@ -226,6 +227,13 @@ class _GrainAppState extends State<GrainApp> {
     }
   }
 
+  void _export(Roll roll) {
+    final c = _overlayContext;
+    if (c != null) {
+      showExportSheet(c, roll: roll, rolls: _rolls, platform: widget.platform);
+    }
+  }
+
   void _import() {
     final c = _overlayContext;
     if (c != null) {
@@ -293,7 +301,12 @@ class _GrainAppState extends State<GrainApp> {
 
   void _openRolls() => unawaited(
     _pushLent<void>(
-      (_) => RollsScreen(rolls: _rolls, gear: _gear, haptics: _haptics),
+      (_) => RollsScreen(
+        rolls: _rolls,
+        gear: _gear,
+        haptics: _haptics,
+        onExport: _export,
+      ),
     ),
   );
 
