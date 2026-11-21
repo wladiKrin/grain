@@ -3,27 +3,49 @@ import 'package:material_ui/material_ui.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
+import 'settings/settings.dart';
+import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
 import 'ui/theme.dart';
 
-void main() => runApp(GrainApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final settings = await Settings.load();
+  runApp(GrainApp(settings: settings));
+}
 
 class GrainApp extends StatefulWidget {
-  GrainApp({super.key, MeterSource? source, Haptics? haptics})
-    : source = source ?? MeterChannel(),
-      haptics = haptics ?? SystemHaptics();
+  GrainApp({
+    super.key,
+    MeterSource? source,
+    this.haptics,
+    Settings? settings,
+  }) : source = source ?? MeterChannel(),
+       settings = settings ?? Settings.inMemory();
 
   final MeterSource source;
-  final Haptics haptics;
+
+  /// Overrides the system haptics (tests); otherwise [SystemHaptics] follows
+  /// the haptics setting.
+  final Haptics? haptics;
+  final Settings settings;
 
   @override
   State<GrainApp> createState() => _GrainAppState();
 }
 
 class _GrainAppState extends State<GrainApp> {
+  Settings get _settings => widget.settings;
   late final MeterController _controller = MeterController(
     source: widget.source,
+    calibrationEv: _settings.calibrationEv,
+    viewfinderOn: _settings.viewfinderOn,
   );
+  late final SystemHaptics _systemHaptics = SystemHaptics(
+    enabled: _settings.haptics,
+  );
+  Haptics get _haptics => widget.haptics ?? _systemHaptics;
+  final _navigator = GlobalKey<NavigatorState>();
   late final AppLifecycleListener _lifecycle;
 
   @override
@@ -36,11 +58,30 @@ class _GrainAppState extends State<GrainApp> {
       onHide: _controller.pause,
       onPause: _controller.pause,
     );
+    _settings.addListener(_onSettings);
+    _controller.addListener(_onController);
     _controller.resume();
+  }
+
+  void _onSettings() {
+    _systemHaptics.enabled = _settings.haptics;
+    _controller.calibrationEv = _settings.calibrationEv;
+    if (_controller.viewfinderOn != _settings.viewfinderOn) {
+      _controller.toggleViewfinder();
+    }
+  }
+
+  /// The eye toggle is the same preference as the settings switch.
+  void _onController() {
+    if (_settings.viewfinderOn != _controller.viewfinderOn) {
+      _settings.setViewfinderOn(_controller.viewfinderOn);
+    }
   }
 
   @override
   void dispose() {
+    _settings.removeListener(_onSettings);
+    _controller.removeListener(_onController);
     _lifecycle.dispose();
     _controller.pause();
     _controller.dispose();
@@ -52,7 +93,17 @@ class _GrainAppState extends State<GrainApp> {
     return MaterialApp(
       title: 'Grain',
       theme: grainTheme(),
-      home: MeterScreen(controller: _controller, haptics: widget.haptics),
+      navigatorKey: _navigator,
+      home: MeterScreen(
+        controller: _controller,
+        haptics: _haptics,
+        onOpenSettings: () => _navigator.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                SettingsScreen(settings: _settings, haptics: _haptics),
+          ),
+        ),
+      ),
     );
   }
 }

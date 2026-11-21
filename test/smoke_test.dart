@@ -5,6 +5,8 @@ import 'package:grain/main.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/metering/meter_channel.dart';
 import 'package:grain/metering/reading.dart';
+import 'package:grain/settings/settings.dart';
+import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -68,5 +70,37 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     expect(src.calls, ['start', 'stop', 'start']);
+  });
+
+  testWidgets('settings open from the meter and share the viewfinder pref', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1700, 2400);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final settings = Settings.inMemory();
+    await tester.pumpWidget(
+      GrainApp(source: _Source(), haptics: _Haptics(), settings: settings),
+    );
+    await tester.pump();
+    expect(find.byType(Texture), findsOneWidget);
+
+    // The eye toggle persists.
+    await tester.tap(find.byIcon(Icons.visibility));
+    await tester.pump();
+    expect(settings.viewfinderOn, isFalse);
+
+    await tester.tap(find.byIcon(Icons.tune));
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
+
+    // The settings switch drives the open meter.
+    await tester.tap(find.text('Open with viewfinder on'));
+    await tester.pumpAndSettle();
+    expect(settings.viewfinderOn, isTrue);
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.byType(Texture), findsOneWidget);
   });
 }
