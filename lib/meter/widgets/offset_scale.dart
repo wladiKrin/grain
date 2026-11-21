@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../exposure/stops.dart';
 import '../../ui/theme.dart';
+import '../../ui/stops_text.dart';
 
 const _range = 3.0;
 
@@ -28,7 +29,7 @@ class OffsetScale extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('OFFSET', style: grainLabelStyle),
-              Text(
+              StopsText(
                 o == null ? '—' : formatStops(o),
                 style: const TextStyle(
                   fontSize: 22,

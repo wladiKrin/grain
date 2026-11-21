@@ -12,6 +12,7 @@ import '../latitude.dart';
 import '../model.dart';
 import '../push.dart';
 import '../roll_controller.dart';
+import '../../ui/stops_text.dart';
 
 const _sizeChips = [12, 24, 36, 72];
 
@@ -378,7 +379,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: _latUnder == null && _latOver == null
-                  ? Text(
+                  ? StopsText(
                       'Default for ${_type.label}: '
                       '${formatHalfStops(_underHalves)} to '
                       '${formatHalfStops(_overHalves)}',

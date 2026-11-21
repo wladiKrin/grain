@@ -16,6 +16,7 @@ import 'package:material_ui/material_ui.dart';
 import '../support/rolls_fixtures.dart';
 import '../support/fake_location.dart';
 import '../support/fake_platform.dart';
+import '../support/stops_finder.dart';
 
 class _Haptics implements Haptics {
   @override
@@ -94,7 +95,7 @@ void main() {
     final s = Settings.inMemory();
     await s.setCalibrationThirds(-4);
     await tester.pumpWidget(_app(s));
-    expect(find.text('−1⅓'), findsWidgets);
+    expect(findStops('−1⅓'), findsWidgets);
   });
 
   testWidgets('swiping the dial updates calibration', (tester) async {

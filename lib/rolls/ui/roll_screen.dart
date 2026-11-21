@@ -11,6 +11,7 @@ import '../roll_controller.dart';
 import 'frame_editor.dart';
 import 'roll_editor.dart';
 import 'thumbnail.dart';
+import '../../ui/stops_text.dart';
 
 enum _RowAction { before, after, renumber, deleteSnapshot, delete }
 
@@ -231,7 +232,7 @@ class _RollScreenState extends State<RollScreen> {
           ),
           const SizedBox(height: 4),
           if (pushed)
-            Text(
+            StopsText(
               '${pushLabel(roll.pushThirds)} · exposed at ISO ${roll.exposedIso}',
               style: const TextStyle(color: GrainColors.accent, fontSize: 17),
             )

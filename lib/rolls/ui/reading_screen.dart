@@ -10,6 +10,7 @@ import '../model.dart';
 import '../roll_controller.dart';
 import 'roll_screen.dart' show formatNum, shortLensName;
 import 'thumbnail.dart';
+import '../../ui/stops_text.dart';
 
 /// "f/5.6 · 1/125 · ISO 400" for a list row or heading.
 String exposureSummary(Exposure e) => [
@@ -161,7 +162,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
             style: const TextStyle(color: GrainColors.secondary, fontSize: 15),
           ),
         ),
-        Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
+        Expanded(child: StopsText(value, style: const TextStyle(fontSize: 16))),
       ],
     ),
   );

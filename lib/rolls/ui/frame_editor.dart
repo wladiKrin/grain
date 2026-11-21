@@ -10,6 +10,7 @@ import '../../ui/theme.dart';
 import '../model.dart';
 import '../roll_controller.dart';
 import 'thumbnail.dart';
+import '../../ui/stops_text.dart';
 
 const _noLens = '';
 const _keptLens = '\u0000kept';
@@ -418,7 +419,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
             if (measured != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
+                child: StopsText(
                   measured,
                   style: const TextStyle(
                     color: GrainColors.secondary,

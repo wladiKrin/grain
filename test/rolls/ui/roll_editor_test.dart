@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../support/gear_fixtures.dart';
 import '../../support/rolls_fixtures.dart';
+import '../../support/stops_finder.dart';
 
 class _Haptics implements Haptics {
   @override
@@ -229,9 +230,9 @@ void main() {
     final under = find.byType(SwipeDial).at(1);
     final over = find.byType(SwipeDial).at(2);
     await t.ensureVisible(under);
-    expect(find.descendant(of: under, matching: find.text('−½')), findsWidgets);
-    expect(find.descendant(of: over, matching: find.text('+½')), findsWidgets);
-    expect(find.text('Default for Slide: −½ to +½'), findsOneWidget);
+    expect(find.descendant(of: under, matching: findStops('−½')), findsWidgets);
+    expect(find.descendant(of: over, matching: findStops('+½')), findsWidgets);
+    expect(findStops('Default for Slide: −½ to +½'), findsOneWidget);
     await t.ensureVisible(find.text('Colour negative'));
     await t.tap(find.text('Colour negative'));
     await t.pump();
@@ -239,7 +240,7 @@ void main() {
     expect(find.descendant(of: under, matching: find.text('−2')), findsWidgets);
     expect(find.descendant(of: over, matching: find.text('+3')), findsWidgets);
     await dragDial(t, 2, -40); // one detent right: +3½
-    expect(find.descendant(of: over, matching: find.text('+3½')), findsWidgets);
+    expect(find.descendant(of: over, matching: findStops('+3½')), findsWidgets);
     expect(find.text('Use film default'), findsOneWidget);
     await typeFilm(t, 'Mystery 400');
     await save(t);
@@ -257,13 +258,19 @@ void main() {
     await t.ensureVisible(under);
     expect(find.descendant(of: under, matching: find.text('−2')), findsWidgets);
     await dragDial(t, 1, -40); // Under one detent right: −1½
-    expect(find.descendant(of: under, matching: find.text('−1½')), findsWidgets);
+    expect(
+      find.descendant(of: under, matching: findStops('−1½')),
+      findsWidgets,
+    );
     await t.ensureVisible(find.text('Slide'));
     await t.tap(find.text('Slide'));
     await t.pump();
     await t.ensureVisible(under);
-    expect(find.descendant(of: under, matching: find.text('−1½')), findsWidgets);
-    expect(find.descendant(of: over, matching: find.text('+½')), findsWidgets);
+    expect(
+      find.descendant(of: under, matching: findStops('−1½')),
+      findsWidgets,
+    );
+    expect(find.descendant(of: over, matching: findStops('+½')), findsWidgets);
     await typeFilm(t, 'Mystery 100');
     await save(t);
     final r = rolls.active!;

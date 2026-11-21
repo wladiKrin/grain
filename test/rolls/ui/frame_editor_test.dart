@@ -11,6 +11,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../support/fake_location.dart';
 import '../../support/gear_fixtures.dart';
 import '../../support/rolls_fixtures.dart';
+import '../../support/stops_finder.dart';
 
 void main() {
   late RollController rolls;
@@ -199,7 +200,7 @@ void main() {
   testWidgets('metered values are read-only', (t) async {
     await start(t);
     await pumpEditor(t);
-    expect(find.text('Metered EV 12.3 · offset +⅔ · spot'), findsOneWidget);
+    expect(findStops('Metered EV 12.3 · offset +⅔ · spot'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(5));
     expect(find.widgetWithText(TextField, 'Metered EV'), findsNothing);
   });

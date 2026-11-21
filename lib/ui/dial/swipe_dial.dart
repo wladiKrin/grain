@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../../exposure/scales.dart';
 import '../haptics.dart';
 import '../theme.dart';
+import '../stops_text.dart';
 
 const _ink = GrainColors.ink;
 const _faded = GrainColors.faded;
@@ -114,8 +115,9 @@ class _SwipeDialState extends State<SwipeDial> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(child: _neighbour(prev, -1, Alignment.centerLeft)),
-                  Text(
+                  StopsText(
                     values[i].label,
+                    softWrap: false,
                     style: TextStyle(
                       fontFamily: _fontFamily,
                       fontSize: widget.valueFontSize,
@@ -161,8 +163,9 @@ class _SwipeDialState extends State<SwipeDial> {
           ),
           child: Center(
             widthFactor: 1,
-            child: Text(
+            child: StopsText(
               label,
+              softWrap: false,
               style: const TextStyle(
                 fontFamily: _fontFamily,
                 fontSize: 24,

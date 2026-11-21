@@ -10,6 +10,7 @@ import 'reading_screen.dart';
 import 'roll_editor.dart';
 import 'roll_screen.dart' show RollScreen, shortLensName;
 import 'thumbnail.dart';
+import '../../ui/stops_text.dart';
 
 /// Rolls and saved readings, in two tabs.
 class RollsScreen extends StatefulWidget {
@@ -127,7 +128,7 @@ class _RollsScreenState extends State<RollsScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    Text(
+                    StopsText(
                       detail,
                       style: const TextStyle(
                         color: GrainColors.secondary,
