@@ -100,4 +100,5 @@ class FakeMeterSource implements MeterSource {
   void emit(MeterStats s) => _stats.add(s);
   void fail(Object error) => _stats.addError(error);
   void emitQr(String text) => _qr.add(text);
+  void failQr(Object error) => _qr.addError(error);
 }
