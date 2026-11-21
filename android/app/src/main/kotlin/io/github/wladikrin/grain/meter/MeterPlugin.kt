@@ -8,9 +8,10 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.TextureRegistry
+import java.io.File
 
 /**
- * `grain/meter` method channel (start / startScan / setWide / stop / setRegions), the
+ * `grain/meter` method channel (start / startScan / setWide / stop / setRegions / snapshot), the
  * `grain/meter/stats` event channel (METER mode) and the `grain/meter/qr` event channel
  * (SCAN mode). Everything here runs on the main thread.
  */
@@ -75,6 +76,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 teardown("Stopped") { result.success(null) }
             }
             "setRegions" -> setRegions(call, result)
+            "snapshot" -> snapshot(call.argument<String>("id"), result)
             else -> result.notImplemented()
         }
     }
@@ -224,6 +226,29 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
     }
 
+    /**
+     * JPEG of the running METER stream's next frame at `filesDir/snapshots/<id>.jpg`; answers
+     * its path, or null when no METER preview is running (stopped, scanning, switching camera)
+     * or the snapshot failed.
+     */
+    private fun snapshot(id: String?, result: MethodChannel.Result) {
+        if (id == null || !SNAPSHOT_ID.matches(id)) {
+            result.error("bad_args", "Expected id: a lowercase UUID", null)
+            return
+        }
+        val s = session
+        if (s == null || ready == null || closing || s.mode != CameraSession.Mode.METER) {
+            result.success(null)
+            return
+        }
+        val dir = File(context.filesDir, "snapshots")
+        if (!dir.isDirectory && !dir.mkdirs()) {
+            result.success(null)
+            return
+        }
+        s.requestSnapshot(File(dir, "$id.jpg")) { path -> result.success(path) }
+    }
+
     private fun setRegions(call: MethodCall, result: MethodChannel.Result) {
         val crop = call.argument<List<Number>>("crop")
         val spot = call.argument<List<Number>>("spot")
@@ -243,5 +268,9 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         override fun onListen(arguments: Any?, events: EventChannel.EventSink) = set(events)
 
         override fun onCancel(arguments: Any?) = set(null)
+    }
+
+    private companion object {
+        val SNAPSHOT_ID = Regex("^[0-9a-f-]{36}$")
     }
 }

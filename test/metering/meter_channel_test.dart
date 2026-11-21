@@ -38,6 +38,9 @@ void main() {
             'wideEqFocal': 13.0,
             'wide': wide,
           };
+        case 'snapshot':
+          return '/data/user/0/io.github.wladikrin.grain/files/snapshots/'
+              '${call.arguments['id']}.jpg';
         default:
           return null;
       }
@@ -159,5 +162,35 @@ void main() {
       MockStreamHandler.inline(onListen: (args, sink) => sink.success('abc')),
     );
     expect(await MeterChannel().qrCodes.first, 'abc');
+  });
+
+  test('snapshot passes the id and returns the path', () async {
+    const id = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+    final path = await MeterChannel().snapshot(id);
+    expect(calls.single.method, 'snapshot');
+    expect(calls.single.arguments, {'id': id});
+    expect(
+      path,
+      '/data/user/0/io.github.wladikrin.grain/files/snapshots/'
+      'f47ac10b-58cc-4372-a567-0e02b2c3d479.jpg',
+    );
+  });
+
+  test('a failed snapshot answers null', () async {
+    messenger.setMockMethodCallHandler(method, (call) async {
+      throw PlatformException(code: 'camera_error');
+    });
+    expect(
+      await MeterChannel().snapshot('f47ac10b-58cc-4372-a567-0e02b2c3d479'),
+      isNull,
+    );
+  });
+
+  test('snapshot without a running camera answers null', () async {
+    messenger.setMockMethodCallHandler(method, (call) async => null);
+    expect(
+      await MeterChannel().snapshot('f47ac10b-58cc-4372-a567-0e02b2c3d479'),
+      isNull,
+    );
   });
 }

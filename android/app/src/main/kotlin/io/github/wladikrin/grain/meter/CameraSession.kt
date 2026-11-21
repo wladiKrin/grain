@@ -23,7 +23,10 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.view.Surface
+import java.io.File
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
@@ -34,6 +37,7 @@ import kotlin.math.min
  * [startWide]): a preview into [surfaceTexture] and a YUV ImageReader whose Y plane feeds
  * [LumaStats] in [Mode.METER] or [QrDecoder] in [Mode.SCAN]. All camera work runs on a private
  * HandlerThread; [onReady], [onError], [onStats] and [onQr] are invoked on the main thread.
+ * In [Mode.METER] the reader runs at preview size, so [requestSnapshot] can JPEG the next frame.
  */
 class CameraSession(
     context: Context,
@@ -59,6 +63,15 @@ class CameraSession(
         val wide: Boolean,
     )
 
+    /** One [requestSnapshot] call; [finish] answers it once, on the main thread. */
+    private inner class SnapshotRequest(val out: File, private val onDone: (String?) -> Unit) {
+        private val answered = AtomicBoolean(false)
+
+        fun finish(path: String?) {
+            if (answered.compareAndSet(false, true)) mainHandler.post { onDone(path) }
+        }
+    }
+
     /** Regions in sensor-buffer coordinates, ready for [LumaStats.compute]. */
     private data class SensorRegions(val crop: RectD, val cx: Double, val cy: Double, val r: Double)
 
@@ -74,8 +87,8 @@ class CameraSession(
     @Volatile private var regions = SensorRegions(RectD(0.0, 0.0, 1.0, 1.0), 0.5, 0.5, 0.0)
     @Volatile private var displayRegions = DisplayRegions.DEFAULT
 
-    // Camera-thread state.
-    private var closed = false
+    // Camera-thread state; [closed] is also read by the snapshot encoder.
+    @Volatile private var closed = false
     private var openInFlight = false
     private var finishClose: (() -> Unit)? = null
     private var device: CameraDevice? = null
@@ -94,6 +107,7 @@ class CameraSession(
     private var request: CaptureRequest.Builder? = null
     private var current: PreviewSetup? = null
     private var lastQr: String? = null
+    private val snapshots = mutableListOf<SnapshotRequest>()
 
     /** Display (portrait) regions as sent by Dart; normalized 0..1, radius relative to crop width. */
     data class DisplayRegions(val crop: RectD, val cx: Double, val cy: Double, val radius: Double) {
@@ -142,6 +156,73 @@ class CameraSession(
         }
     }
 
+    /**
+     * METER mode: the next frame's lens crop, upright, as a JPEG at [out]; [onDone] gets the
+     * path, or null (other mode, no frame within [SNAPSHOT_TIMEOUT_MS], session closed, encode
+     * failed). The camera thread only copies the planes; encoding runs on a background thread.
+     * [onDone] runs on the main thread.
+     */
+    fun requestSnapshot(out: File, onDone: (String?) -> Unit) {
+        val req = SnapshotRequest(out, onDone)
+        if (mode != Mode.METER) {
+            req.finish(null)
+            return
+        }
+        val posted = handler.post {
+            if (closed) {
+                req.finish(null)
+                return@post
+            }
+            snapshots.add(req)
+            handler.postDelayed({
+                if (snapshots.remove(req)) {
+                    Log.w(TAG, "snapshot: no frame within $SNAPSHOT_TIMEOUT_MS ms")
+                    req.finish(null)
+                }
+            }, SNAPSHOT_TIMEOUT_MS)
+        }
+        if (!posted) req.finish(null) // The thread already quit after close().
+    }
+
+    /** Camera thread: copies [img]'s planes and queues an encode for every waiting request. */
+    private fun captureSnapshot(img: android.media.Image) {
+        val waiting = snapshots.toList()
+        snapshots.clear()
+        val w = img.width
+        val h = img.height
+        val (yp, up, vp) = img.planes
+        val y = copyOf(yp.buffer)
+        val u = copyOf(up.buffer)
+        val v = copyOf(vp.buffer)
+        val yRowStride = yp.rowStride
+        val uvRowStride = up.rowStride
+        val uvPixelStride = up.pixelStride
+        val crop = SnapshotEncoder.cropPixels(regions.crop, w, h)
+        val orientation = sensorOrientation
+        encoder.execute {
+            val nv21 = if (closed) null else SnapshotEncoder.yuvToNv21(w, h, y, yRowStride, u, v, uvRowStride, uvPixelStride)
+            for (req in waiting) {
+                if (closed || nv21 == null) {
+                    req.finish(null)
+                    continue
+                }
+                try {
+                    SnapshotEncoder.encode(nv21, w, h, crop, orientation, req.out)
+                    if (closed) {
+                        req.out.delete()
+                        req.finish(null)
+                    } else {
+                        req.finish(req.out.path)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "snapshot encode failed", e)
+                    req.out.delete()
+                    req.finish(null)
+                }
+            }
+        }
+    }
+
     fun setRegions(r: DisplayRegions) {
         displayRegions = r
         regions = toSensor(r, sensorOrientation, readerSize)
@@ -151,6 +232,8 @@ class CameraSession(
     fun close(onClosed: () -> Unit) {
         handler.post {
             closed = true
+            snapshots.forEach { it.finish(null) }
+            snapshots.clear()
             try {
                 session?.close()
             } catch (_: Exception) {
@@ -213,7 +296,8 @@ class CameraSession(
             val preview = choosePreviewSize(map.getOutputSizes(SurfaceTexture::class.java))
                 ?: return fail("No preview size")
             val yuvSizes = map.getOutputSizes(ImageFormat.YUV_420_888)
-            val yuv = (if (mode == Mode.SCAN) chooseScanSize(yuvSizes) else chooseAnalysisSize(yuvSizes))
+            // METER: preview-size frames for snapshots; LumaStats samples them sparsely.
+            val yuv = (if (mode == Mode.SCAN) chooseScanSize(yuvSizes) else choosePreviewSize(yuvSizes))
                 ?: return fail("No YUV size")
 
             sensorOrientation = ch.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
@@ -332,7 +416,8 @@ class CameraSession(
 
     /**
      * Camera thread. Every Image is closed; stats are computed at most 15 times a second
-     * (METER), a QR decode is tried at most every 200 ms (SCAN).
+     * (METER), a QR decode is tried at most every 200 ms (SCAN). A waiting snapshot takes the
+     * first METER frame regardless of the stats rate.
      */
     private fun onImage(r: ImageReader) {
         val image = try {
@@ -357,6 +442,7 @@ class CameraSession(
                 mainHandler.post { onQr(text) }
                 return
             }
+            if (snapshots.isNotEmpty()) captureSnapshot(img)
             if (now - lastEmitMs < MIN_EVENT_INTERVAL_MS) return
             val result = latest ?: return
             val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
@@ -371,6 +457,7 @@ class CameraSession(
             val reg = regions
             val stats = LumaStats.compute(
                 yBuffer, img.width, img.height, plane.rowStride, reg.crop, reg.cx, reg.cy, reg.r,
+                step = LumaStats.samplingStep(img.width),
             )
             val event = mapOf<String, Any>(
                 "exposureNs" to exposure,
@@ -404,6 +491,19 @@ class CameraSession(
         private const val FULL_FRAME_DIAGONAL_MM = 43.27
         private const val TARGET_EQ_FOCAL_MM = 26.0
         private const val MAX_PREVIEW_EDGE = 1440
+        private const val SNAPSHOT_TIMEOUT_MS = 1500L
+
+        /** Shared low-priority thread for snapshot encodes, so they never compete with the camera. */
+        private val encoder = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "GrainSnapshot").apply {
+                isDaemon = true
+                priority = Thread.MIN_PRIORITY
+            }
+        }
+
+        /** The [buf]'s remaining bytes, without moving its position. */
+        private fun copyOf(buf: java.nio.ByteBuffer): ByteArray =
+            ByteArray(buf.remaining()).also { buf.duplicate().get(it) }
 
         /** Typical phone main camera, used when the characteristics give no focal length. */
         private const val FALLBACK_EQ_FOCAL_MM = 26.0
@@ -452,13 +552,6 @@ class CameraSession(
             return fitting.filter(::is4by3).maxByOrNull { it.width * it.height }
                 ?: fitting.maxByOrNull { it.width * it.height }
                 ?: sizes.minByOrNull { it.width * it.height }
-        }
-
-        /** Smallest 4:3 size at least 320×240; else the size closest in area to 320×240. */
-        fun chooseAnalysisSize(sizes: Array<Size>?): Size? {
-            if (sizes.isNullOrEmpty()) return null
-            return sizes.filter { is4by3(it) && max(it.width, it.height) >= 320 }.minByOrNull { it.width * it.height }
-                ?: sizes.minByOrNull { abs(it.width * it.height - 320 * 240) }
         }
 
         /** Smallest 4:3 size with long edge ≥ 1280 px; else the largest with long edge ≤ 1920 px. */

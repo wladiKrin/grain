@@ -5,7 +5,7 @@ import 'package:grain/metering/meter_channel.dart';
 import 'package:grain/metering/reading.dart';
 
 /// Shared [MeterSource] fake: records calls, lets the test gate or fail
-/// [start]/[stop], and emit stats and QR texts.
+/// [start]/[stop]/[snapshot], and emit stats and QR texts.
 class FakeMeterSource implements MeterSource {
   FakeMeterSource({
     this.textureId = 1,
@@ -40,6 +40,12 @@ class FakeMeterSource implements MeterSource {
   /// When set, [start]/[startScan] and [stop] wait for these.
   Completer<void>? startGate;
   Completer<void>? stopGate;
+
+  /// Answers [snapshot] (recorded as `'snapshot(<id>)'`); null when unset.
+  String? Function(String id)? snapshotPath;
+
+  /// When set, [snapshot] waits for it before answering.
+  Completer<void>? snapshotGate;
 
   bool _wide = false;
   final _stats = StreamController<MeterStats>.broadcast();
@@ -87,6 +93,13 @@ class FakeMeterSource implements MeterSource {
     if (setWideError != null) throw setWideError!;
     _wide = wide && wideEqFocal != null;
     return _preview;
+  }
+
+  @override
+  Future<String?> snapshot(String id) async {
+    calls.add('snapshot($id)');
+    await snapshotGate?.future;
+    return snapshotPath?.call(id);
   }
 
   @override

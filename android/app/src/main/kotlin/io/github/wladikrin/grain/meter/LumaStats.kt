@@ -1,5 +1,6 @@
 package io.github.wladikrin.grain.meter
 
+import kotlin.math.max
 import kotlin.math.pow
 
 /** Normalized (0..1) rectangle, left/top inclusive, right/bottom exclusive. */
@@ -41,7 +42,13 @@ object LumaStats {
         }
 
     /**
-     * Samples every 2nd pixel in each direction of the Y [plane].
+     * Sampling step for a plane [width] px wide: about 160 samples per row whatever the size,
+     * so stats on a 1440 px preview cost the same as every 2nd pixel of a 320 px plane.
+     */
+    fun samplingStep(width: Int): Int = max(2, width / 160)
+
+    /**
+     * Samples every [step]th pixel in each direction of the Y [plane].
      * [crop] and the spot centre are normalized sensor-buffer coordinates; [spotR] is the
      * spot radius as a fraction of the plane [width] (the spot is a circle in pixel space).
      * An empty crop falls back to the frame mean; an empty spot to the nearest pixel.
@@ -55,7 +62,9 @@ object LumaStats {
         spotCx: Double,
         spotCy: Double,
         spotR: Double,
+        step: Int = 2,
     ): Stats {
+        require(step >= 1) { "step must be ≥ 1" }
         val histogram = IntArray(HISTOGRAM_BINS)
         var frameSum = 0.0
         var frameN = 0
@@ -94,9 +103,9 @@ object LumaStats {
                     spotSum += lin
                     spotN++
                 }
-                px += 2
+                px += step
             }
-            py += 2
+            py += step
         }
 
         val frame = if (frameN > 0) frameSum / frameN else 0.0

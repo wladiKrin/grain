@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'reading.dart';
@@ -74,6 +75,11 @@ abstract class MeterSource {
   /// One event per decoded QR text while scanning; consecutive duplicates are
   /// suppressed natively.
   Stream<String> get qrCodes;
+
+  /// JPEG of the running meter preview's lens crop, saved app-privately as
+  /// `snapshots/<id>.jpg`; answers its path, or null when no meter preview is
+  /// running or the snapshot failed. Never throws for camera failures.
+  Future<String?> snapshot(String id);
 }
 
 class MeterChannel implements MeterSource {
@@ -115,6 +121,16 @@ class MeterChannel implements MeterSource {
         'crop': [crop.left, crop.top, crop.right, crop.bottom],
         'spot': [spot.dx, spot.dy, radius],
       });
+
+  @override
+  Future<String?> snapshot(String id) async {
+    try {
+      return await _method.invokeMethod<String>('snapshot', {'id': id});
+    } on PlatformException catch (e) {
+      debugPrint('snapshot failed: ${e.code} ${e.message}');
+      return null;
+    }
+  }
 
   /// One cached broadcast stream; subscribers share the same event channel
   /// listener.
