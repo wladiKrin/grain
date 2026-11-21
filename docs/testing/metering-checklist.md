@@ -87,6 +87,15 @@ Result: ______
 | Haptics | Haptic ticks are strong on full stops | |
 | Value row, viewfinder hidden | 92 px numerals do not overflow on the Pixel's width | |
 | Permission flow | "Allow camera" prompt works; deny twice leads to settings | |
+| R8 release build runs on device | The minified release APK starts the camera and the permission flow works (no R8-stripped classes) | |
+| Portrait lock | Rotating the phone keeps the meter in portrait | |
+| Dark mode | With system dark mode on: no black launch flash, dark status bar icons on the paper ground | |
+
+If spot readings look compressed (a bright or dark spot reads closer to the
+average than the reference meter says), the preview tone curve may not be the
+sRGB curve the luma linearization assumes. Try forcing it in the capture
+request: `TONEMAP_MODE_GAMMA_VALUE` with gamma 2.2, or
+`TONEMAP_MODE_PRESET_CURVE` with `TONEMAP_PRESET_CURVE_SRGB`.
 
 ## 5. Release verification (already done on the build host)
 
