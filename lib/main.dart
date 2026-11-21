@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'meter/meter_controller.dart';
@@ -8,8 +9,13 @@ import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
 import 'ui/theme.dart';
 
+/// The meter layout is portrait only.
+Future<void> lockPortrait() =>
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await lockPortrait();
   final settings = await Settings.load();
   runApp(GrainApp(settings: settings));
 }
@@ -94,6 +100,12 @@ class _GrainAppState extends State<GrainApp> {
       title: 'Grain',
       theme: grainTheme(),
       navigatorKey: _navigator,
+      // Every route sits on the paper ground: dark bar icons, even when the
+      // system is in dark mode.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: grainOverlayStyle,
+        child: child!,
+      ),
       home: MeterScreen(
         controller: _controller,
         haptics: _haptics,

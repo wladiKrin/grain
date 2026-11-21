@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// The "Paper" palette.
@@ -12,6 +13,18 @@ abstract final class GrainColors {
 }
 
 const grainFont = 'InterTight';
+
+/// Dark status and navigation bar icons over the paper ground, whatever the
+/// system's dark mode.
+const grainOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.dark,
+  statusBarBrightness: Brightness.light,
+  systemNavigationBarColor: GrainColors.ground,
+  systemNavigationBarDividerColor: GrainColors.ground,
+  systemNavigationBarIconBrightness: Brightness.dark,
+  systemNavigationBarContrastEnforced: false,
+);
 
 /// 12 px letter-spaced label, e.g. "APERTURE".
 const grainLabelStyle = TextStyle(
