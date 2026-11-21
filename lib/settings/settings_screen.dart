@@ -15,6 +15,7 @@ import '../ui/permissions.dart';
 import '../ui/round_button.dart';
 import '../ui/theme.dart';
 import '../version.dart';
+import 'licences.dart';
 import 'settings.dart';
 
 export '../version.dart' show appVersion;
@@ -194,6 +195,12 @@ class SettingsScreen extends StatelessWidget {
               now: now,
             ),
             const _Divider(),
+            _LinkRow(
+              label: 'Licences',
+              subtitle: 'Notices for the code, font and data Grain ships.',
+              onTap: () => showLicences(context),
+            ),
+            const _Divider(),
             const Padding(
               padding: EdgeInsets.only(top: 24),
               child: Text(
@@ -215,6 +222,59 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       const SizedBox(height: 1, child: ColoredBox(color: GrainColors.divider));
+}
+
+/// A row that opens another page.
+class _LinkRow extends StatelessWidget {
+  const _LinkRow({required this.label, required this.onTap, this.subtitle});
+
+  final String label;
+  final String? subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 2,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: GrainColors.ink,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: GrainColors.secondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: GrainColors.secondary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SwitchRow extends StatelessWidget {

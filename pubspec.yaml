@@ -89,6 +89,7 @@ flutter:
           weight: 600
 
   assets:
+    - assets/licenses/
     - library/bodies/canon/
     - library/bodies/leica/
     - library/bodies/minolta/

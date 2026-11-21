@@ -5,6 +5,7 @@ import 'package:grain/backup/backup.dart';
 import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
+import 'package:grain/settings/licences.dart';
 import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
@@ -308,5 +309,30 @@ void main() {
     await tester.tap(find.text('Import everything'));
     await _until(tester, () => _shows("Can't import"));
     expect(find.text('Not a Grain backup'), findsOneWidget);
+  });
+
+  testWidgets('Licences opens the licence page with the bundled notices', (
+    tester,
+  ) async {
+    registerLicences();
+    final s = Settings.inMemory();
+    await tester.pumpWidget(_app(s));
+    await _reveal(tester, find.text('Licences'));
+    await tester.tap(find.text('Licences'));
+    await _until(tester, () => _shows('ZXing core'));
+    await tester.pumpAndSettle();
+    expect(find.text('Grain'), findsWidgets);
+    expect(find.text(appVersion), findsOneWidget);
+    expect(find.text('GPLv3'), findsOneWidget);
+    for (final p in licencePackages) {
+      await tester.scrollUntilVisible(find.text(p), 200);
+      expect(find.text(p), findsOneWidget, reason: p);
+    }
+    expect(licencePackages, [
+      'ZXing core',
+      'Inter Tight',
+      'SQLite',
+      'Grain gear library',
+    ]);
   });
 }

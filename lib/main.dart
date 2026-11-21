@@ -28,6 +28,7 @@ import 'rolls/ui/body_change_dialog.dart';
 import 'rolls/ui/export_sheet.dart';
 import 'rolls/ui/roll_editor.dart';
 import 'rolls/ui/rolls_screen.dart';
+import 'settings/licences.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
 import 'ui/click_sound.dart';
@@ -40,6 +41,7 @@ Future<void> lockPortrait() =>
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerLicences();
   final db = GrainDatabase.open();
   final source = MeterChannel();
   // One bridge, shared by the settings screen (permission) and the roll
