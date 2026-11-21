@@ -54,7 +54,12 @@ const _isoThirds = [
 
 /// Limits closer than this (in stops) to a grid value are treated as that
 /// grid value (e.g. a nominal f/1.8 against the exact 1.78 on the grid).
+/// Aperture stops are `2 * log2(N ratio)`.
 const _limitTolerance = 0.05;
+
+/// An off-grid limit drops the adjacent inside grid value when it lies
+/// closer than this many stops, so the dial has no near-duplicate detent.
+const _dropDistance = 0.25;
 
 double _log2(double x) => math.log(x) / math.ln2;
 
@@ -67,8 +72,8 @@ double _nominal(String label) {
 /// Whether [v] is the grid value that a limit of [limit] designates, either
 /// by exact value (within tolerance) or by its nominal marking (30" is the
 /// grid's 32 s).
-bool _isLimit(ScaleValue v, double limit) =>
-    _log2(v.value / limit).abs() <= _limitTolerance ||
+bool _isLimit(ScaleValue v, double limit, double stopsPerLog2) =>
+    _log2(v.value / limit).abs() * stopsPerLog2 <= _limitTolerance ||
     _nominal(v.label) == limit;
 
 /// Builds a scale from a label table of third (or half) steps.
@@ -84,6 +89,7 @@ List<ScaleValue> _build({
   required double min,
   required double max,
   required String Function(double) formatLimit,
+  double stopsPerLog2 = 1,
   int kOffset = 0,
 }) {
   final labels = step == StepSize.half ? halves : thirds;
@@ -97,18 +103,31 @@ List<ScaleValue> _build({
     grid.add(ScaleValue(labels[i], exact(k), (i + kOffset) % fullEvery == 0));
   }
 
+  bool isLimit(ScaleValue v, double limit) => _isLimit(v, limit, stopsPerLog2);
+  double stopsBetween(double a, double b) =>
+      _log2(a / b).abs() * stopsPerLog2;
+
   final result = <ScaleValue>[];
   for (final v in grid) {
-    if ((v.value > min || _isLimit(v, min)) &&
-        (v.value < max || _isLimit(v, max))) {
+    if ((v.value > min || isLimit(v, min)) &&
+        (v.value < max || isLimit(v, max))) {
       result.add(v);
     }
   }
 
-  if (result.isEmpty || !_isLimit(result.first, min)) {
+  var minAdded = false;
+  if (result.isEmpty || !isLimit(result.first, min)) {
+    if (result.isNotEmpty && stopsBetween(result.first.value, min) < _dropDistance) {
+      result.removeAt(0);
+    }
     result.insert(0, ScaleValue(formatLimit(min), min, false));
+    minAdded = true;
   }
-  if (!_isLimit(result.last, max)) {
+  if (!isLimit(result.last, max)) {
+    final lastIsGrid = !(minAdded && result.length == 1);
+    if (lastIsGrid && stopsBetween(result.last.value, max) < _dropDistance) {
+      result.removeLast();
+    }
     result.add(ScaleValue(formatLimit(max), max, false));
   }
   return result;
@@ -117,8 +136,11 @@ List<ScaleValue> _build({
 String _plain(double v) =>
     v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
-String _shutterLimit(double v) =>
-    v < 1 ? '1/${(1 / v).round()}' : '${_plain(v)}"';
+String _shutterLimit(double v) {
+  final n = 1 / v;
+  if (v < 1 && (n - n.round()).abs() <= n * 0.01) return '1/${n.round()}';
+  return '${_plain(v)}"';
+}
 
 List<ScaleValue> apertureScale({
   required StepSize step,
@@ -134,6 +156,7 @@ List<ScaleValue> apertureScale({
       min: min,
       max: max,
       formatLimit: _plain,
+      stopsPerLog2: 2,
     );
 
 /// Ordered fastest → slowest.
@@ -177,8 +200,88 @@ List<ScaleValue> isoScale({
   );
 }
 
-/// Index of the scale value nearest to [value] by `|log2(a/b)|`.
+/// Shutter table entry for a display [label]: exact value and full-stop flag
+/// from the thirds table, else the halves table, else null.
+ScaleValue? _tableShutter(String label) {
+  var i = _shutterThirds.indexOf(label);
+  if (i >= 0) {
+    return ScaleValue(label, math.pow(2, i / 3) / 8192, i % 3 == 0);
+  }
+  i = _shutterHalves.indexOf(label);
+  if (i >= 0) {
+    return ScaleValue(label, math.pow(2, i / 2) / 8192, i % 2 == 0);
+  }
+  return null;
+}
+
+/// Shutter scale from a body's library marks (`"1/1000"`, `"1"`, `"0.7"`,
+/// `"B"`, `"T"`), fastest → slowest. `B`/`T` are skipped; marks found in the
+/// thirds (else halves) table take that entry's exact value and full-stop
+/// flag, others keep their nominal value as non-full stops. Throws
+/// [ArgumentError] for an unparsable mark or when no timed mark remains.
+List<ScaleValue> bodyShutterScale(List<String> marks) {
+  final byValue = <double, ScaleValue>{};
+  for (final raw in marks) {
+    final mark = raw.trim();
+    if (mark == 'B' || mark == 'T') continue;
+    final double nominal;
+    final String label;
+    if (mark.startsWith('1/')) {
+      final n = double.tryParse(mark.substring(2));
+      if (n == null || !n.isFinite || n <= 0) {
+        throw ArgumentError.value(raw, 'marks', 'unparsable shutter mark');
+      }
+      nominal = 1 / n;
+      label = '1/${_plain(n)}';
+    } else {
+      final v = double.tryParse(mark);
+      if (v == null || !v.isFinite || v <= 0) {
+        throw ArgumentError.value(raw, 'marks', 'unparsable shutter mark');
+      }
+      nominal = v;
+      label = '${_plain(v)}"';
+    }
+    final entry = _tableShutter(label) ?? ScaleValue(label, nominal, false);
+    byValue[entry.value] = entry;
+  }
+  if (byValue.isEmpty) {
+    throw ArgumentError.value(marks, 'marks', 'no timed shutter mark');
+  }
+  return (byValue.values.toList()..sort((a, b) => a.value.compareTo(b.value)));
+}
+
+/// Seconds as a short label: `1/250`, `2.5"`, `45"`, `2m 30s`, `1h 07m`.
+String formatSeconds(double s) {
+  if (s < 1) return '1/${(1 / s).round()}';
+  if (s < 10) {
+    final t = s.toStringAsFixed(1);
+    if (t != '10.0') {
+      return '${t.endsWith('.0') ? t.substring(0, t.length - 2) : t}"';
+    }
+  }
+  final total = s.round();
+  if (total < 60) return '$total"';
+  if (s < 3600) {
+    final m = total ~/ 60;
+    final ss = (total % 60).toString().padLeft(2, '0');
+    if (m < 60) return '${m}m ${ss}s';
+  }
+  var h = s ~/ 3600;
+  var m = ((s - h * 3600) / 60).round();
+  if (m == 60) {
+    h += 1;
+    m = 0;
+  }
+  return '${h}h ${m.toString().padLeft(2, '0')}m';
+}
+
+/// Index of the scale value nearest to [value] by `|log2(a/b)|`. Throws
+/// [ArgumentError] for an empty scale or a [value] that is not finite and > 0.
 int nearestIndex(List<ScaleValue> scale, double value) {
+  if (scale.isEmpty) throw ArgumentError.value(scale, 'scale', 'is empty');
+  if (!value.isFinite || value <= 0) {
+    throw ArgumentError.value(value, 'value', 'must be finite and > 0');
+  }
   var best = 0;
   var bestDist = double.infinity;
   for (var i = 0; i < scale.length; i++) {

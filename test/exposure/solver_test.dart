@@ -86,4 +86,8 @@ void main() {
           isNull);
     }
   });
+
+  test('absurd EV gives no solution instead of throwing', () {
+    expect(solveShutter(ev100: 2000, iso: 100, aperture: 2, shutters: shutters), isNull);
+  });
 }

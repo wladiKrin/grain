@@ -30,9 +30,12 @@ double _halfStep(List<ScaleValue> scale, {required bool first}) {
   return _log2(b.value / a.value).abs() / 2;
 }
 
-/// Snaps [exact] to [scale] (ascending or descending by value). [excess] is
-/// how many stops [exact] lies beyond the scale's first end (positive) or
-/// last end (negative direction handled by [firstIsOver]).
+/// Snaps [exact] (finite, > 0) to [scale] (ascending or descending by
+/// value). Beyond either end by more than half a step the end index is
+/// returned with a range flag. [firstIsOver] says which flag belongs to the
+/// scale's first element: true means values beyond the first element are too
+/// bright ([RangeFlag.over]) and beyond the last too dark; false is the
+/// reverse (aperture scales, where a large f-number is too bright).
 Solved _snap(List<ScaleValue> scale, double exact, {required bool firstIsOver}) {
   final first = scale.first.value;
   final last = scale.last.value;
@@ -57,7 +60,7 @@ Solved _snap(List<ScaleValue> scale, double exact, {required bool firstIsOver}) 
 }
 
 /// Exact `t = N² / 2^EV_S`, snapped to [shutters] (fastest first). Null
-/// for a non-finite [ev100].
+/// when the exact target is non-finite or ≤ 0.
 Solved? solveShutter({
   required double ev100,
   required double iso,
@@ -66,6 +69,7 @@ Solved? solveShutter({
 }) {
   if (!ev100.isFinite) return null;
   final t = aperture * aperture / math.pow(2, evAtIso(ev100, iso));
+  if (!t.isFinite || t <= 0) return null;
   // Small t (faster than the first value) means too bright.
   return _snap(shutters, t, firstIsOver: true);
 }
@@ -80,6 +84,7 @@ Solved? solveAperture({
 }) {
   if (!ev100.isFinite) return null;
   final n = math.sqrt(shutter * math.pow(2, evAtIso(ev100, iso)));
+  if (!n.isFinite || n <= 0) return null;
   // Large f-number beyond the last value means too bright.
   return _snap(apertures, n, firstIsOver: false);
 }
