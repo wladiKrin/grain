@@ -8,6 +8,7 @@ import '../../ui/dial/swipe_dial.dart';
 import '../../ui/haptics.dart';
 import '../../ui/theme.dart';
 import '../film_stocks.dart';
+import '../latitude.dart';
 import '../model.dart';
 import '../push.dart';
 import '../roll_controller.dart';
@@ -18,6 +19,18 @@ const _sizeChips = [12, 24, 36, 72];
 final List<ScaleValue> _pushScale = [
   for (var t = -9; t <= 9; t++)
     ScaleValue(formatStops(t / 3), t / 3, t % 3 == 0),
+];
+
+/// −5 … 0 stops in halves.
+final List<ScaleValue> _underScale = [
+  for (var h = latitudeUnderHalvesMin; h <= 0; h++)
+    ScaleValue(formatHalfStops(h), h / 2, h % 2 == 0),
+];
+
+/// 0 … +6 stops in halves.
+final List<ScaleValue> _overScale = [
+  for (var h = 0; h <= latitudeOverHalvesMax; h++)
+    ScaleValue(formatHalfStops(h), h / 2, h % 2 == 0),
 ];
 
 /// Start a roll (initial == null) or edit one. Pops with the saved [Roll];
@@ -52,6 +65,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
   late FilmType _type;
   late int _box;
   int _push = 0;
+  int? _latUnder, _latOver;
   late int _size;
   late bool _customSize;
   late StartFrame _start;
@@ -70,6 +84,8 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
     _box = last?.boxIso ?? 400;
     // A new roll never inherits the last roll's push.
     _push = e?.pushThirds ?? 0;
+    _latUnder = e?.latitudeUnderHalves;
+    _latOver = e?.latitudeOverHalves;
     _size = e?.size ?? widget.body?.frames ?? 36;
     _customSize = !_sizeChips.contains(_size);
     _custom = TextEditingController(text: '$_size');
@@ -90,6 +106,10 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
     final b = widget.body;
     return b == null ? 'No camera' : '${b.make} ${b.model}';
   }
+
+  FilmLatitude get _default => FilmLatitude.forType(_type);
+  int get _underHalves => _latUnder ?? (_default.under * 2).round();
+  int get _overHalves => _latOver ?? (_default.over * 2).round();
 
   int? get _exposed => exposedIsoFor(_box, _push);
 
@@ -134,6 +154,8 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
           size: size,
           startFrame: _start,
           notes: _notes.text.trim(),
+          latitudeUnderHalves: _latUnder,
+          latitudeOverHalves: _latOver,
         );
       } else {
         // Whatever happened to the roll since the editor opened (it may have
@@ -147,6 +169,8 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
           size: size,
           startFrame: _start,
           notes: _notes.text.trim(),
+          latitudeUnderHalves: () => _latUnder,
+          latitudeOverHalves: () => _latOver,
         );
         await widget.rolls.updateRoll(saved);
       }
@@ -313,6 +337,70 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                     : 'Exposed at ISO $exposed',
                 style: const TextStyle(color: GrainColors.accent, fontSize: 16),
               ),
+            ),
+            const EditorSection('Latitude'),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text('Under'),
+                      SwipeDial(
+                        values: _underScale,
+                        index: _underHalves - latitudeUnderHalvesMin,
+                        valueFontSize: 32,
+                        haptics: widget.haptics,
+                        onChanged: (i) => setState(() {
+                          _latOver ??= _overHalves;
+                          _latUnder = i + latitudeUnderHalvesMin;
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    children: [
+                      const Text('Over'),
+                      SwipeDial(
+                        values: _overScale,
+                        index: _overHalves,
+                        valueFontSize: 32,
+                        haptics: widget.haptics,
+                        onChanged: (i) => setState(() {
+                          _latUnder ??= _underHalves;
+                          _latOver = i;
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: _latUnder == null && _latOver == null
+                  ? Text(
+                      'Default for ${_type.label}: '
+                      '${formatHalfStops(_underHalves)} to '
+                      '${formatHalfStops(_overHalves)}',
+                      style: const TextStyle(color: GrainColors.secondary),
+                    )
+                  : Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size(44, 48),
+                        ),
+                        onPressed: () => setState(() {
+                          _latUnder = null;
+                          _latOver = null;
+                        }),
+                        child: const Text('Use film default'),
+                      ),
+                    ),
             ),
             const EditorSection('Body'),
             Padding(

@@ -108,7 +108,7 @@ void main() {
       db = GrainDatabase(NativeDatabase(file));
       addTearDown(db.close);
       expect(await DriftGearRepository(db).userBodies(), [_a1]);
-      expect(db.schemaVersion, 2);
+      expect(db.schemaVersion, 3);
     });
 
     test('a corrupt stored row is skipped', () async {

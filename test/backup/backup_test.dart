@@ -766,4 +766,55 @@ void main() {
       );
     },
   );
+
+  test(
+    'a backup without latitude keys imports and re-imports as identical',
+    () async {
+      final a = await filledPhone();
+      final file = await writeBackup(
+        out: tempDir('grain-out'),
+        gear: a.gear,
+        rolls: a.rolls,
+        settings: a.settings,
+        now: DateTime(2026, 11, 21),
+      );
+      final zip = ZipDecoder().decodeStream(InputFileStream(file.path));
+      final top = jsonDecode(
+        utf8.decode(zip.findFile('grain-backup.json')!.content),
+      ) as Map<String, Object?>;
+      for (final r in top['rolls'] as List) {
+        final film = ((r as Map)['roll'] as Map)['film'] as Map;
+        expect(film.containsKey('latitudeUnderHalves'), isTrue);
+        film
+          ..remove('latitudeUnderHalves')
+          ..remove('latitudeOverHalves');
+      }
+      final entries = <String, List<int>>{
+        for (final f in zip.files)
+          if (f.isFile) f.name: f.content,
+        'grain-backup.json': jsonBytes(top),
+      };
+      final c = await readBackup(zipOf(entries));
+      final b = Phone();
+      final first = await importInto(b, c);
+      expect(first.rollsAdded, 2);
+      expect(b.rolls.rolls.every((r) => r.latitudeUnderHalves == null), isTrue);
+      expect(b.rolls.rolls.every((r) => r.latitudeOverHalves == null), isTrue);
+      final again = await importInto(b, c);
+      expect(again.rollsSkipped, 2);
+      expect(again.rollsAdded + again.rollsCopied, 0);
+    },
+  );
+
+  test('a roll differing only in latitude is imported as a copy', () async {
+    final a = await filledPhone();
+    final c = await exportFrom(a);
+    final b = Phone();
+    await importInto(b, c);
+    final r = b.rolls.rolls.first;
+    await b.rolls.updateRoll(r.copyWith(latitudeOverHalves: () => 4));
+    final report = await importInto(b, c);
+    expect(report.rollsCopied, 1);
+    expect(report.rollsSkipped, 1);
+  });
 }

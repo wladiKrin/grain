@@ -1,6 +1,7 @@
 import '../exposure/mode.dart';
 import '../gear/model.dart';
 import '../metering/reading.dart';
+import 'latitude.dart';
 import 'numbering.dart';
 import 'push.dart';
 
@@ -178,6 +179,8 @@ class Roll {
     required this.size,
     required this.startFrame,
     this.notes = '',
+    this.latitudeUnderHalves,
+    this.latitudeOverHalves,
     required this.status,
     required this.startedAt,
     this.finishedAt,
@@ -197,12 +200,25 @@ class Roll {
   final int size;
   final StartFrame startFrame;
   final String notes;
+
+  /// Latitude override in half stops (−10…0 / 0…12); null follows the film
+  /// type.
+  final int? latitudeUnderHalves, latitudeOverHalves;
   final RollStatus status;
   final DateTime startedAt;
   final DateTime? finishedAt;
   final DateTime updatedAt;
 
   String get bodyName => _bodyName(bodyId, bodyMake, bodyModel);
+
+  FilmLatitude get latitude {
+    final d = FilmLatitude.forType(filmType);
+    return FilmLatitude(
+      under: latitudeUnderHalves != null ? latitudeUnderHalves! / 2 : d.under,
+      over: latitudeOverHalves != null ? latitudeOverHalves! / 2 : d.over,
+    );
+  }
+
   int get exposedIso => exposedIsoFor(boxIso, pushThirds) ?? boxIso;
   double get pushStops => pushThirds / 3;
   bool get isActive => status == RollStatus.active;
@@ -221,6 +237,8 @@ class Roll {
     size,
     startFrame,
     notes,
+    latitudeUnderHalves,
+    latitudeOverHalves,
     status,
     startedAt,
     finishedAt,
@@ -241,6 +259,8 @@ class Roll {
     int? size,
     StartFrame? startFrame,
     String? notes,
+    int? Function()? latitudeUnderHalves,
+    int? Function()? latitudeOverHalves,
     RollStatus? status,
     DateTime? startedAt,
     DateTime? Function()? finishedAt,
@@ -259,6 +279,12 @@ class Roll {
     size: size ?? this.size,
     startFrame: startFrame ?? this.startFrame,
     notes: notes ?? this.notes,
+    latitudeUnderHalves: latitudeUnderHalves != null
+        ? latitudeUnderHalves()
+        : this.latitudeUnderHalves,
+    latitudeOverHalves: latitudeOverHalves != null
+        ? latitudeOverHalves()
+        : this.latitudeOverHalves,
     status: status ?? this.status,
     startedAt: startedAt ?? this.startedAt,
     finishedAt: finishedAt != null ? finishedAt() : this.finishedAt,

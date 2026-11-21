@@ -157,6 +157,8 @@ class RollController extends ChangeNotifier {
     required int size,
     required StartFrame startFrame,
     String notes = '',
+    int? latitudeUnderHalves,
+    int? latitudeOverHalves,
   }) {
     final now = _now();
     final previous = active;
@@ -183,6 +185,8 @@ class RollController extends ChangeNotifier {
       size: size,
       startFrame: startFrame,
       notes: notes,
+      latitudeUnderHalves: latitudeUnderHalves,
+      latitudeOverHalves: latitudeOverHalves,
       status: RollStatus.active,
       startedAt: now,
       updatedAt: now,

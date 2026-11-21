@@ -92,6 +92,13 @@ void main() {
         expect((await repo.rolls()).length, 3);
       });
 
+      test('latitude overrides persist', () async {
+        await repo.saveRoll(_roll('a').copyWith(latitudeUnderHalves: () => -2));
+        final r = (await repo.rolls()).single;
+        expect(r.latitudeUnderHalves, -2);
+        expect(r.latitudeOverHalves, isNull);
+      });
+
       test(
         'frames come back in position order with every exposure field',
         () async {

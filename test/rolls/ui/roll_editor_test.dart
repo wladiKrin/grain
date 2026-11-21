@@ -57,7 +57,14 @@ void main() {
   }
 
   Future<void> drag(WidgetTester t, double dx) async {
-    final dial = find.byType(SwipeDial);
+    final dial = find.byType(SwipeDial).first;
+    await t.ensureVisible(dial);
+    await t.drag(dial, Offset(dx, 0));
+    await t.pump();
+  }
+
+  Future<void> dragDial(WidgetTester t, int index, double dx) async {
+    final dial = find.byType(SwipeDial).at(index);
     await t.ensureVisible(dial);
     await t.drag(dial, Offset(dx, 0));
     await t.pump();
@@ -211,5 +218,59 @@ void main() {
     expect(u.bodyId, 'canon-a1');
     expect(u.status, RollStatus.finished);
     expect(rolls.active!.number, 2);
+  });
+
+  testWidgets('latitude follows the film type until a dial is moved', (
+    t,
+  ) async {
+    await pumpEditor(t, body: a1);
+    await t.tap(find.text('Slide'));
+    await t.pump();
+    final under = find.byType(SwipeDial).at(1);
+    final over = find.byType(SwipeDial).at(2);
+    await t.ensureVisible(under);
+    expect(find.descendant(of: under, matching: find.text('−½')), findsWidgets);
+    expect(find.descendant(of: over, matching: find.text('+½')), findsWidgets);
+    expect(find.text('Default for Slide: −½ to +½'), findsOneWidget);
+    await t.ensureVisible(find.text('Colour negative'));
+    await t.tap(find.text('Colour negative'));
+    await t.pump();
+    await t.ensureVisible(under);
+    expect(find.descendant(of: under, matching: find.text('−2')), findsWidgets);
+    expect(find.descendant(of: over, matching: find.text('+3')), findsWidgets);
+    await dragDial(t, 2, -40); // one detent right: +3½
+    expect(find.descendant(of: over, matching: find.text('+3½')), findsWidgets);
+    expect(find.text('Use film default'), findsOneWidget);
+    await typeFilm(t, 'Mystery 400');
+    await save(t);
+    final r = rolls.active!;
+    expect(r.latitudeOverHalves, 7);
+    expect(r.latitudeUnderHalves, -4);
+  });
+
+  testWidgets('Use film default clears both overrides', (t) async {
+    final r = (await t.runAsync(
+      () => rolls.startRoll(
+        filmStock: 'Ilford HP5 Plus',
+        filmType: FilmType.bwNeg,
+        boxIso: 400,
+        pushThirds: 0,
+        body: a1,
+        size: 36,
+        startFrame: StartFrame.one,
+        latitudeUnderHalves: -4,
+        latitudeOverHalves: 5,
+      ),
+    ))!;
+    await pumpEditor(t, initial: r);
+    final b = find.text('Use film default');
+    await t.ensureVisible(b);
+    await t.tap(b);
+    await t.pump();
+    expect(find.text('Use film default'), findsNothing);
+    await save(t);
+    final u = rolls.rolls.firstWhere((x) => x.id == r.id);
+    expect(u.latitudeUnderHalves, isNull);
+    expect(u.latitudeOverHalves, isNull);
   });
 }

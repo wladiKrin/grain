@@ -89,6 +89,10 @@ class Rolls extends Table {
   TextColumn get startFrame => text()();
   TextColumn get notes => text().withDefault(const Constant(''))();
 
+  /// Film latitude override in half stops; null follows the film type.
+  IntColumn get latitudeUnderHalves => integer().nullable()();
+  IntColumn get latitudeOverHalves => integer().nullable()();
+
   /// RollStatus.name
   TextColumn get status => text()();
   DateTimeColumn get startedAt => dateTime()();
@@ -145,7 +149,7 @@ class GrainDatabase extends _$GrainDatabase {
   factory GrainDatabase.open() => GrainDatabase(driftDatabase(name: 'grain'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -156,6 +160,10 @@ class GrainDatabase extends _$GrainDatabase {
         await m.createTable(schema.frames);
         await m.createTable(schema.savedReadings);
         await m.createIndex(schema.framesRollPosition);
+      },
+      from2To3: (m, schema) async {
+        await m.addColumn(schema.rolls, schema.rolls.latitudeUnderHalves);
+        await m.addColumn(schema.rolls, schema.rolls.latitudeOverHalves);
       },
     ),
     beforeOpen: (details) async {

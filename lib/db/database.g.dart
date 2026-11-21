@@ -1004,6 +1004,26 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
     requiredDuringInsert: false,
     defaultValue: const Constant(''),
   );
+  static const VerificationMeta _latitudeUnderHalvesMeta =
+      const VerificationMeta('latitudeUnderHalves');
+  @override
+  late final GeneratedColumn<int> latitudeUnderHalves = GeneratedColumn<int>(
+    'latitude_under_halves',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _latitudeOverHalvesMeta =
+      const VerificationMeta('latitudeOverHalves');
+  @override
+  late final GeneratedColumn<int> latitudeOverHalves = GeneratedColumn<int>(
+    'latitude_over_halves',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -1061,6 +1081,8 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
     size,
     startFrame,
     notes,
+    latitudeUnderHalves,
+    latitudeOverHalves,
     status,
     startedAt,
     finishedAt,
@@ -1175,6 +1197,24 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
+    if (data.containsKey('latitude_under_halves')) {
+      context.handle(
+        _latitudeUnderHalvesMeta,
+        latitudeUnderHalves.isAcceptableOrUnknown(
+          data['latitude_under_halves']!,
+          _latitudeUnderHalvesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('latitude_over_halves')) {
+      context.handle(
+        _latitudeOverHalvesMeta,
+        latitudeOverHalves.isAcceptableOrUnknown(
+          data['latitude_over_halves']!,
+          _latitudeOverHalvesMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
@@ -1266,6 +1306,14 @@ class $RollsTable extends Rolls with TableInfo<$RollsTable, RollRow> {
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       )!,
+      latitudeUnderHalves: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}latitude_under_halves'],
+      ),
+      latitudeOverHalves: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}latitude_over_halves'],
+      ),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -1312,6 +1360,10 @@ class RollRow extends DataClass implements Insertable<RollRow> {
   final String startFrame;
   final String notes;
 
+  /// Film latitude override in half stops; null follows the film type.
+  final int? latitudeUnderHalves;
+  final int? latitudeOverHalves;
+
   /// RollStatus.name
   final String status;
   final DateTime startedAt;
@@ -1331,6 +1383,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     required this.size,
     required this.startFrame,
     required this.notes,
+    this.latitudeUnderHalves,
+    this.latitudeOverHalves,
     required this.status,
     required this.startedAt,
     this.finishedAt,
@@ -1354,6 +1408,12 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     map['size'] = Variable<int>(size);
     map['start_frame'] = Variable<String>(startFrame);
     map['notes'] = Variable<String>(notes);
+    if (!nullToAbsent || latitudeUnderHalves != null) {
+      map['latitude_under_halves'] = Variable<int>(latitudeUnderHalves);
+    }
+    if (!nullToAbsent || latitudeOverHalves != null) {
+      map['latitude_over_halves'] = Variable<int>(latitudeOverHalves);
+    }
     map['status'] = Variable<String>(status);
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || finishedAt != null) {
@@ -1380,6 +1440,12 @@ class RollRow extends DataClass implements Insertable<RollRow> {
       size: Value(size),
       startFrame: Value(startFrame),
       notes: Value(notes),
+      latitudeUnderHalves: latitudeUnderHalves == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latitudeUnderHalves),
+      latitudeOverHalves: latitudeOverHalves == null && nullToAbsent
+          ? const Value.absent()
+          : Value(latitudeOverHalves),
       status: Value(status),
       startedAt: Value(startedAt),
       finishedAt: finishedAt == null && nullToAbsent
@@ -1408,6 +1474,10 @@ class RollRow extends DataClass implements Insertable<RollRow> {
       size: serializer.fromJson<int>(json['size']),
       startFrame: serializer.fromJson<String>(json['startFrame']),
       notes: serializer.fromJson<String>(json['notes']),
+      latitudeUnderHalves: serializer.fromJson<int?>(
+        json['latitudeUnderHalves'],
+      ),
+      latitudeOverHalves: serializer.fromJson<int?>(json['latitudeOverHalves']),
       status: serializer.fromJson<String>(json['status']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
@@ -1431,6 +1501,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
       'size': serializer.toJson<int>(size),
       'startFrame': serializer.toJson<String>(startFrame),
       'notes': serializer.toJson<String>(notes),
+      'latitudeUnderHalves': serializer.toJson<int?>(latitudeUnderHalves),
+      'latitudeOverHalves': serializer.toJson<int?>(latitudeOverHalves),
       'status': serializer.toJson<String>(status),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
@@ -1452,6 +1524,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     int? size,
     String? startFrame,
     String? notes,
+    Value<int?> latitudeUnderHalves = const Value.absent(),
+    Value<int?> latitudeOverHalves = const Value.absent(),
     String? status,
     DateTime? startedAt,
     Value<DateTime?> finishedAt = const Value.absent(),
@@ -1470,6 +1544,12 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     size: size ?? this.size,
     startFrame: startFrame ?? this.startFrame,
     notes: notes ?? this.notes,
+    latitudeUnderHalves: latitudeUnderHalves.present
+        ? latitudeUnderHalves.value
+        : this.latitudeUnderHalves,
+    latitudeOverHalves: latitudeOverHalves.present
+        ? latitudeOverHalves.value
+        : this.latitudeOverHalves,
     status: status ?? this.status,
     startedAt: startedAt ?? this.startedAt,
     finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
@@ -1494,6 +1574,12 @@ class RollRow extends DataClass implements Insertable<RollRow> {
           ? data.startFrame.value
           : this.startFrame,
       notes: data.notes.present ? data.notes.value : this.notes,
+      latitudeUnderHalves: data.latitudeUnderHalves.present
+          ? data.latitudeUnderHalves.value
+          : this.latitudeUnderHalves,
+      latitudeOverHalves: data.latitudeOverHalves.present
+          ? data.latitudeOverHalves.value
+          : this.latitudeOverHalves,
       status: data.status.present ? data.status.value : this.status,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
       finishedAt: data.finishedAt.present
@@ -1519,6 +1605,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
           ..write('size: $size, ')
           ..write('startFrame: $startFrame, ')
           ..write('notes: $notes, ')
+          ..write('latitudeUnderHalves: $latitudeUnderHalves, ')
+          ..write('latitudeOverHalves: $latitudeOverHalves, ')
           ..write('status: $status, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
@@ -1542,6 +1630,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
     size,
     startFrame,
     notes,
+    latitudeUnderHalves,
+    latitudeOverHalves,
     status,
     startedAt,
     finishedAt,
@@ -1564,6 +1654,8 @@ class RollRow extends DataClass implements Insertable<RollRow> {
           other.size == this.size &&
           other.startFrame == this.startFrame &&
           other.notes == this.notes &&
+          other.latitudeUnderHalves == this.latitudeUnderHalves &&
+          other.latitudeOverHalves == this.latitudeOverHalves &&
           other.status == this.status &&
           other.startedAt == this.startedAt &&
           other.finishedAt == this.finishedAt &&
@@ -1584,6 +1676,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
   final Value<int> size;
   final Value<String> startFrame;
   final Value<String> notes;
+  final Value<int?> latitudeUnderHalves;
+  final Value<int?> latitudeOverHalves;
   final Value<String> status;
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
@@ -1603,6 +1697,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     this.size = const Value.absent(),
     this.startFrame = const Value.absent(),
     this.notes = const Value.absent(),
+    this.latitudeUnderHalves = const Value.absent(),
+    this.latitudeOverHalves = const Value.absent(),
     this.status = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.finishedAt = const Value.absent(),
@@ -1623,6 +1719,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     required int size,
     required String startFrame,
     this.notes = const Value.absent(),
+    this.latitudeUnderHalves = const Value.absent(),
+    this.latitudeOverHalves = const Value.absent(),
     required String status,
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
@@ -1656,6 +1754,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     Expression<int>? size,
     Expression<String>? startFrame,
     Expression<String>? notes,
+    Expression<int>? latitudeUnderHalves,
+    Expression<int>? latitudeOverHalves,
     Expression<String>? status,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? finishedAt,
@@ -1676,6 +1776,10 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
       if (size != null) 'size': size,
       if (startFrame != null) 'start_frame': startFrame,
       if (notes != null) 'notes': notes,
+      if (latitudeUnderHalves != null)
+        'latitude_under_halves': latitudeUnderHalves,
+      if (latitudeOverHalves != null)
+        'latitude_over_halves': latitudeOverHalves,
       if (status != null) 'status': status,
       if (startedAt != null) 'started_at': startedAt,
       if (finishedAt != null) 'finished_at': finishedAt,
@@ -1698,6 +1802,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     Value<int>? size,
     Value<String>? startFrame,
     Value<String>? notes,
+    Value<int?>? latitudeUnderHalves,
+    Value<int?>? latitudeOverHalves,
     Value<String>? status,
     Value<DateTime>? startedAt,
     Value<DateTime?>? finishedAt,
@@ -1718,6 +1824,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
       size: size ?? this.size,
       startFrame: startFrame ?? this.startFrame,
       notes: notes ?? this.notes,
+      latitudeUnderHalves: latitudeUnderHalves ?? this.latitudeUnderHalves,
+      latitudeOverHalves: latitudeOverHalves ?? this.latitudeOverHalves,
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
@@ -1768,6 +1876,12 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
+    if (latitudeUnderHalves.present) {
+      map['latitude_under_halves'] = Variable<int>(latitudeUnderHalves.value);
+    }
+    if (latitudeOverHalves.present) {
+      map['latitude_over_halves'] = Variable<int>(latitudeOverHalves.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
@@ -1802,6 +1916,8 @@ class RollsCompanion extends UpdateCompanion<RollRow> {
           ..write('size: $size, ')
           ..write('startFrame: $startFrame, ')
           ..write('notes: $notes, ')
+          ..write('latitudeUnderHalves: $latitudeUnderHalves, ')
+          ..write('latitudeOverHalves: $latitudeOverHalves, ')
           ..write('status: $status, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
@@ -5073,6 +5189,8 @@ typedef $$RollsTableCreateCompanionBuilder = RollsCompanion Function({
   required int size,
   required String startFrame,
   Value<String> notes,
+  Value<int?> latitudeUnderHalves,
+  Value<int?> latitudeOverHalves,
   required String status,
   required DateTime startedAt,
   Value<DateTime?> finishedAt,
@@ -5093,6 +5211,8 @@ typedef $$RollsTableUpdateCompanionBuilder = RollsCompanion Function({
   Value<int> size,
   Value<String> startFrame,
   Value<String> notes,
+  Value<int?> latitudeUnderHalves,
+  Value<int?> latitudeOverHalves,
   Value<String> status,
   Value<DateTime> startedAt,
   Value<DateTime?> finishedAt,
@@ -5195,6 +5315,16 @@ class $$RollsTableFilterComposer
 
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get latitudeUnderHalves => $composableBuilder(
+    column: $table.latitudeUnderHalves,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get latitudeOverHalves => $composableBuilder(
+    column: $table.latitudeOverHalves,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5318,6 +5448,16 @@ class $$RollsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get latitudeUnderHalves => $composableBuilder(
+    column: $table.latitudeUnderHalves,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get latitudeOverHalves => $composableBuilder(
+    column: $table.latitudeOverHalves,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -5390,6 +5530,16 @@ class $$RollsTableAnnotationComposer
 
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<int> get latitudeUnderHalves => $composableBuilder(
+    column: $table.latitudeUnderHalves,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get latitudeOverHalves => $composableBuilder(
+    column: $table.latitudeOverHalves,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -5472,6 +5622,8 @@ class $$RollsTableTableManager
                 Value<int> size = const Value.absent(),
                 Value<String> startFrame = const Value.absent(),
                 Value<String> notes = const Value.absent(),
+                Value<int?> latitudeUnderHalves = const Value.absent(),
+                Value<int?> latitudeOverHalves = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
                 Value<DateTime?> finishedAt = const Value.absent(),
@@ -5491,6 +5643,8 @@ class $$RollsTableTableManager
                 size: size,
                 startFrame: startFrame,
                 notes: notes,
+                latitudeUnderHalves: latitudeUnderHalves,
+                latitudeOverHalves: latitudeOverHalves,
                 status: status,
                 startedAt: startedAt,
                 finishedAt: finishedAt,
@@ -5512,6 +5666,8 @@ class $$RollsTableTableManager
                 required int size,
                 required String startFrame,
                 Value<String> notes = const Value.absent(),
+                Value<int?> latitudeUnderHalves = const Value.absent(),
+                Value<int?> latitudeOverHalves = const Value.absent(),
                 required String status,
                 required DateTime startedAt,
                 Value<DateTime?> finishedAt = const Value.absent(),
@@ -5531,6 +5687,8 @@ class $$RollsTableTableManager
                 size: size,
                 startFrame: startFrame,
                 notes: notes,
+                latitudeUnderHalves: latitudeUnderHalves,
+                latitudeOverHalves: latitudeOverHalves,
                 status: status,
                 startedAt: startedAt,
                 finishedAt: finishedAt,

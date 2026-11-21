@@ -1,4 +1,5 @@
 import '../exposure/mode.dart';
+import '../exposure/stops.dart';
 import '../gear/model.dart';
 import '../metering/reading.dart';
 import 'model.dart';
@@ -114,6 +115,8 @@ Map<String, Object?> rollToJson(Roll r, List<Frame> frames) => {
       'pushThirds': r.pushThirds,
       'pushStops': r.pushStops,
       'exposedIso': r.exposedIso,
+      'latitudeUnderHalves': r.latitudeUnderHalves,
+      'latitudeOverHalves': r.latitudeOverHalves,
     },
     'body': _bodyJson(r.bodyId, r.bodyMake, r.bodyModel, r.format),
     'size': r.size,
@@ -194,6 +197,15 @@ int? _intOrNull(Map<String, Object?> m, String k, String p) {
   final v = m[k];
   if (v == null) return null;
   return v is int ? v : _bad('$p$k', 'expected a whole number or null');
+}
+
+/// Optional half-stop count of roll.film within [min]…[max].
+int? _halves(Map<String, Object?> film, String k, int min, int max) {
+  final v = _intOrNull(film, k, 'roll.film.');
+  if (v != null && (v < min || v > max)) {
+    _bad('roll.film.$k', 'expected $min..$max');
+  }
+  return v;
 }
 
 double? _numOrNull(Map<String, Object?> m, String k, String p) {
@@ -307,6 +319,18 @@ void _header(Map<String, Object?> m, String type) {
     size: _int(r, 'size', rp),
     startFrame: startFrame,
     notes: _str(r, 'notes', rp),
+    latitudeUnderHalves: _halves(
+      film,
+      'latitudeUnderHalves',
+      latitudeUnderHalvesMin,
+      0,
+    ),
+    latitudeOverHalves: _halves(
+      film,
+      'latitudeOverHalves',
+      0,
+      latitudeOverHalvesMax,
+    ),
     status: status,
     startedAt: _date(r, 'startedAt', rp),
     finishedAt: _dateOrNull(r, 'finishedAt', rp),

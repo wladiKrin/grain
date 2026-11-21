@@ -218,4 +218,39 @@ void main() {
     expect(j['takenAt'], '2026-11-21T13:03:22.000Z');
     expect(rollFromJson(rollToJson(r4, [f])).$2.single, f);
   });
+
+  test('latitude overrides round-trip and absent keys mean the default', () {
+    final r = roll(latitudeUnderHalves: -4, latitudeOverHalves: 5);
+    expect(rollFromJson(rollToJson(r, const [])).$1, r);
+    final old = rollToJson(roll(), const []);
+    ((old['roll'] as Map)['film'] as Map)
+      ..remove('latitudeUnderHalves')
+      ..remove('latitudeOverHalves');
+    final back = rollFromJson(old).$1;
+    expect(back.latitudeUnderHalves, isNull);
+    expect(back.latitudeOverHalves, isNull);
+  });
+
+  test('latitude out of range is rejected', () {
+    for (final (key, bad, msg) in [
+      ('latitudeOverHalves', 13, 'expected 0..12'),
+      ('latitudeOverHalves', -1, 'expected 0..12'),
+      ('latitudeUnderHalves', -11, 'expected -10..0'),
+      ('latitudeUnderHalves', 1, 'expected -10..0'),
+    ]) {
+      final j = rollToJson(roll(latitudeOverHalves: 5), const []);
+      ((j['roll'] as Map)['film'] as Map)[key] = bad;
+      expect(
+        () => rollFromJson(j),
+        throwsA(
+          isA<RollFormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('roll.film.$key: $msg'),
+          ),
+        ),
+        reason: '$key $bad',
+      );
+    }
+  });
 }

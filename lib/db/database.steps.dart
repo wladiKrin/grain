@@ -687,8 +687,222 @@ class Shape5 extends i0.VersionedTable {
       columnsByName['format']! as i1.GeneratedColumn<String>;
 }
 
+final class Schema3 extends i0.VersionedSchema {
+  Schema3({required super.database}) : super(version: 3);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    userProfiles,
+    favorites,
+    gearSelections,
+    rolls,
+    frames,
+    savedReadings,
+    framesRollPosition,
+  ];
+  late final Shape0 userProfiles = Shape0(
+    source: i0.VersionedTable(
+      entityName: 'user_profiles',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(kind, id)'],
+      columns: [_column_0, _column_1, _column_2, _column_3, _column_4],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape1 favorites = Shape1(
+    source: i0.VersionedTable(
+      entityName: 'favorites',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(kind, profile_id)'],
+      columns: [_column_1, _column_5],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape2 gearSelections = Shape2(
+    source: i0.VersionedTable(
+      entityName: 'gear_selections',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_6, _column_7, _column_8, _column_9],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape6 rolls = Shape6(
+    source: i0.VersionedTable(
+      entityName: 'rolls',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_10,
+        _column_11,
+        _column_12,
+        _column_13,
+        _column_14,
+        _column_7,
+        _column_15,
+        _column_16,
+        _column_17,
+        _column_18,
+        _column_19,
+        _column_20,
+        _column_43,
+        _column_44,
+        _column_21,
+        _column_22,
+        _column_23,
+        _column_4,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 frames = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'frames',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_24,
+        _column_25,
+        _column_26,
+        _column_27,
+        _column_28,
+        _column_8,
+        _column_29,
+        _column_30,
+        _column_9,
+        _column_31,
+        _column_32,
+        _column_33,
+        _column_34,
+        _column_35,
+        _column_36,
+        _column_37,
+        _column_38,
+        _column_39,
+        _column_40,
+        _column_4,
+        _column_0,
+        _column_41,
+        _column_42,
+        _column_10,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 savedReadings = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'saved_readings',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_24,
+        _column_25,
+        _column_26,
+        _column_27,
+        _column_28,
+        _column_8,
+        _column_29,
+        _column_30,
+        _column_9,
+        _column_31,
+        _column_32,
+        _column_33,
+        _column_34,
+        _column_35,
+        _column_36,
+        _column_37,
+        _column_38,
+        _column_39,
+        _column_40,
+        _column_4,
+        _column_0,
+        _column_7,
+        _column_15,
+        _column_16,
+        _column_17,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index framesRollPosition = i1.Index(
+    'frames_roll_position',
+    'CREATE INDEX frames_roll_position ON frames (roll_id, position)',
+  );
+}
+
+class Shape6 extends i0.VersionedTable {
+  Shape6({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get number =>
+      columnsByName['number']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get filmStock =>
+      columnsByName['film_stock']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get filmType =>
+      columnsByName['film_type']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get boxIso =>
+      columnsByName['box_iso']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get pushThirds =>
+      columnsByName['push_thirds']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get bodyId =>
+      columnsByName['body_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get bodyMake =>
+      columnsByName['body_make']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get bodyModel =>
+      columnsByName['body_model']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get format =>
+      columnsByName['format']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get size =>
+      columnsByName['size']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get startFrame =>
+      columnsByName['start_frame']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get notes =>
+      columnsByName['notes']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get latitudeUnderHalves =>
+      columnsByName['latitude_under_halves']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get latitudeOverHalves =>
+      columnsByName['latitude_over_halves']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get startedAt =>
+      columnsByName['started_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get finishedAt =>
+      columnsByName['finished_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_43(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'latitude_under_halves',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
+i1.GeneratedColumn<int> _column_44(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'latitude_over_halves',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
+  required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -697,6 +911,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from1To2(migrator, schema);
         return 2;
+      case 2:
+        final schema = Schema3(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from2To3(migrator, schema);
+        return 3;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -705,6 +924,7 @@ i0.MigrationStepWithVersion migrationSteps({
 
 i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
+  required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
 }) => i0.VersionedSchema.stepByStepHelper(
-  step: migrationSteps(from1To2: from1To2),
+  step: migrationSteps(from1To2: from1To2, from2To3: from2To3),
 );

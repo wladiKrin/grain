@@ -4,6 +4,7 @@ import 'package:grain/exposure/scales.dart';
 import 'package:grain/gear/model.dart';
 import 'package:grain/metering/reading.dart';
 import 'package:grain/rolls/ids.dart';
+import 'package:grain/rolls/latitude.dart';
 import 'package:grain/rolls/model.dart';
 
 import 'support.dart';
@@ -95,5 +96,25 @@ void main() {
     expect(nominalValue('1/125'), .008);
     expect(nominalValue('2"'), 2);
     expect(nominalValue('5.6'), 5.6);
+  });
+
+  test('latitude follows the film type unless set', () {
+    expect(roll(filmType: FilmType.slide).latitude, FilmLatitude.slide);
+    expect(
+      roll(filmType: FilmType.slide, latitudeOverHalves: 2).latitude,
+      const FilmLatitude(under: -0.5, over: 1),
+    );
+    expect(
+      roll(filmType: FilmType.bwNeg, latitudeUnderHalves: -3).latitude,
+      const FilmLatitude(under: -1.5, over: 3),
+    );
+    final r = roll(latitudeUnderHalves: -3);
+    expect(
+      r.copyWith(latitudeUnderHalves: () => null).latitudeUnderHalves,
+      isNull,
+    );
+    expect(r.copyWith().latitudeUnderHalves, -3);
+    expect(r == roll(latitudeUnderHalves: -3), isTrue);
+    expect(r == roll(latitudeUnderHalves: -4), isFalse);
   });
 }
