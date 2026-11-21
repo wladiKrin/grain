@@ -19,9 +19,12 @@ import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
 import 'rolls/location.dart';
 import 'rolls/location_channel.dart';
+import 'rolls/model.dart';
 import 'rolls/roll_controller.dart';
 import 'rolls/roll_repository.dart';
 import 'rolls/snapshot_store.dart';
+import 'rolls/ui/body_change_dialog.dart';
+import 'rolls/ui/roll_editor.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
@@ -237,40 +240,63 @@ class _GrainAppState extends State<GrainApp> {
 
   /// Pushes a full-screen route with the meter's camera released while it
   /// (and anything opened from it) is up; the meter resumes on the way back.
-  void _pushLent(WidgetBuilder builder) {
+  /// When the route returns with another body selected while a roll is active
+  /// in a different one, asks what to do with the roll.
+  Future<T?> _pushLent<T>(WidgetBuilder builder) async {
     final navigator = _navigator.currentState;
-    if (navigator == null) return;
-    unawaited(
-      _controller.lendCamera(
-        () => navigator.push(MaterialPageRoute<void>(builder: builder)),
-        waitForRelease: false,
-      ),
+    if (navigator == null) return null;
+    final before = _gear.body?.id;
+    final result = await _controller.lendCamera(
+      () => navigator.push(MaterialPageRoute<T>(builder: builder)),
+      waitForRelease: false,
     );
+    if (mounted && _gear.body?.id != before) await _askBodyChange();
+    return result;
   }
 
-  void _openLibrary() => _pushLent(
-    (_) => BodyPickerScreen(gear: _gear, onShare: _share, onImport: _import),
+  Future<void> _askBodyChange() async {
+    final roll = _rolls.active;
+    final c = _overlayContext;
+    if (roll == null || c == null || _rolls.logsFor(_gear.body)) return;
+    final choice = await showBodyChangeDialog(c, roll: roll);
+    if (choice == BodyChangeChoice.finishAndStart && mounted) {
+      await _startRoll();
+    }
+  }
+
+  Future<void> _startRoll() => _pushLent<Roll>(
+    (_) => RollEditorScreen(rolls: _rolls, haptics: _haptics, body: _gear.body),
+  );
+
+  void _openLibrary() => unawaited(
+    _pushLent<void>(
+      (_) => BodyPickerScreen(gear: _gear, onShare: _share, onImport: _import),
+    ),
   );
 
   /// Lenses of the selected body's mount; without a body, the library.
   void _openLensPicker() {
     final body = _gear.body;
     if (body == null) return _openLibrary();
-    _pushLent(
-      (_) => LensPickerScreen(
-        gear: _gear,
-        mount: body.mount,
-        onShare: _share,
-        onImport: _import,
+    unawaited(
+      _pushLent<void>(
+        (_) => LensPickerScreen(
+          gear: _gear,
+          mount: body.mount,
+          onShare: _share,
+          onImport: _import,
+        ),
       ),
     );
   }
 
-  void _openSettings() => _pushLent(
-    (_) => SettingsScreen(
-      settings: _settings,
-      haptics: _haptics,
-      location: widget.location,
+  void _openSettings() => unawaited(
+    _pushLent<void>(
+      (_) => SettingsScreen(
+        settings: _settings,
+        haptics: _haptics,
+        location: widget.location,
+      ),
     ),
   );
 
@@ -294,6 +320,7 @@ class _GrainAppState extends State<GrainApp> {
         onOpenLibrary: _openLibrary,
         onOpenLensPicker: _openLensPicker,
         onOpenSettings: _openSettings,
+        onStartRoll: () => unawaited(_startRoll()),
       ),
     );
   }
