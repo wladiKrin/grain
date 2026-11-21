@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Subsets the Inter Tight sources in tool/fonts/source/ into assets/fonts/
 # (same file names), keeping Latin, Latin-1, Latin Extended-A, the Romanian
-# comma letters, general punctuation, fractions, arrows and the few symbols
+# comma letters, general punctuation, fractions and the fraction slash (U+2044,
+# which the UI draws stop thirds and halves with), arrows and the few symbols
 # the UI draws. Then checks that every UI glyph the source font had survived.
 #
 # Made with fontTools 4.68.0 (pyftsubset). It installs nothing; to get it:
@@ -25,7 +26,7 @@ python="$(dirname "$pyftsubset")/python3"
 [ -x "$python" ] || python=python3
 
 for src in tool/fonts/source/InterTight-*.ttf; do
-  "$pyftsubset" "$src" --output-file="assets/fonts/$(basename "$src")" --unicodes="U+0020-007E,U+00A0-017F,U+0218-021B,U+2010-2027,U+2030,U+2032-2033,U+2039-203A,U+20AC,U+2122,U+2150-215F,U+2190-2193,U+2212,U+2248,U+25B2,U+25BC,U+25CF" --layout-features='*' --no-hinting --desubroutinize
+  "$pyftsubset" "$src" --output-file="assets/fonts/$(basename "$src")" --unicodes="U+0020-007E,U+00A0-017F,U+0218-021B,U+2010-2027,U+2030,U+2032-2033,U+2039-203A,U+2044,U+20AC,U+2122,U+2150-215F,U+2190-2193,U+2212,U+2248,U+25B2,U+25BC,U+25CF" --layout-features='*' --no-hinting --desubroutinize
   echo "$(basename "$src"): $(stat -c %s "$src") -> $(stat -c %s "assets/fonts/$(basename "$src")") bytes"
 done
 
@@ -37,7 +38,7 @@ import pathlib, re, sys
 from fontTools.ttLib import TTFont
 
 src_dir, lib_dir = map(pathlib.Path, sys.argv[1:3])
-wanted = set('→←·−…—–×±⅓⅔½≈▲▼●äöüßéñ')
+wanted = set("→←·−…—–×±⅓⅔½≈▲▼●äöüßéñ\u2044")
 for path in lib_dir.rglob('*.dart'):
     for line in path.read_text(encoding='utf-8').splitlines():
         code = line.split('//', 1)[0]
