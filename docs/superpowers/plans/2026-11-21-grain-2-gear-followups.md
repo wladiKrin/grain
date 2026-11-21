@@ -1,6 +1,6 @@
 # Grain 2 — Gear library: follow-ups
 
-Recorded when plan 2 finished (2026-11-21). Branch feat/gear on top of feat/meter. No device was connected: every on-device check in docs/testing/device-test-script.md and docs/testing/device-test-script.md is still open.
+Recorded when plan 2 finished (2026-11-21). Branch feat/gear on top of feat/meter. No device was connected: every on-device check in docs/testing/device-test-script.md (which replaced the gear and metering checklists) is still open.
 
 ## Decisions made during the build
 - - R1 Task 2/9: Ruling: Lens.shortName uses replaceAllMapped (plan's replaceAll does not expand $1 in Dart) — plan defect — cost if wrong: none.
