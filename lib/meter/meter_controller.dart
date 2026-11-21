@@ -113,16 +113,20 @@ class MeterController extends ChangeNotifier {
     cameraDenied = false;
     cameraError = null;
     try {
-      final info = await _source.start();
-      if (!_wantRunning || _disposed) {
+      while (true) {
+        final info = await _source.start();
+        if (_wantRunning && !_disposed) {
+          preview = info;
+          _running = true;
+          _sub = _source.stats.listen(_onStats, onError: _onStatsError);
+          _sendRegions();
+          break;
+        }
         // Paused or disposed while starting: release the camera again.
         await _source.stop();
-        return;
+        // Resumed again while it was being released: start over.
+        if (!_wantRunning || _disposed) break;
       }
-      preview = info;
-      _running = true;
-      _sub = _source.stats.listen(_onStats);
-      _sendRegions();
     } on PlatformException catch (e) {
       if (e.code == 'denied') {
         cameraDenied = true;
@@ -162,9 +166,28 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The native side tears the camera down after reporting an error; a later
+  /// [resume] opens it again.
+  void _onStatsError(Object error) {
+    if (!_running) return;
+    _running = false;
+    unawaited(_sub?.cancel());
+    _sub = null;
+    preview = null;
+    _latest = null;
+    cameraError = error is PlatformException
+        ? (error.message ?? error.code)
+        : error.toString();
+    if (!held) reading = null;
+    if (!_disposed) notifyListeners();
+  }
+
   void _derive() {
     final s = _latest;
-    if (s == null) return;
+    if (s == null) {
+      reading = null;
+      return;
+    }
     reading = readingFrom(s, area: area, calibration: _calibrationEv);
   }
 

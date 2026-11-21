@@ -13,6 +13,7 @@ class FakeSource implements MeterSource {
   final _stats = StreamController<MeterStats>.broadcast();
   Object? startError;
   Completer<void>? startGate;
+  Completer<void>? stopGate;
 
   @override
   Future<PreviewInfo> start() async {
@@ -28,7 +29,10 @@ class FakeSource implements MeterSource {
   }
 
   @override
-  Future<void> stop() async => calls.add('stop');
+  Future<void> stop() async {
+    calls.add('stop');
+    await stopGate?.future;
+  }
 
   @override
   Future<void> setRegions(Rect crop, Offset spot, double radius) async {
@@ -41,6 +45,7 @@ class FakeSource implements MeterSource {
 
   bool get hasListener => _stats.hasListener;
   void emit(MeterStats s) => _stats.add(s);
+  void fail(Object error) => _stats.addError(error);
 }
 
 /// Stats giving EV100 = 15 (f/1, 1/32768 s, ISO 100, region == frame).
@@ -271,5 +276,57 @@ void main() {
     // Switching area re-derives from the last valid frame.
     c.tapSpot(const Offset(.3, .3));
     expect(c.reading!.ev100, closeTo(15, 1e-3));
+  });
+
+  test('resume while the cancelled start is still stopping restarts', () async {
+    src.startGate = Completer<void>();
+    src.stopGate = Completer<void>();
+    final first = c.resume();
+    await c.pause();
+    src.startGate!.complete();
+    await settle(); // start resolved; the cancel-path stop is pending
+    expect(src.calls, ['start', 'stop']);
+    final second = c.resume();
+    src.stopGate!.complete();
+    await Future.wait([first, second]);
+    expect(src.calls.where((e) => e != 'setRegions'), [
+      'start',
+      'stop',
+      'start',
+    ]);
+    expect(src.hasListener, isTrue);
+    expect(c.preview, isNotNull);
+  });
+
+  test('stats stream error stops metering and is reported', () async {
+    await run();
+    expect(c.reading, isNotNull);
+    var notified = 0;
+    c.addListener(() => notified++);
+    src.fail(PlatformException(code: 'camera_error', message: 'disconnected'));
+    await settle();
+    expect(c.cameraError, 'disconnected');
+    expect(c.preview, isNull);
+    expect(c.reading, isNull);
+    expect(src.hasListener, isFalse);
+    expect(notified, greaterThan(0));
+    // A later resume recovers.
+    await c.resume();
+    expect(c.cameraError, isNull);
+    expect(c.preview, isNotNull);
+    expect(src.hasListener, isTrue);
+    src.emit(stats());
+    await settle();
+    expect(c.reading!.ev100, closeTo(15, 1e-3));
+  });
+
+  test('stats stream error keeps a held reading', () async {
+    await run();
+    c.toggleHold();
+    final held = c.reading;
+    src.fail(StateError('gone'));
+    await settle();
+    expect(c.cameraError, isNotNull);
+    expect(c.reading, same(held));
   });
 }
