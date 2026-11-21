@@ -105,9 +105,11 @@ class MeterController extends ChangeNotifier {
         );
 
   Future<void> resume() async {
-    if (_running || _starting || _disposed) return;
-    _starting = true;
+    if (_disposed) return;
+    // Recorded before the guard so a resume during an in-flight start keeps it.
     _wantRunning = true;
+    if (_running || _starting) return;
+    _starting = true;
     cameraDenied = false;
     cameraError = null;
     try {

@@ -154,6 +154,30 @@ void main() {
     expect(src.hasListener, isTrue);
   });
 
+  test('resume during an in-flight start keeps the camera', () async {
+    src.startGate = Completer<void>();
+    final first = c.resume();
+    await c.pause();
+    final second = c.resume();
+    src.startGate!.complete();
+    await Future.wait([first, second]);
+    expect(src.calls.where((e) => e != 'setRegions'), ['start']);
+    expect(src.hasListener, isTrue);
+    expect(c.preview, isNotNull);
+  });
+
+  test('resume then pause during an in-flight start ends stopped', () async {
+    src.startGate = Completer<void>();
+    final first = c.resume();
+    await c.pause();
+    final second = c.resume();
+    await c.pause();
+    src.startGate!.complete();
+    await Future.wait([first, second]);
+    expect(src.calls, ['start', 'stop']);
+    expect(src.hasListener, isFalse);
+  });
+
   test('dispose while start is in flight releases the camera', () async {
     src.startGate = Completer<void>();
     final starting = c.resume();
