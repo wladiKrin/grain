@@ -29,4 +29,11 @@ class LocationPickTest {
         assertEquals(precise, LocationPick.freshest(listOf(coarse, precise), now, maxAge))
         assertEquals(precise, LocationPick.freshest(listOf(precise, coarse), now, maxAge))
     }
+
+    @Test fun futureDatedFixIsRejected() {
+        val future = Fix(1.0, 1.0, 5f, now + 60_000)
+        val ok = Fix(2.0, 2.0, 500f, now - 20_000)
+        assertNull(LocationPick.freshest(listOf(future), now, maxAge))
+        assertEquals(ok, LocationPick.freshest(listOf(future, ok), now, maxAge))
+    }
 }

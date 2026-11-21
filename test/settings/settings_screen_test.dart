@@ -3,10 +3,9 @@ import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:grain/ui/theme.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_location.dart';
-
-import 'package:material_ui/material_ui.dart';
 
 class _Haptics implements Haptics {
   @override

@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -26,8 +27,8 @@ class LocationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var channel: MethodChannel? = null
     private val handler = Handler(Looper.getMainLooper())
 
-    /** Cancels whatever fresh-fix request is in flight (detach). */
-    private val cancels = mutableSetOf<() -> Unit>()
+    /** Finishers (with null) of the fresh-fix requests in flight, run on detach. */
+    private val cancels = mutableSetOf<(Location?) -> Unit>()
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
@@ -37,7 +38,7 @@ class LocationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel?.setMethodCallHandler(null)
         channel = null
-        cancels.toList().forEach { it() }
+        cancels.toList().forEach { it(null) }
         cancels.clear()
     }
 
@@ -68,16 +69,21 @@ class LocationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             result.success(recent.toMap())
             return
         }
-        val provider = freshProviders().firstOrNull { enabled(lm, it) }
-        if (provider == null) {
-            result.success(LocationPick.freshest(known.map { it.toFix() }, now, STALE_MS)?.toMap())
-            return
-        }
-        requestFresh(lm, provider, timeoutMs) { fresh ->
-            val answer = fresh?.toFix()
+        val providers = freshProviders().filter { enabled(lm, it) }
+        val answer = { fresh: Location? ->
+            val fix = fresh?.toFix()
                 ?: LocationPick.freshest(known.map { it.toFix() }, System.currentTimeMillis(), STALE_MS)
-            result.success(answer?.toMap())
+            result.success(fix?.toMap())
         }
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        // Each provider gets what is left of the one timeout budget; a failure or an empty
+        // answer moves on to the next enabled provider.
+        fun attempt(i: Int) {
+            val left = deadline - SystemClock.elapsedRealtime()
+            if (i >= providers.size || left <= 0) return answer(null)
+            requestFresh(lm, providers[i], left) { loc -> if (loc != null) answer(loc) else attempt(i + 1) }
+        }
+        attempt(0)
     }
 
     private fun freshProviders(): List<String> = buildList {
@@ -105,23 +111,25 @@ class LocationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
     }
 
-    /** Delivers one fix, or null on timeout / failure; [done] runs exactly once. */
+    /**
+     * Delivers one fix, or null on timeout / failure / detach; [done] runs exactly once. Every
+     * way out cancels the system request and the timeout.
+     */
     @Suppress("DEPRECATION")
     private fun requestFresh(lm: LocationManager, provider: String, timeoutMs: Long, done: (Location?) -> Unit) {
         var finished = false
         var cancel: () -> Unit = {}
-        var timeout: Runnable? = null
-        fun finish(loc: Location?) {
+        lateinit var finishRef: (Location?) -> Unit
+        val timeout = Runnable { finishRef(null) }
+        finishRef = fun(loc: Location?) {
             if (finished) return
             finished = true
-            timeout?.let { handler.removeCallbacks(it) }
-            cancels.remove(cancel)
+            handler.removeCallbacks(timeout)
+            cancel()
+            cancels.remove(finishRef)
             done(loc)
         }
-        timeout = Runnable {
-            cancel()
-            finish(null)
-        }
+        val finish = finishRef
         try {
             if (Build.VERSION.SDK_INT >= 30) {
                 val signal = CancellationSignal()
@@ -146,15 +154,16 @@ class LocationPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             return
         }
         if (finished) return
-        cancels.add(cancel)
+        cancels.add(finish)
         handler.postDelayed(timeout, timeoutMs)
     }
 
+    /** Time from the monotonic clock's age, so a skewed wall-clock stamp can't make it look new. */
     private fun Location.toFix() = Fix(
         latitude,
         longitude,
         if (hasAccuracy()) accuracy else null,
-        time,
+        System.currentTimeMillis() - (SystemClock.elapsedRealtimeNanos() - elapsedRealtimeNanos) / 1_000_000,
     )
 
     private fun Fix.toMap(): Map<String, Any?> = mapOf(
