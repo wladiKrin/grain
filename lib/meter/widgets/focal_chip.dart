@@ -1,25 +1,22 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../exposure/scales.dart';
-import '../../metering/fov.dart';
 import '../../ui/dial/swipe_dial.dart';
 import '../../ui/haptics.dart';
 import '../../ui/theme.dart';
-
-final _focalValues = [
-  for (final f in focalStops) ScaleValue('$f', f.toDouble(), false),
-];
 
 /// "50 mm" pill; tapping it opens a focal-length dial in a bottom sheet.
 class FocalChip extends StatelessWidget {
   const FocalChip({
     super.key,
-    required this.focalIndex,
+    required this.values,
+    required this.index,
     required this.onChanged,
     required this.haptics,
   });
 
-  final int focalIndex;
+  final List<ScaleValue> values;
+  final int index;
   final ValueChanged<int> onChanged;
   final Haptics haptics;
 
@@ -43,7 +40,7 @@ class FocalChip extends StatelessWidget {
                 border: Border.all(color: GrainColors.border),
               ),
               child: Text(
-                '${focalStops[focalIndex]} mm',
+                '${values[index].label} mm',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
@@ -61,7 +58,8 @@ class FocalChip extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (_) => _FocalSheet(
-        initial: focalIndex,
+        values: values,
+        initial: index,
         onChanged: onChanged,
         haptics: haptics,
       ),
@@ -71,11 +69,13 @@ class FocalChip extends StatelessWidget {
 
 class _FocalSheet extends StatefulWidget {
   const _FocalSheet({
+    required this.values,
     required this.initial,
     required this.onChanged,
     required this.haptics,
   });
 
+  final List<ScaleValue> values;
   final int initial;
   final ValueChanged<int> onChanged;
   final Haptics haptics;
@@ -102,7 +102,7 @@ class _FocalSheetState extends State<_FocalSheet> {
               children: [
                 const Text('FOCAL LENGTH', style: grainLabelStyle),
                 Text(
-                  '${focalStops[_index]} mm',
+                  '${widget.values[_index].label} mm',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
@@ -112,7 +112,7 @@ class _FocalSheetState extends State<_FocalSheet> {
               ],
             ),
             SwipeDial(
-              values: _focalValues,
+              values: widget.values,
               index: _index,
               haptics: widget.haptics,
               onChanged: (i) {

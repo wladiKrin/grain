@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/exposure/solver.dart';
+import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
@@ -83,6 +84,7 @@ void main() {
         home: MeterScreen(
           controller: c,
           haptics: haptics,
+          gear: GearController.inMemory(),
           requestCameraPermission: () async {
             permissionRequests++;
             return grant;

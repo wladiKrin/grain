@@ -1,12 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/main.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
+import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'support/fake_source.dart';
+import 'support/gear_fixtures.dart';
 
 class _Haptics implements Haptics {
   @override
@@ -79,5 +82,30 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
     expect(find.byType(Texture), findsOneWidget);
+  });
+
+  testWidgets('gear selection reaches the dials', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final g = GearController.inMemory(library: fixtureLibrary());
+    await tester.pumpWidget(
+      GrainApp(
+        source: FakeMeterSource(logRegions: false),
+        haptics: _Haptics(),
+        gear: g,
+      ),
+    );
+    await tester.pump();
+    await tester.runAsync(() => g.selectBody(libBody('canon-a1')));
+    await tester.pump();
+    // Shutter priority: the shutter row is the only dial.
+    await tester.tap(find.text('Shutter priority'));
+    await tester.pump();
+    expect(
+      tester.widget<SwipeDial>(find.byType(SwipeDial)).values.first.label,
+      '1/1000',
+    );
   });
 }

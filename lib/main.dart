@@ -1,6 +1,10 @@
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'db/database.dart';
+import 'gear/gear_controller.dart';
+import 'gear/gear_repository.dart';
+import 'gear/library.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
@@ -16,8 +20,16 @@ Future<void> lockPortrait() =>
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await lockPortrait();
-  final settings = await Settings.load();
-  runApp(GrainApp(settings: settings));
+  final (settings, library) = await (
+    Settings.load(),
+    GearLibrary.load(rootBundle),
+  ).wait;
+  final gear = GearController(
+    library: library,
+    repository: DriftGearRepository(GrainDatabase.open()),
+  );
+  await gear.load();
+  runApp(GrainApp(settings: settings, gear: gear));
 }
 
 class GrainApp extends StatefulWidget {
@@ -26,8 +38,10 @@ class GrainApp extends StatefulWidget {
     MeterSource? source,
     this.haptics,
     Settings? settings,
+    GearController? gear,
   }) : source = source ?? MeterChannel(),
-       settings = settings ?? Settings.inMemory();
+       settings = settings ?? Settings.inMemory(),
+       gear = gear ?? GearController.inMemory();
 
   final MeterSource source;
 
@@ -35,6 +49,7 @@ class GrainApp extends StatefulWidget {
   /// the haptics setting.
   final Haptics? haptics;
   final Settings settings;
+  final GearController gear;
 
   @override
   State<GrainApp> createState() => _GrainAppState();
@@ -42,8 +57,10 @@ class GrainApp extends StatefulWidget {
 
 class _GrainAppState extends State<GrainApp> {
   Settings get _settings => widget.settings;
+  GearController get _gear => widget.gear;
   late final MeterController _controller = MeterController(
     source: widget.source,
+    gear: _gear.setup,
     calibrationEv: _settings.calibrationEv,
     viewfinderOn: _settings.viewfinderOn,
   );
@@ -66,6 +83,7 @@ class _GrainAppState extends State<GrainApp> {
     );
     _settings.addListener(_onSettings);
     _controller.addListener(_onController);
+    _gear.addListener(_onGear);
     _controller.resume();
   }
 
@@ -77,8 +95,14 @@ class _GrainAppState extends State<GrainApp> {
     }
   }
 
-  /// The eye toggle is the same preference as the settings switch.
+  /// Equal setups are a no-op on the controller, so the two-way sync below
+  /// settles after one round trip.
+  void _onGear() => _controller.setGear(_gear.setup);
+
+  /// The eye toggle is the same preference as the settings switch; a zoom
+  /// change goes back to the gear selection.
   void _onController() {
+    if (_controller.focal != _gear.focal) _gear.setFocal(_controller.focal);
     if (_settings.viewfinderOn != _controller.viewfinderOn) {
       _settings.setViewfinderOn(_controller.viewfinderOn);
     }
@@ -88,11 +112,19 @@ class _GrainAppState extends State<GrainApp> {
   void dispose() {
     _settings.removeListener(_onSettings);
     _controller.removeListener(_onController);
+    _gear.removeListener(_onGear);
     _lifecycle.dispose();
     _controller.pause();
     _controller.dispose();
     super.dispose();
   }
+
+  /// Placeholder routes until the gear screens arrive.
+  void _push(String title) => _navigator.currentState?.push(
+    MaterialPageRoute<void>(
+      builder: (_) => Scaffold(appBar: AppBar(title: Text(title))),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +141,9 @@ class _GrainAppState extends State<GrainApp> {
       home: MeterScreen(
         controller: _controller,
         haptics: _haptics,
+        gear: _gear,
+        onOpenLibrary: () => _push('Library'),
+        onOpenLensPicker: () => _push('Lenses'),
         onOpenSettings: () => _navigator.currentState?.push(
           MaterialPageRoute<void>(
             builder: (_) =>

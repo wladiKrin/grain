@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
+import '../gear/gear_controller.dart';
 import '../ui/haptics.dart';
 import '../ui/theme.dart';
 import 'meter_controller.dart';
@@ -11,6 +12,7 @@ import 'widgets/camera_permission.dart';
 import 'widgets/focal_chip.dart';
 import 'widgets/header.dart';
 import 'widgets/iso_stepper.dart';
+import 'widgets/lens_chip.dart';
 import 'widgets/mode_tabs.dart';
 import 'widgets/offset_scale.dart';
 import 'widgets/value_row.dart';
@@ -23,15 +25,28 @@ class MeterScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.haptics,
+    required this.gear,
     this.onOpenSettings,
+    this.onOpenLibrary,
+    this.onOpenLensPicker,
     this.requestCameraPermission,
   });
 
   final MeterController controller;
   final Haptics haptics;
 
-  /// Settings button action; Task 9 wires the settings screen.
+  /// Source of the header and lens chip, and the lens cycling.
+  final GearController gear;
+
+  /// Settings button action.
   final VoidCallback? onOpenSettings;
+
+  /// Gear library: the header title and its camera button.
+  final VoidCallback? onOpenLibrary;
+
+  /// The lens list; also where a tap on the lens chip leads when there is
+  /// no favorite lens to cycle.
+  final VoidCallback? onOpenLensPicker;
 
   /// Defaults to the system permission request; tests pass a fake.
   final CameraPermissionRequest? requestCameraPermission;
@@ -43,11 +58,31 @@ class MeterScreen extends StatefulWidget {
 class _MeterScreenState extends State<MeterScreen> {
   MeterController get _c => widget.controller;
 
-  /// Aperture scale labelled "f/5.6" for display.
-  late final List<ScaleValue> _apertures = [
-    for (final v in _c.apertures)
-      ScaleValue('f/${v.label}', v.value, v.isFullStop),
-  ];
+  GearController get _gear => widget.gear;
+
+  /// Aperture scale labelled "f/5.6" for display, rebuilt whenever the
+  /// controller swaps its aperture list (gear or focal change).
+  List<ScaleValue>? _aperturesFor;
+  List<ScaleValue> _apertures = const [];
+
+  List<ScaleValue> _displayApertures() {
+    if (!identical(_aperturesFor, _c.apertures)) {
+      _aperturesFor = _c.apertures;
+      _apertures = [
+        for (final v in _c.apertures)
+          ScaleValue('f/${v.label}', v.value, v.isFullStop),
+      ];
+    }
+    return _apertures;
+  }
+
+  Future<void> _onLensTap() async {
+    if (await _gear.cycleLens()) {
+      widget.haptics.tick(strong: false);
+    } else {
+      widget.onOpenLensPicker?.call();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,20 +104,18 @@ class _MeterScreenState extends State<MeterScreen> {
             children: [
               _Select(
                 controller: _c,
-                select: (c) => (c.focalIndex, c.mode),
+                select: (c) => (c.gear, c.focalValues, c.focalIndex, c.mode),
                 builder: (context, _) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   spacing: 16,
                   children: [
-                    MeterHeader(
-                      viewfinderOn: viewfinderOn,
-                      onToggleViewfinder: _c.toggleViewfinder,
-                      onOpenSettings: widget.onOpenSettings ?? () {},
+                    ListenableBuilder(
+                      listenable: _gear,
+                      builder: (context, _) => _gearHeader(viewfinderOn),
                     ),
-                    FocalChip(
-                      focalIndex: _c.focalIndex,
-                      onChanged: _c.setFocal,
-                      haptics: widget.haptics,
+                    ListenableBuilder(
+                      listenable: _gear,
+                      builder: (context, _) => _chips(),
                     ),
                     ModeTabs(mode: _c.mode, onChanged: _c.setMode),
                   ],
@@ -112,10 +145,10 @@ class _MeterScreenState extends State<MeterScreen> {
               RepaintBoundary(child: _valueRows(viewfinderOn)),
               _Select(
                 controller: _c,
-                select: (c) => c.isoIndex,
-                builder: (context, isoIndex) => IsoStepper(
-                  values: _c.isos,
-                  index: isoIndex,
+                select: (c) => (c.isoIndex, c.isos),
+                builder: (context, sel) => IsoStepper(
+                  values: sel.$2,
+                  index: sel.$1,
                   onChanged: _c.setIso,
                   haptics: widget.haptics,
                 ),
@@ -124,6 +157,45 @@ class _MeterScreenState extends State<MeterScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _gearHeader(bool viewfinderOn) {
+    final body = _gear.body;
+    final onLibrary = widget.onOpenLibrary ?? () {};
+    return MeterHeader(
+      title: body?.displayName ?? 'No camera',
+      subtitle: body?.format.label ?? 'Free mode',
+      viewfinderOn: viewfinderOn,
+      onToggleViewfinder: _c.toggleViewfinder,
+      onOpenSettings: widget.onOpenSettings ?? () {},
+      onOpenLibrary: onLibrary,
+    );
+  }
+
+  Widget _chips() {
+    final body = _gear.body;
+    final showFocal = _c.focalValues.length > 1;
+    if (body == null && !showFocal) return const SizedBox.shrink();
+    final onMore = widget.onOpenLensPicker ?? () {};
+    return Row(
+      children: [
+        if (body != null)
+          Flexible(
+            child: LensChip(
+              label: _gear.lens?.shortName ?? 'Choose lens',
+              onTap: _onLensTap,
+              onMore: onMore,
+            ),
+          ),
+        if (showFocal)
+          FocalChip(
+            values: _c.focalValues,
+            index: _c.focalIndex,
+            onChanged: _c.setFocal,
+            haptics: widget.haptics,
+          ),
+      ],
     );
   }
 
@@ -181,6 +253,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.cameraError,
       c.preview,
       c.focalIndex,
+      c.format,
       c.area,
       c.spot,
       c.reading?.ev100,
@@ -223,6 +296,9 @@ class _MeterScreenState extends State<MeterScreen> {
     controller: _c,
     select: (c) => (
       c.mode,
+      c.apertures,
+      c.shutters,
+      c.bulbSeconds,
       c.apertureIndex,
       c.shutterIndex,
       c.solvedShutter?.index,
@@ -232,9 +308,11 @@ class _MeterScreenState extends State<MeterScreen> {
     ),
     builder: (context, _) {
       final size = viewfinderOn ? 64.0 : 92.0;
+      final apertures = _displayApertures();
+      final bulb = _c.bulbSeconds;
       final aperture = ValueRow.input(
         label: 'APERTURE',
-        values: _apertures,
+        values: apertures,
         index: _c.apertureIndex,
         onChanged: _c.setAperture,
         haptics: widget.haptics,
@@ -253,9 +331,12 @@ class _MeterScreenState extends State<MeterScreen> {
           aperture,
           ValueRow.solved(
             label: 'SHUTTER',
-            solved: _c.solvedShutter == null
+            solved: bulb != null
+                ? 'B'
+                : _c.solvedShutter == null
                 ? null
                 : _c.shutters[_c.solvedShutter!.index].label,
+            note: bulb == null ? null : formatSeconds(bulb),
             flag: _c.solvedShutter?.flag ?? .ok,
             fontSize: size,
           ),
@@ -265,7 +346,7 @@ class _MeterScreenState extends State<MeterScreen> {
             label: 'APERTURE',
             solved: _c.solvedAperture == null
                 ? null
-                : _apertures[_c.solvedAperture!.index].label,
+                : apertures[_c.solvedAperture!.index].label,
             flag: _c.solvedAperture?.flag ?? .ok,
             fontSize: size,
           ),

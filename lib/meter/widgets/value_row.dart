@@ -18,6 +18,7 @@ class ValueRow extends StatelessWidget {
     required Haptics this.haptics,
     required this.fontSize,
   }) : solved = null,
+       note = null,
        flag = RangeFlag.ok;
 
   const ValueRow.solved({
@@ -26,6 +27,7 @@ class ValueRow extends StatelessWidget {
     required this.solved,
     required this.flag,
     required this.fontSize,
+    this.note,
   }) : values = null,
        index = null,
        onChanged = null,
@@ -42,6 +44,10 @@ class ValueRow extends StatelessWidget {
   /// Metered value's label; null before the first reading.
   final String? solved;
   final RangeFlag flag;
+
+  /// Shown in the flag slot (secondary colour) instead of the range flag,
+  /// e.g. the exact Bulb time.
+  final String? note;
 
   bool get _isInput => values != null;
 
@@ -124,7 +130,16 @@ class ValueRow extends StatelessWidget {
             ),
           ),
         ),
-        if (flagText != null)
+        if (note != null)
+          Text(
+            note!,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: GrainColors.secondary,
+            ),
+          )
+        else if (flagText != null)
           Text(
             flagText,
             style: const TextStyle(

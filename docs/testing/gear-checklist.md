@@ -45,3 +45,11 @@ mode, read within a minute). Acceptable: difference <= 1/3 stop.
 | Largest kit QR | The largest kit QR the app will show (error correction L, ~2953 bytes) is read | |
 | Dim light | Scanning in a dim interior still reads a single-body QR | |
 | Leaving scan is instant | Leaving the scan screen (or backgrounding) while a code is in view: the camera indicator goes off without a noticeable delay from a running decode | |
+
+## 3. Meter screen with gear
+
+| Check | Expected | Result |
+|---|---|---|
+| Cold start | Cold start to first meter frame <= 1.5 s with the library and database loaded (same method as the metering checklist) | |
+| Lens chip cycle | Tapping the lens chip cycles favorite lenses and feels instant | |
+| Narrow width | At 360 px width the header and chips fit with the longest bundled names (e.g. "Zoom-Nikkor 35-105/3.5-4.5 AI-S") without overflow | |
