@@ -81,7 +81,7 @@ class CameraSession(
     /** Display (portrait) regions as sent by Dart; normalized 0..1, radius relative to crop width. */
     data class DisplayRegions(val crop: RectD, val cx: Double, val cy: Double, val radius: Double) {
         companion object {
-            val DEFAULT = DisplayRegions(RectD(0.0, 0.0, 1.0, 1.0), 0.5, 0.5, 0.04)
+            val DEFAULT = DisplayRegions(RectD(0.0, 0.0, 1.0, 1.0), 0.5, 0.5, 0.02)
         }
     }
 
@@ -152,7 +152,7 @@ class CameraSession(
             }
             defaultAperture = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
                 ?.firstOrNull()?.toDouble() ?: 0.0
-            val setup = PreviewSetup(preview.width, preview.height, sensorOrientation, eqFocal(ch) ?: 0.0)
+            val setup = PreviewSetup(preview.width, preview.height, sensorOrientation, phoneEqFocal(eqFocal(ch)))
 
             surfaceTexture.setDefaultBufferSize(preview.width, preview.height)
             val surface = Surface(surfaceTexture).also { previewSurface = it }
@@ -294,6 +294,13 @@ class CameraSession(
         private const val FULL_FRAME_DIAGONAL_MM = 43.27
         private const val TARGET_EQ_FOCAL_MM = 26.0
         private const val MAX_PREVIEW_EDGE = 1440
+
+        /** Typical phone main camera, used when the characteristics give no focal length. */
+        private const val FALLBACK_EQ_FOCAL_MM = 26.0
+
+        /** [eq] when it is a usable focal length, else [FALLBACK_EQ_FOCAL_MM]. */
+        fun phoneEqFocal(eq: Double?): Double =
+            eq?.takeIf { it.isFinite() && it > 0 } ?: FALLBACK_EQ_FOCAL_MM
 
         /** 35 mm-equivalent focal length of a camera's first (main) focal length, mm. */
         fun eqFocal(ch: CameraCharacteristics): Double? {
