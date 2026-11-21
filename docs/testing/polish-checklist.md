@@ -17,3 +17,9 @@ Device: Pixel 10, release build
 | Enable click sound, turn a dial at once | the first detent right after enabling may be silent (the sound loads asynchronously) | |
 | Ringer on silent, click sound on | note whether the click follows (expected: system-sound volume rules) | |
 | Click sound off, `adb shell dumpsys media.audio_flinger \| grep -i soundpool` | no Grain track | |
+
+## Plan 4 Task 6: parked fixes
+- [ ] Manual mode with the viewfinder on, tap a spot: the ring and ticks are clearly visible, not a dot.
+- [ ] Tap in the dimmed area: the spot lands on the crop edge.
+- [ ] Import a backup containing an active roll and start a roll in the seconds the import runs: one active roll afterwards.
+- [ ] On a phone that reports no aperture, the EV line reads "EV ≈..." (f/1.8 assumed).

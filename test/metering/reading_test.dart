@@ -25,6 +25,27 @@ MeterStats stats({
 });
 
 void main() {
+  test('apertureAssumed is read, absent means false', () {
+    expect(stats().apertureAssumed, isFalse);
+    final m = {
+      'exposureNs': 1000000,
+      'sensitivity': 100,
+      'aperture': 1.8,
+      'minExposureNs': 1,
+      'maxExposureNs': 2,
+      'minIso': 50,
+      'maxIso': 6400,
+      'frameLuma': .18,
+      'cropLuma': .18,
+      'spotLuma': .18,
+      'histogram': <Object?>[1],
+    };
+    expect(MeterStats.fromMap(m).apertureAssumed, isFalse);
+    expect(
+      MeterStats.fromMap({...m, 'apertureAssumed': true}).apertureAssumed,
+      isTrue,
+    );
+  });
   test('AE result to EV100', () {
     expect(
       readingFrom(stats(), area: MeterArea.average)!.ev100,

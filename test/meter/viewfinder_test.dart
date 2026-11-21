@@ -109,15 +109,91 @@ void main() {
     );
     final box = t.getRect(find.byType(Viewfinder));
     // Left of centre by a quarter of the box width.
-    await t.tapAt(box.center - Offset(box.width / 4, 0));
     final content = t.getRect(find.byType(Texture));
+    // A quarter of the crop's width left of centre: inside the crop.
+    final dx = crop.width * content.width / 4;
+    await t.tapAt(box.center - Offset(dx, 0));
     expect(
       tapped!.dx,
-      closeTo(
-        (box.center.dx - box.width / 4 - content.left) / content.width,
-        1e-6,
-      ),
+      closeTo((box.center.dx - dx - content.left) / content.width, 1e-6),
     );
     expect(tapped!.dy, closeTo(.5, 1e-6));
+  });
+
+  test('estimated EV line', () {
+    expect(
+      evLine(
+        ev: 12.34,
+        flag: RangeFlag.ok,
+        area: MeterArea.average,
+        held: false,
+        estimated: true,
+      ),
+      'EV \u224812.3 · AVG',
+    );
+    expect(
+      evLine(
+        ev: null,
+        flag: RangeFlag.ok,
+        area: MeterArea.average,
+        held: false,
+        estimated: true,
+      ),
+      'EV — · AVG',
+    );
+  });
+
+  test('small spots get a faint ring', () {
+    expect(faintRingRadius(3), 8);
+    expect(spotTickGap(3), 12);
+    expect(faintRingRadius(10), isNull);
+    expect(spotTickGap(10), 14);
+  });
+
+  testWidgets('a tap in the dimmed band meters the nearest crop edge', (
+    t,
+  ) async {
+    final crop = lensCrop(preview: _preview, lensFocal: 50, phoneEqFocal: 25);
+    Offset? tapped;
+    await t.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 100,
+            height: 400,
+            child: Viewfinder(
+              textureId: 1,
+              previewSize: _preview,
+              crop: crop,
+              area: MeterArea.average,
+              spot: const Offset(.5, .5),
+              spotRadius: .02,
+              ev: null,
+              flag: RangeFlag.ok,
+              held: false,
+              widerThanPhone: false,
+              onSpot: (p) => tapped = p,
+              onClearSpot: () {},
+              onToggleHold: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final box = t.getRect(find.byType(Viewfinder));
+    final content = t.getRect(find.byType(Texture));
+    // Inside the box but in the dimmed band beside and above the crop.
+    expect(
+      content.left + crop.left * content.width,
+      greaterThanOrEqualTo(box.left),
+    );
+    await t.tapAt(box.topLeft + const Offset(2, 2));
+    // The crop fills the box's width here, so only the vertical axis clamps.
+    expect(tapped!.dy, closeTo(crop.top, 1e-9));
+    expect(
+      tapped!.dx,
+      closeTo((box.left + 2 - content.left) / content.width, 1e-9),
+    );
   });
 }

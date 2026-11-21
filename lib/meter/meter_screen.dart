@@ -320,6 +320,7 @@ class _MeterScreenState extends State<MeterScreen> {
                             c.reading?.flag,
                             c.area,
                             c.held,
+                            c.apertureAssumed,
                           ),
                           builder: (context, _) => _notice() ?? _evText(),
                         ),
@@ -450,6 +451,7 @@ class _MeterScreenState extends State<MeterScreen> {
       flag: _c.reading?.flag ?? RangeFlag.ok,
       area: _c.area,
       held: _c.held,
+      estimated: _c.apertureAssumed,
     ),
     textAlign: TextAlign.center,
     style: const TextStyle(
@@ -473,6 +475,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.reading?.ev100,
       c.reading?.flag,
       c.held,
+      c.apertureAssumed,
       c.histogramOn,
     ),
     builder: (context, _) {
@@ -499,6 +502,7 @@ class _MeterScreenState extends State<MeterScreen> {
         ev: _c.reading?.ev100,
         flag: _c.reading?.flag ?? RangeFlag.ok,
         held: _c.held,
+        estimated: _c.apertureAssumed,
         widerThanPhone: _c.lensWiderThanCamera,
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,

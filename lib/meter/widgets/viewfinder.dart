@@ -42,10 +42,11 @@ String evLine({
   required RangeFlag flag,
   required MeterArea area,
   required bool held,
+  bool estimated = false,
 }) {
   final value = ev == null
       ? '—'
-      : ev.toStringAsFixed(1).replaceFirst('-', '\u2212');
+      : '${estimated ? '\u2248' : ''}${ev.toStringAsFixed(1).replaceFirst('-', '\u2212')}';
   final mark = switch (flag) {
     RangeFlag.over => ' ▲',
     RangeFlag.under => ' ▼',
@@ -58,6 +59,13 @@ String evLine({
       : 'AVG';
   return 'EV $value$mark · $tag';
 }
+
+/// Radius of the faint outer ring drawn around a spot smaller than 8 px
+/// (null when the metered circle is big enough to see).
+double? faintRingRadius(double r) => r < 8 ? 8 : null;
+
+/// Distance from the spot's centre to the start of its ticks.
+double spotTickGap(double r) => math.max(r, 8) + 4;
 
 /// Live preview in a rounded box, the lens crop as the clear area, a spot
 /// reticle (or centre crosshair for average), the EV pill with a hold
@@ -80,6 +88,7 @@ class Viewfinder extends StatelessWidget {
     required this.onSpot,
     required this.onClearSpot,
     required this.onToggleHold,
+    this.estimated = false,
     this.histogramOn = false,
     this.onToggleHistogram,
     this.histogram,
@@ -107,6 +116,9 @@ class Viewfinder extends StatelessWidget {
   /// Whether the phone's own AE ran out of range for [ev].
   final RangeFlag flag;
   final bool held;
+
+  /// The phone reported no aperture, so [ev] assumes f/1.8.
+  final bool estimated;
   final bool widerThanPhone;
   final ValueChanged<Offset> onSpot;
   final VoidCallback onClearSpot;
@@ -117,7 +129,8 @@ class Viewfinder extends StatelessWidget {
   final VoidCallback? onToggleHistogram;
   final ValueListenable<HistogramView?>? histogram;
 
-  String get _evLine => evLine(ev: ev, flag: flag, area: area, held: held);
+  String get _evLine =>
+      evLine(ev: ev, flag: flag, area: area, held: held, estimated: estimated);
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +144,18 @@ class Viewfinder extends StatelessWidget {
             final content = previewSize == null
                 ? Offset.zero & box
                 : previewRect(box, previewSize!, crop: crop);
-            Offset normalize(Offset p) => Offset(
-              ((p.dx - content.left) / content.width).clamp(0.0, 1.0),
-              ((p.dy - content.top) / content.height).clamp(0.0, 1.0),
-            );
+            // Taps are clamped to the lens crop, so the spot stays inside it.
+            final c = crop;
+            Offset normalize(Offset p) {
+              final x = ((p.dx - content.left) / content.width).clamp(0.0, 1.0);
+              final y = ((p.dy - content.top) / content.height).clamp(0.0, 1.0);
+              if (c == null) return Offset(x, y);
+              return Offset(
+                x.clamp(c.left, c.right).toDouble(),
+                y.clamp(c.top, c.bottom).toDouble(),
+              );
+            }
+
             return Stack(
               children: [
                 if (textureId != null)
@@ -284,8 +305,19 @@ class _OverlayPainter extends CustomPainter {
       final centre = _map(s);
       // The circle is the metered area; the ticks keep it findable.
       final r = spotRadius * cropPx.width;
+      final faint = faintRingRadius(r);
+      if (faint != null) {
+        canvas.drawCircle(
+          centre,
+          faint,
+          Paint()
+            ..color = GrainColors.ground.withValues(alpha: .5)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2,
+        );
+      }
       canvas.drawCircle(centre, r, stroke);
-      _ticks(canvas, centre, r + 4, 8, stroke);
+      _ticks(canvas, centre, spotTickGap(r), 8, stroke);
     } else {
       _ticks(canvas, cropPx.center, 6, 10, stroke);
     }

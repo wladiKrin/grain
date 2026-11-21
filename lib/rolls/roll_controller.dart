@@ -324,6 +324,52 @@ class RollController extends ChangeNotifier {
     _readings = _mergeStored(_readings, readings, {
       for (final s in plan.readings) s.id,
     }, (s) => s.id);
+    // A roll started here while the import ran can leave two active rolls;
+    // the imported ones are finished (the user's own roll stays).
+    final activeNow = [
+      for (final r in _rolls)
+        if (r.isActive) r,
+    ];
+    if (activeNow.length > 1) {
+      final importedIds = {for (final (r, _) in rolls) r.id};
+      final local = activeNow.where((r) => !importedIds.contains(r.id));
+      var toFinish = activeNow.where((r) => importedIds.contains(r.id));
+      if (local.isEmpty) {
+        // All imported: keep the newest by startedAt.
+        final sorted = [...activeNow]
+          ..sort((a, b) => a.startedAt.compareTo(b.startedAt));
+        toFinish = sorted.take(sorted.length - 1);
+      }
+      final done = <Roll>[];
+      for (final r in toFinish.toList()) {
+        final frames = <Frame>[
+          for (final (ir, f) in rolls)
+            if (ir.id == r.id) ...f,
+        ];
+        done.add(
+          r.copyWith(
+            status: RollStatus.finished,
+            finishedAt: () => finishTimeFor(r, frames),
+          ),
+        );
+      }
+      final doneIds = {for (final r in done) r.id};
+      _rolls = [
+        for (final r in _rolls)
+          if (doneIds.contains(r.id))
+            done.firstWhere((d) => d.id == r.id)
+          else
+            r,
+      ];
+      finished += done.length;
+      await _enqueue(
+        () => _repo.transaction(() async {
+          for (final r in done) {
+            await _repo.saveRoll(r);
+          }
+        }),
+      );
+    }
     final a = active;
     if (a != null && !_frames.containsKey(a.id)) {
       _frames[a.id] = await _loadFrames(a.id);

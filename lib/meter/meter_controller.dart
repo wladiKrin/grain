@@ -421,6 +421,10 @@ class MeterController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// The shown reading assumes f/1.8 because the phone reports no aperture.
+  bool get apertureAssumed =>
+      (held ? _frozenStats : _latest)?.apertureAssumed ?? false;
+
   void _derive() {
     final s = held ? _frozenStats : _latest;
     if (s == null) {

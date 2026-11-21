@@ -101,7 +101,8 @@ class CameraSession(
     private var maxExposureNs = 0L
     private var minIso = 0
     private var maxIso = 0
-    private var defaultAperture = 0.0
+    private var defaultAperture = FALLBACK_APERTURE
+    private var apertureListed = false
     private var latest: TotalCaptureResult? = null
     private var wideSupport: Wide? = null
     private var request: CaptureRequest.Builder? = null
@@ -316,8 +317,9 @@ class CameraSession(
                 minIso = it.lower
                 maxIso = it.upper
             }
-            defaultAperture = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
-                ?.firstOrNull()?.toDouble() ?: 0.0
+            val availableApertures = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+            defaultAperture = phoneAperture(availableApertures)
+            apertureListed = availableApertures?.isNotEmpty() == true
             val setup = PreviewSetup(
                 preview.width, preview.height, sensorOrientation,
                 phoneEqFocal = activeEq,
@@ -466,6 +468,7 @@ class CameraSession(
                 "sensitivity" to sensitivity,
                 "boost" to (result.get(CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100),
                 "aperture" to (result.get(CaptureResult.LENS_APERTURE)?.toDouble() ?: defaultAperture),
+                "apertureAssumed" to (result.get(CaptureResult.LENS_APERTURE) == null && !apertureListed),
                 "minExposureNs" to minExposureNs,
                 "maxExposureNs" to maxExposureNs,
                 "minIso" to minIso,
@@ -486,6 +489,14 @@ class CameraSession(
 
     companion object {
         private const val TAG = "GrainCamera"
+
+        /** Typical phone main-camera aperture, used when the phone reports none. */
+        const val FALLBACK_APERTURE = 1.8
+
+        /** The first positive listed aperture, else [FALLBACK_APERTURE]. */
+        fun phoneAperture(available: FloatArray?): Double =
+            available?.firstOrNull { it > 0f }?.toDouble() ?: FALLBACK_APERTURE
+
         // 15 events/s at 30 and 60 fps (every 2nd / 4th frame); 1000/15+1 gave 10/s at 30 fps.
         private const val MIN_EVENT_INTERVAL_MS = 60L
         private const val MIN_SCAN_INTERVAL_MS = 200L

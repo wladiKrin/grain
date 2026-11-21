@@ -12,6 +12,7 @@ import 'package:grain/rolls/snapshot_store.dart';
 import 'package:grain/settings/settings.dart';
 
 import '../support/fake_location.dart';
+import 'support.dart' show roll;
 
 Body body(String id, String model) => Body(
   id: id,
@@ -470,6 +471,40 @@ void main() {
     await import;
     await deleted;
     expect(rolls.readings.map((x) => x.id), ['imported']);
+  });
+
+  test('a roll started during an import leaves one active roll', () async {
+    final gated = _GatedRepository();
+    repo = gated;
+    rolls = make();
+    await rolls.load();
+    final x = roll();
+    gated.hold = Completer<void>();
+    final import = rolls.importRecords(
+      MergePlan(
+        rolls: [(x, const <Frame>[])],
+        readings: const [],
+        snapshots: const {},
+        report: const ImportReport(rollsAdded: 1),
+      ),
+    );
+    await gated.entered.future;
+    final started = start();
+    gated.hold!.complete();
+    expect(await import, 1);
+    final y = await started;
+    expect(rolls.rolls.where((r) => r.isActive).map((r) => r.id), [y.id]);
+    expect(
+      rolls.rolls.firstWhere((r) => r.id == x.id).status,
+      RollStatus.finished,
+    );
+    final fresh = make();
+    await fresh.load();
+    expect(fresh.rolls.where((r) => r.isActive).map((r) => r.id), [y.id]);
+    expect(
+      fresh.rolls.firstWhere((r) => r.id == x.id).status,
+      RollStatus.finished,
+    );
   });
 }
 

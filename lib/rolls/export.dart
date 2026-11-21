@@ -39,9 +39,15 @@ Future<List<File>> exportRoll(
     }
   }
   // With a zip, the snapshot column names the zip entry, so the files match.
+  // A frame whose file is missing has no entry, so its name is blank.
   final listed = [
     for (final f in frames)
-      if (entryOf[f.id] case final e?) f.copyWith(snapshot: () => e) else f,
+      if (entryOf[f.id] case final e?)
+        f.copyWith(snapshot: () => e)
+      else if (entries.isNotEmpty)
+        f.copyWith(snapshot: () => null)
+      else
+        f,
   ];
   final csv = File('${out.path}/$base.csv');
   final json = File('${out.path}/$base.json');

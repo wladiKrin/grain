@@ -21,6 +21,7 @@ class MeterStats {
     required this.cropLuma,
     required this.spotLuma,
     required this.histogram,
+    this.apertureAssumed = false,
   });
 
   factory MeterStats.fromMap(Map<Object?, Object?> m) {
@@ -48,6 +49,7 @@ class MeterStats {
       histogram: List<int>.unmodifiable(
         (req('histogram') as List<Object?>).map((e) => (e as num).toInt()),
       ),
+      apertureAssumed: m['apertureAssumed'] == true,
     );
   }
 
@@ -64,6 +66,9 @@ class MeterStats {
 
   /// 64 bins of the crop.
   final List<int> histogram;
+
+  /// The phone gave no aperture; [aperture] is the f/1.8 fallback.
+  final bool apertureAssumed;
 }
 
 enum MeterArea { average, spot }

@@ -98,16 +98,35 @@ void main() {
       final snaps = [
         for (final f in json['frames']! as List) (f as Map)['snapshot'],
       ];
-      expect(snaps, ['frame-5.jpg', 'frame-5-2.jpg', 'missing.jpg', null]);
+      expect(snaps, ['frame-5.jpg', 'frame-5-2.jpg', null, null]);
       final csv = files.first.readAsStringSync().trim().split(RegExp(r'\r?\n'));
       expect(csv.skip(1).map((l) => l.split(',').last), [
         'frame-5.jpg',
         'frame-5-2.jpg',
-        'missing.jpg',
+        '',
         '',
       ]);
     },
   );
+
+  test('a frame whose snapshot file is missing has a blank name when a zip is made', () async {
+    final d = dirs();
+    d.store.file('a.jpg').writeAsBytesSync([1]);
+    final files = await exportRoll(
+      r4,
+      [fr(1, 'a.jpg'), fr(2, 'gone.jpg')],
+      out: d.out,
+      store: d.store,
+      withSnapshots: true,
+    );
+    final csv = files.first.readAsStringSync().trim().split(RegExp(r'\r?\n'));
+    expect(csv.skip(1).map((l) => l.split(',').last), ['frame-1.jpg', '']);
+    final json =
+        jsonDecode(files[1].readAsStringSync()) as Map<String, Object?>;
+    final fs = json['frames']! as List;
+    expect((fs[0] as Map)['snapshot'], 'frame-1.jpg');
+    expect((fs[1] as Map)['snapshot'], isNull);
+  });
 
   test('without a zip, csv and json keep the stored snapshot names', () async {
     final d = dirs();
