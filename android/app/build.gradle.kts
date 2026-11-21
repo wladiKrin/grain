@@ -40,10 +40,20 @@ android {
     signingConfigs {
         if (hasKeystore) {
             create("release") {
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+                fun key(name: String): String =
+                    requireNotNull(keystoreProperties.getProperty(name)) {
+                        "android/key.properties lacks $name"
+                    }
+                val (path, pass, alias, keyPass) =
+                    listOf("storeFile", "storePassword", "keyAlias", "keyPassword").map(::key)
+                val store = file(path)
+                require(store.exists()) {
+                    "android/key.properties: storeFile ${store.path} does not exist"
+                }
+                storeFile = store
+                storePassword = pass
+                keyAlias = alias
+                keyPassword = keyPass
             }
         }
     }
