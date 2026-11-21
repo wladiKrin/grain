@@ -23,8 +23,8 @@ class SnapshotStore {
   Future<void> delete(String name) async {
     try {
       await file(name).delete();
-    } on PathNotFoundException {
-      // already gone
+    } on FileSystemException {
+      // already gone, or not removable: nothing more to do
     }
   }
 }

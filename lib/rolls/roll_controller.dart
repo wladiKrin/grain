@@ -57,6 +57,11 @@ class RollController extends ChangeNotifier {
 
   Future<void> _chain = Future.value();
 
+  /// Record ids with a snapshot being taken, and those whose arriving file
+  /// must be deleted instead of attached.
+  final Set<String> _pendingSnapshots = {};
+  final Set<String> _discardSnapshot = {};
+
   SnapshotStore get snapshots => _snapshots;
 
   DateTime _now() => ids.atSecond(_clock());
@@ -323,16 +328,21 @@ class RollController extends ChangeNotifier {
   }) {
     final take = _takeSnapshot;
     if (_settings.snapshots && take != null) {
+      _pendingSnapshots.add(id);
       unawaited(() async {
         try {
           final path = await take(_newId());
           if (path == null) return;
           final name = path.substring(path.lastIndexOf('/') + 1);
-          if (!exists() || !attachSnapshot(name)) {
+          final discard = _discardSnapshot.contains(id);
+          if (discard || !exists() || !attachSnapshot(name)) {
             await _snapshots.delete(name);
           }
         } catch (e) {
           debugPrint('Snapshot failed: $e');
+        } finally {
+          _pendingSnapshots.remove(id);
+          _discardSnapshot.remove(id);
         }
       }());
     }
@@ -341,7 +351,7 @@ class RollController extends ChangeNotifier {
       unawaited(() async {
         try {
           final fix = await loc.current();
-          if (fix != null) attachFix(fix);
+          if (fix != null && _settings.location) attachFix(fix);
         } catch (e) {
           debugPrint('Location failed: $e');
         }
@@ -396,8 +406,21 @@ class RollController extends ChangeNotifier {
 
   // ---- frame editing -----------------------------------------------------
 
+  /// Saves an edit. The snapshot and location are not part of an edit: they
+  /// stay as they are now (a late attach may have landed since the editor
+  /// opened); clear a snapshot with [deleteFrameSnapshot].
   Future<void> updateFrame(Frame f) {
-    final u = f.copyWith(updatedAt: _now());
+    final cur = _findFrame(f.id);
+    if (cur == null) return Future.value();
+    final u = f.copyWith(
+      snapshot: () => cur.snapshot,
+      location: () => cur.location,
+      updatedAt: _now(),
+    );
+    return _writeFrame(u);
+  }
+
+  Future<void> _writeFrame(Frame u) {
     _replaceFrame(u);
     notifyListeners();
     return _enqueue(() => _repo.saveFrames([u]));
@@ -424,54 +447,83 @@ class RollController extends ChangeNotifier {
     );
   }
 
-  Future<void> insertBlank(String rollId, int position) async {
-    final frames = await framesOf(rollId);
-    await _apply(
-      rollId,
-      numbering.insertBlankAt(
-        frames,
-        position,
-        id: _newId(),
-        rollId: rollId,
-        now: _now(),
-      ),
-    );
+  /// Runs [op] on the cached frames of [rollId], loading them first on a
+  /// cache miss; the cache is read synchronously so nothing lands in between.
+  Future<void> _withFrames(String rollId, Future<void> Function() op) {
+    if (_frames[rollId] != null) return op();
+    return framesOf(rollId).then((_) => op());
   }
 
-  Future<void> deleteFrame(String rollId, String frameId) async {
-    final frames = await framesOf(rollId);
-    final i = frames.indexWhere((f) => f.id == frameId);
-    if (i < 0) return;
-    final name = frames[i].snapshot;
-    await _apply(
-      rollId,
-      numbering.deleteAt(frames, i, now: _now()),
-      deleted: [frameId],
-    );
-    if (name != null) await _snapshots.delete(name);
-  }
+  Future<void> insertBlank(String rollId, int position) =>
+      _withFrames(rollId, () {
+        final frames = _frames[rollId]!;
+        if (position < 0 || position > frames.length) return Future.value();
+        return _apply(
+          rollId,
+          numbering.insertBlankAt(
+            frames,
+            position,
+            id: _newId(),
+            rollId: rollId,
+            now: _now(),
+          ),
+        );
+      });
 
-  Future<void> renumberFrom(String rollId, int position, int number) async {
-    final frames = await framesOf(rollId);
-    if (position < 0 || position >= frames.length) return;
-    await _apply(
-      rollId,
-      numbering.renumberFrom(frames, position, number, now: _now()),
-    );
-  }
+  Future<void> deleteFrame(String rollId, String frameId) =>
+      _withFrames(rollId, () async {
+        final frames = _frames[rollId]!;
+        final i = frames.indexWhere((f) => f.id == frameId);
+        if (i < 0) return;
+        final name = frames[i].snapshot;
+        final done = _apply(
+          rollId,
+          numbering.deleteAt(frames, i, now: _now()),
+          deleted: [frameId],
+        );
+        await done;
+        if (name != null) await _snapshots.delete(name);
+      });
+
+  Future<void> renumberFrom(String rollId, int position, int number) =>
+      _withFrames(rollId, () {
+        final frames = _frames[rollId]!;
+        if (position < 0 || position >= frames.length) return Future.value();
+        return _apply(
+          rollId,
+          numbering.renumberFrom(frames, position, number, now: _now()),
+        );
+      });
 
   Future<void> deleteFrameSnapshot(String rollId, String frameId) async {
     final f = _findFrame(frameId);
-    final name = f?.snapshot;
-    if (f == null || name == null) return;
-    await updateFrame(f.copyWith(snapshot: () => null));
+    if (f == null) return;
+    final name = f.snapshot;
+    if (name == null) {
+      // Still being taken: the file is deleted when it arrives.
+      if (_pendingSnapshots.contains(frameId)) _discardSnapshot.add(frameId);
+      return;
+    }
+    await _writeFrame(f.copyWith(snapshot: () => null, updatedAt: _now()));
     await _snapshots.delete(name);
   }
 
   // ---- readings ----------------------------------------------------------
 
+  /// As [updateFrame]: snapshot and location are kept as they are now.
   Future<void> updateReading(SavedReading r) {
-    final u = r.copyWith(updatedAt: _now());
+    final cur = _readings.where((x) => x.id == r.id).firstOrNull;
+    if (cur == null) return Future.value();
+    return _writeReading(
+      r.copyWith(
+        snapshot: () => cur.snapshot,
+        location: () => cur.location,
+        updatedAt: _now(),
+      ),
+    );
+  }
+
+  Future<void> _writeReading(SavedReading u) {
     _readings = [
       for (final x in _readings)
         if (x.id == u.id) u else x,
@@ -493,9 +545,13 @@ class RollController extends ChangeNotifier {
 
   Future<void> deleteReadingSnapshot(String id) async {
     final r = _readings.where((x) => x.id == id).firstOrNull;
-    final name = r?.snapshot;
-    if (r == null || name == null) return;
-    await updateReading(r.copyWith(snapshot: () => null));
+    if (r == null) return;
+    final name = r.snapshot;
+    if (name == null) {
+      if (_pendingSnapshots.contains(id)) _discardSnapshot.add(id);
+      return;
+    }
+    await _writeReading(r.copyWith(snapshot: () => null, updatedAt: _now()));
     await _snapshots.delete(name);
   }
 }

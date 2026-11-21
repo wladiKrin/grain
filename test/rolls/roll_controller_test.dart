@@ -250,4 +250,73 @@ void main() {
     await rolls.deleteFrame(roll.id, f.id);
     expect(rolls.nextLabel, '1');
   });
+
+  test(
+    'a stale edit saved after a late attach keeps snapshot and fix',
+    () async {
+      await settings.setLocation(true);
+      const fix = GeoFix(latitude: 1, longitude: 2);
+      loc.fix = fix;
+      final roll = await start();
+      final stale = await rolls.logFrame(e); // editor opened now
+      snaps.single.complete('${store.dir.path}/abc.jpg');
+      await pumpEventQueue();
+      await rolls.updateFrame(stale.copyWith(note: () => 'late'));
+      final f = rolls.activeFrames.single;
+      expect([f.note, f.snapshot, f.location], ['late', 'abc.jpg', fix]);
+      final s = (await repo.frames(roll.id)).single;
+      expect([s.note, s.snapshot, s.location], ['late', 'abc.jpg', fix]);
+    },
+  );
+
+  test('editing a removed frame or reading writes nothing', () async {
+    final roll = await start();
+    final f = await rolls.logFrame(e);
+    await rolls.deleteFrame(roll.id, f.id);
+    await rolls.updateFrame(f.copyWith(note: () => 'x'));
+    expect(await repo.frames(roll.id), isEmpty);
+    final r = await rolls.saveReading(e, body: null, format: FilmFormat.f135);
+    await rolls.deleteReading(r.id);
+    await rolls.updateReading(r.copyWith(note: () => 'x'));
+    expect(await repo.readings(), isEmpty);
+    expect(rolls.readings, isEmpty);
+  });
+
+  test('quick undo then log keeps the new frame', () async {
+    final roll = await start();
+    final f = await rolls.logFrame(e);
+    final undo = rolls.deleteFrame(roll.id, f.id);
+    final log = rolls.logFrame(e);
+    final ins = rolls.insertBlank(roll.id, 0);
+    await Future.wait([undo, log, ins]);
+    await pumpEventQueue();
+    final mem = rolls.activeFrames.map((x) => x.number).toList();
+    expect(mem, [1, 2]);
+    expect((await repo.frames(roll.id)).map((x) => x.number), mem);
+  });
+
+  test('location turned off before the fix arrives drops it', () async {
+    await settings.setLocation(true);
+    loc.fix = const GeoFix(latitude: 1, longitude: 2);
+    await start();
+    final f = rolls.logFrame(e);
+    await settings.setLocation(false);
+    await f;
+    await pumpEventQueue();
+    expect(rolls.activeFrames.single.location, isNull);
+  });
+
+  test(
+    'deleting the snapshot while pending discards the arriving file',
+    () async {
+      final roll = await start();
+      final f = await rolls.logFrame(e);
+      final file = store.file('abc.jpg')..writeAsBytesSync([1]);
+      await rolls.deleteFrameSnapshot(roll.id, f.id);
+      snaps.single.complete(file.path);
+      await pumpEventQueue();
+      expect(file.existsSync(), isFalse);
+      expect(rolls.activeFrames.single.snapshot, isNull);
+    },
+  );
 }
