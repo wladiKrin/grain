@@ -17,7 +17,8 @@ void main() {
 
   test('backup_rules.xml has the includes and the snapshots exclude', () {
     final xml = File('$res/backup_rules.xml').readAsStringSync();
-    expect(xml, contains('<full-backup-content>'));
+    expect(xml, contains('<full-backup-content '));
+    expect(xml, contains('tools:ignore="FullBackupContent"'));
     for (final r in _rules) {
       expect(_count(xml, r), 1, reason: r);
     }
@@ -25,7 +26,8 @@ void main() {
 
   test('data_extraction_rules.xml repeats the rules in both sections', () {
     final xml = File('$res/data_extraction_rules.xml').readAsStringSync();
-    expect(xml, contains('<data-extraction-rules>'));
+    expect(xml, contains('<data-extraction-rules '));
+    expect(xml, contains('tools:ignore="FullBackupContent"'));
     for (final section in ['cloud-backup', 'device-transfer']) {
       final start = xml.indexOf('<$section>');
       final end = xml.indexOf('</$section>');
