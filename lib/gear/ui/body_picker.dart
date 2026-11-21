@@ -7,6 +7,7 @@ import 'body_editor.dart';
 import 'form_bits.dart';
 import 'lens_picker.dart';
 import 'profile_tile.dart';
+import 'share_sheet.dart';
 
 /// "No camera", favorites, then every body grouped by make.
 class BodyPickerScreen extends StatelessWidget {
@@ -32,7 +33,7 @@ class BodyPickerScreen extends StatelessWidget {
 
   List<ProfileAction> _actions(BuildContext context, Body b) {
     final user = gear.isUser(b);
-    final lenses = gear.lensesFor(b.mount);
+    final kit = kitFor(gear, b);
     return [
       if (user) ProfileAction('Edit', () => _edit(context, b, isNew: false)),
       ProfileAction(
@@ -41,11 +42,8 @@ class BodyPickerScreen extends StatelessWidget {
       ),
       if (onShare != null) ...[
         ProfileAction('Share', () => onShare!(b)),
-        if (lenses.isNotEmpty)
-          ProfileAction(
-            'Share with lenses',
-            () => onShare!(Kit(b, lenses.take(20).toList())),
-          ),
+        if (kit.lenses.isNotEmpty)
+          ProfileAction('Share with lenses', () => onShare!(kit)),
       ],
       if (user)
         ProfileAction('Delete', () async {

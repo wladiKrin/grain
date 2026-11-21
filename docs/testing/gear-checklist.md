@@ -53,3 +53,23 @@ mode, read within a minute). Acceptable: difference <= 1/3 stop.
 | Cold start | Cold start to first meter frame <= 1.5 s with the library and database loaded (same method as the metering checklist) | |
 | Lens chip cycle | Tapping the lens chip cycles favorite lenses and feels instant | |
 | Narrow width | At 360 px width the header and chips fit with the longest bundled names (e.g. "Zoom-Nikkor 35-105/3.5-4.5 AI-S") without overflow | |
+
+## 4. Sharing and import
+
+| Check | Expected | Result |
+|---|---|---|
+| Share a body to a messaging app | Library > Share on a body opens the system share sheet with `<id>.json`; the receiver gets a readable JSON file | |
+| Share a body to Files | Saving the shared file to Files / Downloads works and the content is the pretty-printed profile | |
+| Import from Downloads | Import > From file, pick that file: "Import <body>?" dialog, snackbar "Imported ...", the body is listed and starred; importing it again adds no duplicate | |
+| Scan a body QR | Import > Scan QR code on a QR shown on another phone (body): the confirmation appears, the preview closes | |
+| Scan a kit QR | Same with "Share with lenses" QR: "Import <body> and N lenses?" | |
+| Scan a non-Grain QR | A URL QR shows "Not a Grain profile" for about 2 s and scanning continues; nothing is imported | |
+| Back out of scanning | Leaving the scan screen with back returns to the meter and the viewfinder preview comes back, no stuck camera indicator | |
+
+## 5. Release size and permissions (arm64 release APK)
+
+| Check | Expected | Result |
+|---|---|---|
+| Size | `app-arm64-v8a-release.apk` < 20 MB | 21.5 MB (21,524,542 bytes) after share_plus / file_selector / qr_flutter; was 19.1 MB. OVER the limit, reported as a concern |
+| Permissions | `aapt2 dump permissions`: CAMERA only (plus AndroidX's non-network DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION); no INTERNET | CAMERA only, no INTERNET |
+| Play Services | No `com.google.android.gms` classes in the dex files | none found |

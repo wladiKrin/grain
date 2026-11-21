@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
@@ -483,6 +484,51 @@ void main() {
           .map((v) => v.label),
     );
     expect(c.gear, g);
+  });
+
+  group('lendCamera', () {
+    List<String> calls() => [
+      for (final e in src.calls)
+        if (e != 'setRegions') e,
+    ];
+
+    test('keeps the meter closed while scanning', () async {
+      await c.resume();
+      expect(calls(), ['start']);
+      final result = await c.lendCamera(() async {
+        expect(calls(), ['start', 'stop']);
+        await c.resume();
+        expect(calls(), ['start', 'stop'], reason: 'no start while lent');
+        return 42;
+      });
+      await settle();
+      expect(result, 42);
+      expect(calls(), ['start', 'stop', 'start']);
+    });
+
+    test('resumes after use throws, and rethrows', () async {
+      await c.resume();
+      await expectLater(
+        c.lendCamera<void>(() async => throw StateError('boom')),
+        throwsStateError,
+      );
+      await settle();
+      expect(calls(), ['start', 'stop', 'start']);
+    });
+
+    test('a stop still in flight finishes before the meter restarts', () async {
+      await c.resume();
+      src.stopGate = Completer<void>();
+      var restarted = false;
+      final lend = c.lendCamera(() async {});
+      await settle();
+      restarted = calls().where((e) => e == 'start').length > 1;
+      expect(restarted, isFalse);
+      src.stopGate!.complete();
+      await lend;
+      await settle();
+      expect(calls(), ['start', 'stop', 'start']);
+    });
   });
 }
 

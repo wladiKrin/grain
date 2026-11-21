@@ -203,11 +203,12 @@ void main() {
     t,
   ) async {
     await gear.saveUser(gear.duplicateBody(libBody('canon-a1')));
+    await gear.toggleFavorite(libLens('canon-fd-50-1.8'));
     final shared = <GearDoc>[];
     await open(t, () => BodyPickerScreen(gear: gear, onShare: shared.add));
     await tapAction(t, 'Canon A-1 (copy)', 'Share with lenses');
     expect(shared.single, isA<Kit>());
-    expect((shared.single as Kit).lenses, hasLength(5));
+    expect((shared.single as Kit).lenses.map((l) => l.id), ['canon-fd-50-1.8']);
     await t.tap(find.byIcon(Icons.more_vert).first);
     await t.pumpAndSettle();
     expect(find.text('Share'), findsOneWidget);

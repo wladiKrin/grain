@@ -5,8 +5,12 @@ import 'db/database.dart';
 import 'gear/gear_controller.dart';
 import 'gear/gear_repository.dart';
 import 'gear/library.dart';
+import 'gear/model.dart';
+import 'gear/platform.dart';
 import 'gear/ui/body_picker.dart';
+import 'gear/ui/import_flow.dart';
 import 'gear/ui/lens_picker.dart';
+import 'gear/ui/share_sheet.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
@@ -41,7 +45,9 @@ class GrainApp extends StatefulWidget {
     this.haptics,
     Settings? settings,
     GearController? gear,
+    GearPlatform? platform,
   }) : source = source ?? MeterChannel(),
+       platform = platform ?? const SystemGearPlatform(),
        settings = settings ?? Settings.inMemory(),
        gear = gear ?? GearController.inMemory();
 
@@ -52,6 +58,7 @@ class GrainApp extends StatefulWidget {
   final Haptics? haptics;
   final Settings settings;
   final GearController gear;
+  final GearPlatform platform;
 
   @override
   State<GrainApp> createState() => _GrainAppState();
@@ -121,8 +128,36 @@ class _GrainAppState extends State<GrainApp> {
     super.dispose();
   }
 
+  /// A context under the app's navigator, for sheets and dialogs started
+  /// from the pickers' callbacks.
+  BuildContext? get _overlayContext =>
+      _navigator.currentState?.overlay?.context;
+
+  void _share(GearDoc doc) {
+    final c = _overlayContext;
+    if (c != null) {
+      showShareSheet(c, doc: doc, platform: widget.platform);
+    }
+  }
+
+  void _import() {
+    final c = _overlayContext;
+    if (c != null) {
+      showImportSheet(
+        c,
+        gear: _gear,
+        platform: widget.platform,
+        meter: _controller,
+        source: widget.source,
+      );
+    }
+  }
+
   void _openLibrary() => _navigator.currentState?.push(
-    MaterialPageRoute<void>(builder: (_) => BodyPickerScreen(gear: _gear)),
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          BodyPickerScreen(gear: _gear, onShare: _share, onImport: _import),
+    ),
   );
 
   /// Lenses of the selected body's mount; without a body, the library.
@@ -131,7 +166,12 @@ class _GrainAppState extends State<GrainApp> {
     if (body == null) return _openLibrary();
     _navigator.currentState?.push(
       MaterialPageRoute<void>(
-        builder: (_) => LensPickerScreen(gear: _gear, mount: body.mount),
+        builder: (_) => LensPickerScreen(
+          gear: _gear,
+          mount: body.mount,
+          onShare: _share,
+          onImport: _import,
+        ),
       ),
     );
   }

@@ -152,7 +152,7 @@ class MeterController extends ChangeNotifier {
     if (_disposed) return;
     // Recorded before the guard so a resume during an in-flight start keeps it.
     _wantRunning = true;
-    if (_running || _starting) return;
+    if (_lent || _running || _starting) return;
     _starting = true;
     cameraDenied = false;
     cameraError = null;
@@ -185,6 +185,21 @@ class MeterController extends ChangeNotifier {
     if (_disposed) return;
     notifyListeners();
     await _syncWide();
+  }
+
+  bool _lent = false;
+
+  /// Runs [use] (e.g. a QR scan) with the camera released: pauses the meter,
+  /// keeps [resume] from reopening it meanwhile, and resumes afterwards.
+  Future<T> lendCamera<T>(Future<T> Function() use) async {
+    _lent = true;
+    try {
+      await pause();
+      return await use();
+    } finally {
+      _lent = false;
+      await resume();
+    }
   }
 
   Future<void> pause() async {
