@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/main.dart';
+import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/meter/meter_screen.dart';
+import 'package:grain/rolls/latitude.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
+import 'package:grain/settings/settings.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -41,7 +45,12 @@ void main() {
     gear.dispose();
   });
 
-  Future<void> pumpApp(WidgetTester t, {bool roll = true}) async {
+  Future<void> pumpApp(
+    WidgetTester t, {
+    bool roll = true,
+    FilmType filmType = FilmType.bwNeg,
+    Settings? settings,
+  }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
     addTearDown(t.view.reset);
@@ -51,7 +60,7 @@ void main() {
       if (roll) {
         await rolls.startRoll(
           filmStock: 'Ilford HP5 Plus',
-          filmType: FilmType.bwNeg,
+          filmType: filmType,
           boxIso: 400,
           pushThirds: 0,
           body: a1,
@@ -61,7 +70,13 @@ void main() {
       }
     });
     await t.pumpWidget(
-      GrainApp(source: src, haptics: _NoHaptics(), gear: gear, rolls: rolls),
+      GrainApp(
+        source: src,
+        haptics: _NoHaptics(),
+        gear: gear,
+        rolls: rolls,
+        settings: settings,
+      ),
     );
     await settle(t);
   }
@@ -77,6 +92,9 @@ void main() {
     await t.tap(find.byIcon(Icons.arrow_back).last);
     await settle(t);
   }
+
+  MeterController meter(WidgetTester t) =>
+      t.widget<MeterScreen>(find.byType(MeterScreen)).controller;
 
   const startAnother = 'Finish roll 1 and start a new one';
 
@@ -184,5 +202,33 @@ void main() {
     await t.tap(find.text('Log frame 1'));
     await settle(t);
     expect(find.text('Log frame 2'), findsOneWidget);
+  });
+
+  testWidgets(
+    'the logging roll sets the latitude, meter-only falls back to negative',
+    (t) async {
+      await pumpApp(t, filmType: FilmType.slide);
+      expect(meter(t).latitude, FilmLatitude.slide);
+      await pickBody(t, 'Canon AE-1');
+      await t.tap(find.text("Meter only (don't log)"));
+      await settle(t);
+      expect(meter(t).latitude, FilmLatitude.negative);
+      await pickBody(t, 'Canon A-1');
+      expect(meter(t).latitude, FilmLatitude.slide);
+    },
+  );
+
+  testWidgets('the histogram choice is remembered', (t) async {
+    final settings = Settings.inMemory();
+    await pumpApp(t, settings: settings);
+    expect(meter(t).histogramOn, isFalse);
+    final handle = t.ensureSemantics();
+    await t.tap(find.bySemanticsLabel('Show histogram'));
+    await settle(t);
+    expect(settings.histogram, isTrue);
+    await t.runAsync(() => settings.setHistogram(false));
+    await settle(t);
+    expect(meter(t).histogramOn, isFalse);
+    handle.dispose();
   });
 }

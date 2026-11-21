@@ -17,6 +17,7 @@ import 'gear/ui/share_sheet.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
+import 'rolls/latitude.dart';
 import 'rolls/location.dart';
 import 'rolls/location_channel.dart';
 import 'rolls/model.dart';
@@ -147,6 +148,7 @@ class _GrainAppState extends State<GrainApp> {
     gear: _gear.setup,
     calibrationEv: _settings.calibrationEv,
     viewfinderOn: _settings.viewfinderOn,
+    histogramOn: _settings.histogram,
   );
   late final bool _ownsRolls = widget.rolls == null;
 
@@ -195,6 +197,9 @@ class _GrainAppState extends State<GrainApp> {
     if (_controller.viewfinderOn != _settings.viewfinderOn) {
       _controller.toggleViewfinder();
     }
+    if (_controller.histogramOn != _settings.histogram) {
+      _controller.toggleHistogram();
+    }
   }
 
   /// Equal setups are a no-op on the controller, so the two-way sync below
@@ -206,8 +211,8 @@ class _GrainAppState extends State<GrainApp> {
 
   String? _rollId;
 
-  /// The meter follows the active roll's exposed-at ISO while the roll logs
-  /// for the selected body.
+  /// The meter follows the active roll's exposed-at ISO and latitude while
+  /// the roll logs for the selected body.
   void _onRolls() => _syncRollIso();
 
   void _syncRollIso() {
@@ -219,14 +224,18 @@ class _GrainAppState extends State<GrainApp> {
       _controller.setRollIso(null);
     }
     _controller.setRollIso(logs ? roll!.exposedIso : null);
+    _controller.setLatitude(logs ? roll!.latitude : FilmLatitude.negative);
   }
 
-  /// The eye toggle is the same preference as the settings switch; a zoom
-  /// change goes back to the gear selection.
+  /// The eye and histogram toggles are the same preferences as the
+  /// settings; a zoom change goes back to the gear selection.
   void _onController() {
     if (_controller.focal != _gear.focal) _gear.setFocal(_controller.focal);
     if (_settings.viewfinderOn != _controller.viewfinderOn) {
       _settings.setViewfinderOn(_controller.viewfinderOn);
+    }
+    if (_settings.histogram != _controller.histogramOn) {
+      _settings.setHistogram(_controller.histogramOn);
     }
   }
 

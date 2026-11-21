@@ -7,6 +7,7 @@ import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/exposure/mode.dart';
 import 'package:grain/meter/meter_screen.dart';
+import 'package:grain/meter/widgets/histogram_overlay.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
 import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/reading.dart';
@@ -168,6 +169,35 @@ void main() {
     expect(find.byType(Texture), findsNothing);
     expect(t.widget<SwipeDial>(find.byType(SwipeDial)).valueFontSize, 92);
     expect(find.byIcon(Icons.visibility_off), findsOneWidget);
+  });
+
+  testWidgets('the histogram toggle shows and hides the overlay', (t) async {
+    final handle = t.ensureSemantics();
+    await pumpScreen(t, stats: ev15());
+    expect(find.byType(HistogramOverlay), findsNothing);
+    expect(find.bySemanticsLabel('Hide histogram'), findsNothing);
+
+    await t.tap(find.bySemanticsLabel('Show histogram'));
+    await t.pump();
+    expect(c.histogramOn, isTrue);
+    expect(find.byType(HistogramOverlay), findsOneWidget);
+    expect(find.bySemanticsLabel('Hide histogram'), findsOneWidget);
+    expect(find.bySemanticsLabel('Show histogram'), findsNothing);
+
+    await t.tap(find.byIcon(Icons.visibility));
+    await t.pump();
+    expect(find.byType(HistogramOverlay), findsNothing);
+    expect(find.bySemanticsLabel('Hide histogram'), findsNothing);
+
+    await t.tap(find.byIcon(Icons.visibility_off));
+    await t.pump();
+    expect(find.byType(HistogramOverlay), findsOneWidget);
+
+    await t.tap(find.bySemanticsLabel('Hide histogram'));
+    await t.pump();
+    expect(c.histogramOn, isFalse);
+    expect(find.byType(HistogramOverlay), findsNothing);
+    handle.dispose();
   });
 
   testWidgets('camera denied shows Allow camera and dials still work', (

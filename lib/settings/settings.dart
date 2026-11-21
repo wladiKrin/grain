@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persisted preferences: calibration offset, haptics and the viewfinder
-/// default (the app opens the way the viewfinder was left).
+/// Persisted preferences: calibration offset, haptics and the viewfinder and
+/// histogram defaults (the app opens the way they were left).
 class Settings extends ChangeNotifier {
   Settings._(
     this._prefs, {
@@ -11,6 +11,7 @@ class Settings extends ChangeNotifier {
     required bool vf,
     required this._snapshots,
     required this._location,
+    required this._histogram,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -22,6 +23,7 @@ class Settings extends ChangeNotifier {
   static const _kViewfinder = 'viewfinderOn';
   static const _kSnapshots = 'snapshots';
   static const _kLocation = 'location';
+  static const _kHistogram = 'histogram';
 
   /// Calibration range in thirds of a stop (±3 EV).
   static const maxThirds = 9;
@@ -35,6 +37,7 @@ class Settings extends ChangeNotifier {
       vf: p.getBool(_kViewfinder) ?? true,
       snapshots: p.getBool(_kSnapshots) ?? true,
       location: p.getBool(_kLocation) ?? false,
+      histogram: p.getBool(_kHistogram) ?? false,
     );
   }
 
@@ -45,6 +48,7 @@ class Settings extends ChangeNotifier {
   bool _viewfinderOn = true;
   bool _snapshots = true;
   bool _location = false;
+  bool _histogram = false;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
@@ -57,6 +61,9 @@ class Settings extends ChangeNotifier {
 
   /// Attach the location to every logged frame or saved reading.
   bool get location => _location;
+
+  /// Show the histogram over the viewfinder.
+  bool get histogram => _histogram;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -94,12 +101,20 @@ class Settings extends ChangeNotifier {
     await _prefs?.setBool(_kLocation, v);
   }
 
+  Future<void> setHistogram(bool v) async {
+    if (v == _histogram) return;
+    _histogram = v;
+    notifyListeners();
+    await _prefs?.setBool(_kHistogram, v);
+  }
+
   /// The settings a backup carries. Calibration belongs to this phone's
   /// sensor and location to its owner's choice: neither travels.
   Map<String, Object?> backupMap() => {
     _kHaptics: _haptics,
     _kViewfinder: _viewfinderOn,
     _kSnapshots: _snapshots,
+    _kHistogram: _histogram,
   };
 
   /// Applies [m] from a backup: only the keys of [backupMap]; a value of the
@@ -108,5 +123,6 @@ class Settings extends ChangeNotifier {
     if (m[_kHaptics] case final bool v) await setHaptics(v);
     if (m[_kViewfinder] case final bool v) await setViewfinderOn(v);
     if (m[_kSnapshots] case final bool v) await setSnapshots(v);
+    if (m[_kHistogram] case final bool v) await setHistogram(v);
   }
 }

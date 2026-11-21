@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../exposure/solver.dart';
+import '../../metering/histogram.dart';
 import '../../metering/reading.dart';
 import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
+import 'histogram_overlay.dart';
 
 /// Where the [preview] is drawn in [box]: scaled to cover the box, but no
 /// further than keeps the whole [crop] (normalized in [preview]) inside it,
@@ -57,8 +60,10 @@ String evLine({
 }
 
 /// Live preview in a rounded box, the lens crop as the clear area, a spot
-/// reticle (or centre crosshair for average), and the EV pill with a hold
-/// button. Tap sets the spot, long-press returns to average.
+/// reticle (or centre crosshair for average), the EV pill with a hold
+/// button and, with [onToggleHistogram], a histogram toggle at the top left
+/// and the [histogram] at the bottom right. Tap sets the spot, long-press
+/// returns to average.
 class Viewfinder extends StatelessWidget {
   const Viewfinder({
     super.key,
@@ -75,6 +80,9 @@ class Viewfinder extends StatelessWidget {
     required this.onSpot,
     required this.onClearSpot,
     required this.onToggleHold,
+    this.histogramOn = false,
+    this.onToggleHistogram,
+    this.histogram,
   });
 
   /// Null until the camera has started.
@@ -103,6 +111,11 @@ class Viewfinder extends StatelessWidget {
   final ValueChanged<Offset> onSpot;
   final VoidCallback onClearSpot;
   final VoidCallback onToggleHold;
+  final bool histogramOn;
+
+  /// Null hides the histogram toggle.
+  final VoidCallback? onToggleHistogram;
+  final ValueListenable<HistogramView?>? histogram;
 
   String get _evLine => evLine(ev: ev, flag: flag, area: area, held: held);
 
@@ -181,6 +194,26 @@ class Viewfinder extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onToggleHistogram != null)
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: RoundButton(
+                      toggled: histogramOn,
+                      background: GrainColors.ground,
+                      semanticLabel: histogramOn
+                          ? 'Hide histogram'
+                          : 'Show histogram',
+                      onPressed: onToggleHistogram!,
+                      child: const Icon(Icons.bar_chart),
+                    ),
+                  ),
+                if (histogramOn && histogram != null)
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: HistogramOverlay(view: histogram!),
+                  ),
                 if (widerThanPhone)
                   const Positioned(
                     left: 12,

@@ -10,8 +10,10 @@ import '../exposure/solver.dart';
 import '../gear/gear_scales.dart';
 import '../gear/model.dart';
 import '../metering/fov.dart';
+import '../metering/histogram.dart';
 import '../metering/meter_channel.dart';
 import '../metering/reading.dart';
+import '../rolls/latitude.dart';
 import '../rolls/model.dart' show Exposure;
 
 const _centre = Offset(.5, .5);
@@ -26,6 +28,7 @@ class MeterController extends ChangeNotifier {
     required this._source,
     this._calibrationEv = 0,
     this.viewfinderOn = true,
+    this.histogramOn = false,
     GearSetup gear = const GearSetup(),
   }) : _gear = gear {
     _scales = _scalesAt(gear);
@@ -60,6 +63,17 @@ class MeterController extends ChangeNotifier {
   late int apertureIndex, shutterIndex, isoIndex, focalIndex;
   bool viewfinderOn;
 
+  /// Whether the viewfinder shows the histogram overlay.
+  bool histogramOn;
+
+  /// The histogram of the shown frame (the held one while [held]); null
+  /// while hidden or before a frame. Updated without [notifyListeners], so
+  /// only the overlay repaints per frame.
+  final ValueNotifier<HistogramView?> histogram = ValueNotifier(null);
+
+  /// The film's usable range, drawn as the histogram's band.
+  FilmLatitude latitude = FilmLatitude.negative;
+
   /// Spot position, normalized display coordinates.
   Offset spot = _centre;
   MeterArea area = MeterArea.average;
@@ -77,6 +91,7 @@ class MeterController extends ChangeNotifier {
     if (v == _calibrationEv) return;
     _calibrationEv = v;
     _derive();
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -142,6 +157,7 @@ class MeterController extends ChangeNotifier {
     // Only the ISO list changes; the other scales stay as they are.
     _scales = _scales.withIsos(_withRollIso(scalesFor(_gear), _gear).isos);
     isoIndex = nearestIndex(isos, iso?.toDouble() ?? keep);
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -354,6 +370,7 @@ class MeterController extends ChangeNotifier {
     _latest = s;
     if (held) return;
     _derive();
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -370,6 +387,7 @@ class MeterController extends ChangeNotifier {
         ? (error.message ?? error.code)
         : error.toString();
     if (!held) reading = null;
+    _updateHistogram();
     if (!_disposed) notifyListeners();
   }
 
@@ -380,6 +398,34 @@ class MeterController extends ChangeNotifier {
       return;
     }
     reading = readingFrom(s, area: area, calibration: _calibrationEv);
+  }
+
+  /// Recomputes [histogram] from the shown frame: the band is the film's
+  /// latitude around the metered luma, shifted by the Manual offset.
+  void _updateHistogram() {
+    if (_disposed) return;
+    final s = held ? _frozenStats : _latest;
+    histogram.value = !histogramOn || !viewfinderOn || s == null
+        ? null
+        : histogramView(
+            bins: s.histogram,
+            meteredLuma: area == MeterArea.spot ? s.spotLuma : s.cropLuma,
+            latitude: latitude,
+            offsetStops: mode == MeterMode.manual ? (offset ?? 0) : 0,
+          );
+  }
+
+  void setLatitude(FilmLatitude l) {
+    if (l == latitude) return;
+    latitude = l;
+    _updateHistogram();
+    notifyListeners();
+  }
+
+  void toggleHistogram() {
+    histogramOn = !histogramOn;
+    _updateHistogram();
+    notifyListeners();
   }
 
   /// Preview buffer size in portrait display orientation, once started.
@@ -421,21 +467,25 @@ class MeterController extends ChangeNotifier {
 
   void setMode(MeterMode m) {
     mode = m;
+    _updateHistogram();
     notifyListeners();
   }
 
   void setAperture(int i) {
     apertureIndex = i.clamp(0, apertures.length - 1);
+    _updateHistogram();
     notifyListeners();
   }
 
   void setShutter(int i) {
     shutterIndex = i.clamp(0, shutters.length - 1);
+    _updateHistogram();
     notifyListeners();
   }
 
   void setIso(int i) {
     isoIndex = i.clamp(0, isos.length - 1);
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -451,6 +501,7 @@ class MeterController extends ChangeNotifier {
     }
     _sendRegions();
     unawaited(_syncWide());
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -468,6 +519,7 @@ class MeterController extends ChangeNotifier {
     isoIndex = nearestIndex(isos, iso);
     _sendRegions();
     unawaited(_syncWide());
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -525,6 +577,7 @@ class MeterController extends ChangeNotifier {
 
   void toggleViewfinder() {
     viewfinderOn = !viewfinderOn;
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -532,6 +585,7 @@ class MeterController extends ChangeNotifier {
     spot = normalized;
     area = MeterArea.spot;
     _derive();
+    _updateHistogram();
     _sendRegions();
     notifyListeners();
   }
@@ -540,6 +594,7 @@ class MeterController extends ChangeNotifier {
     spot = _centre;
     area = MeterArea.average;
     _derive();
+    _updateHistogram();
     _sendRegions();
     notifyListeners();
   }
@@ -548,6 +603,7 @@ class MeterController extends ChangeNotifier {
     held = !held;
     _frozenStats = held ? _latest : null;
     _derive();
+    _updateHistogram();
     notifyListeners();
   }
 
@@ -556,6 +612,7 @@ class MeterController extends ChangeNotifier {
     _disposed = true;
     _wantRunning = false;
     _sub?.cancel();
+    histogram.dispose();
     super.dispose();
   }
 }

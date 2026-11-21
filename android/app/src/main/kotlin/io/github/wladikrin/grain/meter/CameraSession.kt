@@ -486,7 +486,8 @@ class CameraSession(
 
     companion object {
         private const val TAG = "GrainCamera"
-        private const val MIN_EVENT_INTERVAL_MS = 1000L / 15 + 1
+        // 15 events/s at 30 and 60 fps (every 2nd / 4th frame); 1000/15+1 gave 10/s at 30 fps.
+        private const val MIN_EVENT_INTERVAL_MS = 60L
         private const val MIN_SCAN_INTERVAL_MS = 200L
         private const val MIN_SCAN_EDGE = 1280
         private const val MAX_SCAN_EDGE = 1920

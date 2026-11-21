@@ -473,6 +473,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.reading?.ev100,
       c.reading?.flag,
       c.held,
+      c.histogramOn,
     ),
     builder: (context, _) {
       final notice = _notice();
@@ -502,6 +503,9 @@ class _MeterScreenState extends State<MeterScreen> {
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,
         onToggleHold: _c.toggleHold,
+        histogramOn: _c.histogramOn,
+        onToggleHistogram: _c.toggleHistogram,
+        histogram: _c.histogram,
       );
     },
   );

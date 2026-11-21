@@ -5,7 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/exposure/mode.dart';
 import 'package:grain/metering/fov.dart';
+import 'package:grain/metering/histogram.dart';
 import 'package:grain/metering/reading.dart';
+import 'package:grain/rolls/latitude.dart';
 
 import '../support/fake_source.dart';
 
@@ -14,6 +16,7 @@ MeterStats stats({
   double region = .18,
   int exposureNs = 30518,
   double aperture = 1.0,
+  List<int>? histogram,
 }) => MeterStats.fromMap({
   'exposureNs': exposureNs,
   'sensitivity': 100,
@@ -26,7 +29,7 @@ MeterStats stats({
   'frameLuma': .18,
   'cropLuma': region,
   'spotLuma': region,
-  'histogram': List<int>.filled(64, 0),
+  'histogram': histogram ?? List<int>.filled(64, 0),
 });
 
 Future<void> settle() => Future<void>.delayed(Duration.zero);
@@ -306,5 +309,122 @@ void main() {
     expect(c.reading!.ev100, closeTo(frozen + 1, 1e-9));
     c.toggleHold(); // released: the newest frame
     expect(c.reading!.ev100, closeTo(frozen + 2, 1e-3));
+  });
+
+  group('histogram', () {
+    late MeterController h;
+    final bins = List<int>.filled(64, 0)..[30] = 10;
+    setUp(() async {
+      h = MeterController(source: src, histogramOn: true, viewfinderOn: true);
+      await h.resume();
+    });
+    tearDown(() => h.dispose());
+
+    test('starts with the negative latitude and no view', () {
+      expect(h.latitude, FilmLatitude.negative);
+      expect(h.histogram.value, isNull);
+    });
+
+    test('the histogram marks the metered luma', () async {
+      src.emit(stats(region: .18, histogram: bins));
+      await settle();
+      expect(h.histogram.value!.marker, closeTo(.4615, 1e-3));
+      h.setLatitude(FilmLatitude.slide);
+      expect(h.latitude, FilmLatitude.slide);
+      expect(h.histogram.value!.bandEnd, closeTo(.5414, 1e-3));
+    });
+
+    test('setLatitude to the same latitude does not notify', () async {
+      var n = 0;
+      h.addListener(() => n++);
+      h.setLatitude(FilmLatitude.negative);
+      expect(n, 0);
+      h.setLatitude(FilmLatitude.slide);
+      expect(n, 1);
+    });
+
+    test('a held reading freezes the histogram', () async {
+      src.emit(stats(region: .18, histogram: bins));
+      await settle();
+      h.toggleHold();
+      src.emit(stats(region: .72, histogram: bins));
+      await settle();
+      expect(h.histogram.value!.marker, closeTo(.4615, 1e-3));
+      h.toggleHold();
+      src.emit(stats(region: .72, histogram: bins));
+      await settle();
+      expect(h.histogram.value!.marker, closeTo(histogramX(.72), 1e-9));
+    });
+
+    test(
+      'hidden viewfinder computes nothing, showing it restores the view',
+      () async {
+        src.emit(stats(region: .18, histogram: bins));
+        await settle();
+        h.toggleViewfinder();
+        expect(h.histogram.value, isNull);
+        src.emit(stats(region: .18, histogram: bins));
+        await settle();
+        expect(h.histogram.value, isNull);
+        h.toggleViewfinder();
+        expect(h.histogram.value, isNotNull);
+      },
+    );
+
+    test('manual offset shifts the band', () async {
+      src.emit(stats(region: .18, histogram: bins));
+      await settle();
+      h.setMode(MeterMode.manual);
+      h.setIso(h.isos.indexWhere((v) => v.label == '100'));
+      h.setAperture(h.apertures.indexWhere((v) => v.label == '8'));
+      h.setShutter(h.shutters.indexWhere((v) => v.label == '1/250'));
+      expect(h.offset, 1.0);
+      expect(h.histogram.value!.bandStart, closeTo(.1634, 1e-3));
+    });
+
+    test('the spot meters the spot luma', () async {
+      src.emit(
+        MeterStats.fromMap({
+          'exposureNs': 30518,
+          'sensitivity': 100,
+          'boost': 100,
+          'aperture': 1.0,
+          'minExposureNs': 10000,
+          'maxExposureNs': 1000000000,
+          'minIso': 50,
+          'maxIso': 3200,
+          'frameLuma': .18,
+          'cropLuma': .18,
+          'spotLuma': .72,
+          'histogram': bins,
+        }),
+      );
+      await settle();
+      expect(h.histogram.value!.marker, closeTo(histogramX(.18), 1e-9));
+      h.tapSpot(const Offset(.3, .3));
+      expect(h.histogram.value!.marker, closeTo(histogramX(.72), 1e-9));
+      h.clearSpot();
+      expect(h.histogram.value!.marker, closeTo(histogramX(.18), 1e-9));
+    });
+
+    test('histogram off publishes null', () async {
+      h.toggleHistogram();
+      expect(h.histogramOn, isFalse);
+      src.emit(stats(region: .18, histogram: bins));
+      await settle();
+      expect(h.histogram.value, isNull);
+      var n = 0;
+      h.addListener(() => n++);
+      h.toggleHistogram();
+      expect(n, 1);
+      expect(h.histogramOn, isTrue);
+      expect(h.histogram.value, isNotNull);
+    });
+
+    test('defaults off', () {
+      final d = MeterController(source: src);
+      addTearDown(d.dispose);
+      expect(d.histogramOn, isFalse);
+    });
   });
 }

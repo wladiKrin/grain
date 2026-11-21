@@ -32,6 +32,23 @@ void main() {
     expect(r.location, isTrue);
   });
 
+  test('histogram defaults off, persists and travels in the backup', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.histogram, isFalse);
+    expect(s.backupMap()['histogram'], isFalse);
+    await s.setHistogram(true);
+    expect(s.histogram, isTrue);
+    final r = await Settings.load();
+    expect(r.histogram, isTrue);
+    expect(r.backupMap()['histogram'], isTrue);
+    await r.applyBackupMap({'histogram': false});
+    expect(r.histogram, isFalse);
+    await r.applyBackupMap({'histogram': 'yes'});
+    expect(r.histogram, isFalse);
+    expect((await Settings.load()).histogram, isFalse);
+  });
+
   test('persists and reloads', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();
