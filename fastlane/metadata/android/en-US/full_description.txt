@@ -1,9 +1,9 @@
-Grain is a free, open-source lightmeter for film photographers. It reads the light through the phone camera and gives you aperture, shutter speed and ISO, with one gesture to change any value: swipe a dial and it moves one stop per detent, with haptic feedback.
+Grain is a free, open-source lightmeter for film photographers. It reads the light through the phone camera and gives you aperture, shutter speed and ISO, with one gesture to change any value: swipe a dial and it moves one value per detent, in the steps your camera uses (full, half or third stops), with haptic feedback.
 
 <b>Metering</b>
-- Average metering over the whole frame, or spot metering by tapping the preview.
+- Average metering over what your lens sees (centre-weighted), or spot metering by tapping the preview.
 - Aperture priority, shutter priority and manual modes, plus a free mode with no gear restrictions.
-- Viewfinder crop to match the frame of your camera.
+- Viewfinder crop that shows what your lens sees on your camera's film format.
 - Optional histogram overlay with film latitude markers, so you can see where highlights and shadows land.
 
 <b>Your gear</b>
@@ -13,7 +13,7 @@ Grain is a free, open-source lightmeter for film photographers. It reads the lig
 
 <b>Rolls and frame log</b>
 - Start a roll, log each frame with its settings and notes, and keep a reference snapshot per frame.
-- Export a roll as CSV, JSON or a zip with the snapshots, so the settings can go with your photos when you post them.
+- Export a roll as CSV and JSON, optionally with a zip of the snapshots, so the settings can go with your photos when you post them.
 - Back up and restore all your data.
 
 <b>Private by design</b>
