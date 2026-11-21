@@ -16,3 +16,7 @@ Device: Pixel 10, release build
 | Open the phone's gallery app | No Grain snapshots appear there | |
 | Log a frame, press Home at once | The snapshot still attaches to that frame on return | |
 | Note: the activity is portrait-locked; snapshots are rotated by sensor orientation only, so a frame logged with the phone held landscape is stored sideways (by design for now; device orientation/EXIF is later work) | — | |
+| Settings: turn Save location on | System dialog offers precise / approximate; refuse → switch stays off with "Location permission was not granted." | |
+| Location on: log a frame | A fix is attached within 10 s (indoors: the last known fix) | |
+| Airplane mode + GPS off, location on: log a frame | Frame logs with no location and no delay | |
+| Revoke the location permission in system settings, log a frame | Logging still works, no location | |

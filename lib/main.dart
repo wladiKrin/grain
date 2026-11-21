@@ -16,6 +16,8 @@ import 'gear/ui/share_sheet.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
+import 'rolls/location.dart';
+import 'rolls/location_channel.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
@@ -37,7 +39,9 @@ Future<void> main() async {
     repository: DriftGearRepository(GrainDatabase.open()),
   );
   await gear.load();
-  runApp(GrainApp(settings: settings, gear: gear));
+  // One bridge, shared by the settings screen (permission) and, from the
+  // rolls wiring on, the roll controller (fixes).
+  runApp(GrainApp(settings: settings, gear: gear, location: LocationChannel()));
 }
 
 class GrainApp extends StatefulWidget {
@@ -48,10 +52,12 @@ class GrainApp extends StatefulWidget {
     Settings? settings,
     GearController? gear,
     GearPlatform? platform,
+    LocationSource? location,
   }) : source = source ?? MeterChannel(),
        platform = platform ?? const SystemGearPlatform(),
        settings = settings ?? Settings.inMemory(),
-       gear = gear ?? GearController.inMemory();
+       gear = gear ?? GearController.inMemory(),
+       location = location ?? LocationChannel();
 
   final MeterSource source;
 
@@ -61,6 +67,7 @@ class GrainApp extends StatefulWidget {
   final Settings settings;
   final GearController gear;
   final GearPlatform platform;
+  final LocationSource location;
 
   @override
   State<GrainApp> createState() => _GrainAppState();
@@ -186,8 +193,13 @@ class _GrainAppState extends State<GrainApp> {
     );
   }
 
-  void _openSettings() =>
-      _pushLent((_) => SettingsScreen(settings: _settings, haptics: _haptics));
+  void _openSettings() => _pushLent(
+    (_) => SettingsScreen(
+      settings: _settings,
+      haptics: _haptics,
+      location: widget.location,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {

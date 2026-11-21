@@ -3,6 +3,9 @@ import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:grain/ui/theme.dart';
+
+import '../support/fake_location.dart';
+
 import 'package:material_ui/material_ui.dart';
 
 class _Haptics implements Haptics {
@@ -10,9 +13,9 @@ class _Haptics implements Haptics {
   void tick({required bool strong}) {}
 }
 
-Widget _app(Settings s) => MaterialApp(
+Widget _app(Settings s, [FakeLocation? location]) => MaterialApp(
   theme: grainTheme(),
-  home: SettingsScreen(settings: s, haptics: _Haptics()),
+  home: SettingsScreen(settings: s, haptics: _Haptics(), location: location),
 );
 
 void main() {
@@ -54,6 +57,62 @@ void main() {
     await tester.tap(find.text('Open with viewfinder on'));
     await tester.pump();
     expect(s.viewfinderOn, isFalse);
+  });
+
+  testWidgets('turning location on asks for permission first', (tester) async {
+    final s = Settings.inMemory();
+    final loc = FakeLocation();
+    await tester.pumpWidget(_app(s, loc));
+    expect(find.text('Save location'), findsOneWidget);
+    expect(find.text('Off: no location is stored anywhere.'), findsOneWidget);
+    expect(loc.permissionRequests, 0);
+    await tester.tap(find.text('Save location'));
+    await tester.pump();
+    expect(loc.permissionRequests, 1);
+    expect(s.location, isTrue);
+    expect(tester.widget<Switch>(find.byType(Switch).at(3)).value, isTrue);
+    expect(loc.calls, 0);
+  });
+
+  testWidgets('turning location off does not ask', (tester) async {
+    final s = Settings.inMemory();
+    await s.setLocation(true);
+    final loc = FakeLocation();
+    await tester.pumpWidget(_app(s, loc));
+    await tester.tap(find.text('Save location'));
+    await tester.pump();
+    expect(s.location, isFalse);
+    expect(loc.permissionRequests, 0);
+  });
+
+  testWidgets('refused permission keeps location off', (tester) async {
+    final s = Settings.inMemory();
+    final loc = FakeLocation()..granted = false;
+    await tester.pumpWidget(_app(s, loc));
+    await tester.tap(find.text('Save location'));
+    await tester.pump();
+    await tester.pump();
+    expect(s.location, isFalse);
+    expect(find.text('Location permission was not granted.'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch).at(3)).value, isFalse);
+  });
+
+  testWidgets('snapshots switch toggles the setting', (tester) async {
+    final s = Settings.inMemory();
+    await tester.pumpWidget(_app(s));
+    expect(
+      find.text(
+        'A small picture of the scene with each frame, kept on this phone.',
+      ),
+      findsOneWidget,
+    );
+    expect(s.snapshots, isTrue);
+    await tester.tap(find.text('Reference snapshots'));
+    await tester.pump();
+    expect(s.snapshots, isFalse);
+    await tester.tap(find.text('Reference snapshots'));
+    await tester.pump();
+    expect(s.snapshots, isTrue);
   });
 
   testWidgets('back button pops', (tester) async {

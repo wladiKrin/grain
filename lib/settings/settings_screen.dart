@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../exposure/scales.dart';
 import '../exposure/stops.dart';
+import '../rolls/location.dart';
 import '../ui/dial/swipe_dial.dart';
 import '../ui/haptics.dart';
 import '../ui/round_button.dart';
@@ -22,12 +23,28 @@ class SettingsScreen extends StatelessWidget {
     super.key,
     required this.settings,
     required this.haptics,
+    this.location,
   });
 
   final Settings settings;
 
   /// Used for the calibration dial's detent ticks.
   final Haptics haptics;
+
+  /// Asked for the permission when location is turned on. Without one the
+  /// switch cannot be turned on.
+  final LocationSource? location;
+
+  /// The permission is requested only here, on turning the switch on.
+  Future<void> _setLocation(BuildContext context, bool on) async {
+    if (!on) return settings.setLocation(false);
+    final messenger = ScaffoldMessenger.of(context);
+    final granted = await location?.requestPermission() ?? false;
+    if (granted) return settings.setLocation(true);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Location permission was not granted.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +118,20 @@ class SettingsScreen extends StatelessWidget {
               onChanged: settings.setViewfinderOn,
             ),
             const _Divider(),
+            _SwitchRow(
+              label: 'Reference snapshots',
+              subtitle: 'A small picture of the scene with each frame, kept on this phone.',
+              value: settings.snapshots,
+              onChanged: settings.setSnapshots,
+            ),
+            const _Divider(),
+            _SwitchRow(
+              label: 'Save location',
+              subtitle: 'Off: no location is stored anywhere.',
+              value: settings.location,
+              onChanged: (v) => _setLocation(context, v),
+            ),
+            const _Divider(),
             const Padding(
               padding: EdgeInsets.only(top: 24),
               child: Text(
@@ -129,9 +160,11 @@ class _SwitchRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.subtitle,
   });
 
   final String label;
+  final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
@@ -146,9 +179,26 @@ class _SwitchRow extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontSize: 15, color: GrainColors.ink),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 2,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: GrainColors.ink,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: GrainColors.secondary,
+                        ),
+                      ),
+                  ],
                 ),
               ),
               Switch(
