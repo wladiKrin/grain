@@ -153,6 +153,9 @@ class MeterController extends ChangeNotifier {
       // Cold-start timing: compare this logcat timestamp with the launch.
       debugPrint('GRAIN first EV');
     }
+    // A frame that gives no finite EV (bad AE metadata) is dropped, so
+    // [_latest] always derives a reading.
+    if (readingFrom(s, area: area) == null) return;
     _latest = s;
     if (held) return;
     _derive();

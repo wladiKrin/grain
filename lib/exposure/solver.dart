@@ -56,42 +56,48 @@ Solved _snap(List<ScaleValue> scale, double exact, {required bool firstIsOver}) 
   return Solved(nearestIndex(scale, exact), RangeFlag.ok);
 }
 
-/// Exact `t = N² / 2^EV_S`, snapped to [shutters] (fastest first).
-Solved solveShutter({
+/// Exact `t = N² / 2^EV_S`, snapped to [shutters] (fastest first). Null
+/// for a non-finite [ev100].
+Solved? solveShutter({
   required double ev100,
   required double iso,
   required double aperture,
   required List<ScaleValue> shutters,
 }) {
+  if (!ev100.isFinite) return null;
   final t = aperture * aperture / math.pow(2, evAtIso(ev100, iso));
   // Small t (faster than the first value) means too bright.
   return _snap(shutters, t, firstIsOver: true);
 }
 
 /// Exact `N = sqrt(t · 2^EV_S)`, snapped to [apertures] (smallest f-number
-/// first).
-Solved solveAperture({
+/// first). Null for a non-finite [ev100].
+Solved? solveAperture({
   required double ev100,
   required double iso,
   required double shutter,
   required List<ScaleValue> apertures,
 }) {
+  if (!ev100.isFinite) return null;
   final n = math.sqrt(shutter * math.pow(2, evAtIso(ev100, iso)));
   // Large f-number beyond the last value means too bright.
   return _snap(apertures, n, firstIsOver: false);
 }
 
 /// Stops of exposure error for a manual setting, rounded to [step];
-/// positive = overexposed.
-double manualOffset({
+/// positive = overexposed. Null for a non-finite [ev100] (or settings that
+/// give no finite offset).
+double? manualOffset({
   required double ev100,
   required double iso,
   required double aperture,
   required double shutter,
   double step = 1 / 3,
 }) {
+  if (!ev100.isFinite) return null;
   final raw =
       _log2(shutter / (aperture * aperture)) + evAtIso(ev100, iso);
+  if (!raw.isFinite) return null;
   final v = (raw / step).round() * step;
   return v == 0 ? 0.0 : v; // normalise -0.0
 }

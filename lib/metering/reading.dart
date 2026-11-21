@@ -78,8 +78,20 @@ class Reading {
   String toString() => 'Reading($ev100, $flag)';
 }
 
-Reading readingFrom(MeterStats s,
+/// Null for a frame whose AE metadata or lumas cannot give a finite EV
+/// (non-positive aperture, exposure or ISO; non-finite values).
+Reading? readingFrom(MeterStats s,
     {required MeterArea area, double calibration = 0}) {
+  if (!(s.aperture.isFinite && s.aperture > 0) ||
+      s.exposureNs <= 0 ||
+      s.sensitivity <= 0 ||
+      s.boost <= 0 ||
+      !s.frameLuma.isFinite ||
+      !s.cropLuma.isFinite ||
+      !s.spotLuma.isFinite ||
+      !calibration.isFinite) {
+    return null;
+  }
   final phoneIso = s.sensitivity * s.boost / 100;
   final evAE = _log2(s.aperture * s.aperture / (s.exposureNs / 1e9)) -
       _log2(phoneIso / 100);
@@ -87,6 +99,8 @@ Reading readingFrom(MeterStats s,
   final ev100 = evAE +
       _log2(math.max(region, _lumaFloor) / math.max(s.frameLuma, _lumaFloor)) +
       calibration;
+
+  if (!ev100.isFinite) return null;
 
   var flag = RangeFlag.ok;
   if (s.exposureNs >= 0.95 * s.maxExposureNs &&

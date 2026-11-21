@@ -44,12 +44,15 @@ class FakeSource implements MeterSource {
 }
 
 /// Stats giving EV100 = 15 (f/1, 1/32768 s, ISO 100, region == frame).
-MeterStats stats({double region = .18, int exposureNs = 30518}) =>
-    MeterStats.fromMap({
+MeterStats stats({
+  double region = .18,
+  int exposureNs = 30518,
+  double aperture = 1.0,
+}) => MeterStats.fromMap({
       'exposureNs': exposureNs,
       'sensitivity': 100,
       'boost': 100,
-      'aperture': 1.0,
+      'aperture': aperture,
       'minExposureNs': 10000,
       'maxExposureNs': 1000000000,
       'minIso': 50,
@@ -252,5 +255,21 @@ void main() {
     await c.resume();
     expect(c.cameraDenied, isFalse);
     expect(c.cameraError, 'boom');
+  });
+
+  test('frames that give no finite EV are skipped', () async {
+    await run();
+    c.setMode(MeterMode.manual);
+    final before = c.reading;
+    src.emit(stats(aperture: 0));
+    src.emit(stats(exposureNs: 0));
+    src.emit(stats(region: double.nan));
+    await settle();
+    expect(c.reading, same(before));
+    expect(c.offset, isNotNull);
+    expect(c.offset!.isFinite, isTrue);
+    // Switching area re-derives from the last valid frame.
+    c.tapSpot(const Offset(.3, .3));
+    expect(c.reading!.ev100, closeTo(15, 1e-3));
   });
 }
