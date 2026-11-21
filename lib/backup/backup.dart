@@ -371,8 +371,9 @@ List<String> _copySnapshots(
 
 /// Merges [c] into this phone: profiles first (their renames reach the
 /// rolls and readings), then snapshot files, then all records in one
-/// transaction. Settings (haptics, viewfinder, snapshots) are taken from the
-/// file only with [applySettings]; calibration and location never travel.
+/// transaction. Settings (haptics, viewfinder, snapshots, histogram, shake
+/// warning, click sound) are taken from the file only with [applySettings];
+/// calibration and location never travel.
 Future<ImportReport> importBackup(
   BackupContents c, {
   required GearController gear,
