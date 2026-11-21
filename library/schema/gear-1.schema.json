@@ -1,0 +1,379 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://grain.invalid/schema/gear-1.schema.json",
+  "title": "Grain gear file, schema 1",
+  "description": "A camera body, a lens, or a kit (one body plus lenses). This schema expresses the per-field rules only. Cross-field rules are enforced by the Dart validator alone: lens focal min < max, zoom aperture breakpoints (ascending, first at focal min, last at focal max), minAperture greater than every maxAperture, kit lens mounts equal to the body mount, at least one timed shutter speed, iso min < max, and the defaults for frames and iso.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "type",
+        "id",
+        "make",
+        "model",
+        "mount",
+        "format",
+        "shutter"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "type": {
+          "const": "body"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+        },
+        "make": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "mount": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+        },
+        "format": {
+          "enum": [
+            "135",
+            "135-half",
+            "120-645",
+            "120-66",
+            "120-67",
+            "120-69"
+          ]
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "shutter": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(1/[1-9][0-9]*|[0-9]+(\\.[0-9]+)?|B|T)$"
+          }
+        },
+        "iso": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "integer",
+            "minimum": 6,
+            "maximum": 12800
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "type",
+        "id",
+        "make",
+        "name",
+        "mount",
+        "focal",
+        "maxAperture",
+        "minAperture",
+        "apertureStep"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "type": {
+          "const": "lens"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+        },
+        "make": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "pattern": "\\S"
+        },
+        "mount": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+        },
+        "focal": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          ]
+        },
+        "maxAperture": {
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 0.7,
+              "maximum": 64
+            },
+            {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0.7,
+                    "maximum": 64
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "minAperture": {
+          "type": "number",
+          "exclusiveMinimum": 0.7,
+          "maximum": 64
+        },
+        "apertureStep": {
+          "enum": [
+            "full",
+            "half",
+            "third"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "type",
+        "body",
+        "lenses"
+      ],
+      "properties": {
+        "schema": {
+          "const": 1
+        },
+        "type": {
+          "const": "kit"
+        },
+        "body": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "make",
+            "model",
+            "mount",
+            "format",
+            "shutter"
+          ],
+          "properties": {
+            "type": {
+              "const": "body"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "make": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60,
+              "pattern": "\\S"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60,
+              "pattern": "\\S"
+            },
+            "mount": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+            },
+            "format": {
+              "enum": [
+                "135",
+                "135-half",
+                "120-645",
+                "120-66",
+                "120-67",
+                "120-69"
+              ]
+            },
+            "frames": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "shutter": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(1/[1-9][0-9]*|[0-9]+(\\.[0-9]+)?|B|T)$"
+              }
+            },
+            "iso": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "integer",
+                "minimum": 6,
+                "maximum": 12800
+              }
+            }
+          }
+        },
+        "lenses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id",
+              "make",
+              "name",
+              "mount",
+              "focal",
+              "maxAperture",
+              "minAperture",
+              "apertureStep"
+            ],
+            "properties": {
+              "type": {
+                "const": "lens"
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+              },
+              "make": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "\\S"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "\\S"
+              },
+              "mount": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+              },
+              "focal": {
+                "oneOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                ]
+              },
+              "maxAperture": {
+                "oneOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0.7,
+                    "maximum": 64
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0.7,
+                          "maximum": 64
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "minAperture": {
+                "type": "number",
+                "exclusiveMinimum": 0.7,
+                "maximum": 64
+              },
+              "apertureStep": {
+                "enum": [
+                  "full",
+                  "half",
+                  "third"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
