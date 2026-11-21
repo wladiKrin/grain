@@ -20,4 +20,14 @@ void main() {
     expect(formatStops(1.0000001), '+1');
     expect(formatStops(-1.32), '−1⅓');
   });
+
+  group('formatHalfStops', () {
+    test('half stops', () {
+      expect([0, 1, -1, 6, -5, 7].map(formatHalfStops), ['0', '+½', '−½', '+3', '−2½', '+3½']);
+    });
+    test('latitude limits', () {
+      expect(formatHalfStops(latitudeUnderHalvesMin), '−5');
+      expect(formatHalfStops(latitudeOverHalvesMax), '+6');
+    });
+  });
 }
