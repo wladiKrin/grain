@@ -12,6 +12,7 @@ import '../gear/model.dart';
 import '../metering/fov.dart';
 import '../metering/meter_channel.dart';
 import '../metering/reading.dart';
+import '../rolls/model.dart' show Exposure;
 
 const _centre = Offset(.5, .5);
 
@@ -105,9 +106,90 @@ class MeterController extends ChangeNotifier {
     final s = scalesFor(g);
     focalIndex = nearestIndex(s.focals, g.focal);
     final f = s.focals[focalIndex].value;
-    return f == g.focal
-        ? s
-        : scalesFor(GearSetup(body: g.body, lens: g.lens, focal: f));
+    return _withRollIso(
+      f == g.focal
+          ? s
+          : scalesFor(GearSetup(body: g.body, lens: g.lens, focal: f)),
+      g,
+    );
+  }
+
+  /// The active roll's exposed-at ISO while it drives the meter.
+  int? _rollIso;
+
+  /// [s] with the ISO dial extended to hold the roll's ISO when that lies
+  /// outside the body's own range (bodies limit their meters, not the film).
+  GearScales _withRollIso(GearScales s, GearSetup g) {
+    final iso = _rollIso;
+    final lo = g.body?.isoMin ?? 6, hi = g.body?.isoMax ?? 12800;
+    if (iso == null || (iso >= lo && iso <= hi)) return s;
+    return s.withIsos(isoScale(min: math.min(lo, iso), max: math.max(hi, iso)));
+  }
+
+  /// Whether the roll's ISO is set and the meter's ISO is another value.
+  bool get isoDiffersFromRoll {
+    final iso = _rollIso;
+    return iso != null && isos[isoIndex].label != '$iso';
+  }
+
+  /// Sets the meter's ISO to the active roll's exposed-at [iso] (extending
+  /// the scale when the body's dial stops short of it); null releases it,
+  /// keeping the nearest ISO on the gear's own scale.
+  void setRollIso(int? iso) {
+    if (iso == _rollIso) return;
+    final keep = _iso;
+    _rollIso = iso;
+    // Only the ISO list changes; the other scales stay as they are.
+    _scales = _scales.withIsos(_withRollIso(scalesFor(_gear), _gear).isos);
+    isoIndex = nearestIndex(isos, iso?.toDouble() ?? keep);
+    notifyListeners();
+  }
+
+  /// What the meter shows now, as a record for a roll or the saved readings:
+  /// the input dials' labels, the solved value in a priority mode (null with
+  /// no reading), nominal numbers rather than the exact scale values.
+  Exposure captureExposure() {
+    String? shutter;
+    double? time, aperture;
+    switch (mode) {
+      case MeterMode.aperturePriority:
+        aperture = nominalValue(apertures[apertureIndex].label);
+        final bulb = bulbSeconds;
+        final solved = solvedShutter;
+        if (bulb != null) {
+          shutter = 'B';
+          time = (bulb * 10).round() / 10;
+        } else if (solved != null) {
+          shutter = shutters[solved.index].label;
+          time = nominalValue(shutter);
+        }
+      case MeterMode.shutterPriority:
+        shutter = shutters[shutterIndex].label;
+        time = nominalValue(shutter);
+        final solved = solvedAperture;
+        if (solved != null) {
+          aperture = nominalValue(apertures[solved.index].label);
+        }
+      case MeterMode.manual:
+        aperture = nominalValue(apertures[apertureIndex].label);
+        shutter = shutters[shutterIndex].label;
+        time = nominalValue(shutter);
+    }
+    final lens = _gear.lens;
+    return Exposure(
+      mode: mode,
+      aperture: aperture,
+      shutter: shutter,
+      exposureTime: time,
+      iso: int.parse(isos[isoIndex].label),
+      lensId: lens?.id,
+      lensMake: lens?.make,
+      lensName: lens?.name,
+      focal: focal,
+      meteredEv: reading?.ev100,
+      offset: offset,
+      area: area,
+    );
   }
 
   double get _ev100 => reading!.ev100;
@@ -364,7 +446,7 @@ class MeterController extends ChangeNotifier {
     if (lens != null && lens.maxAperture.length > 1) {
       // A varying-aperture zoom: the widest aperture follows the focal.
       final value = apertures[apertureIndex].value;
-      _scales = scalesFor(_gear);
+      _scales = scalesFor(_gear).withIsos(_scales.isos);
       apertureIndex = nearestIndex(apertures, value);
     }
     _sendRegions();

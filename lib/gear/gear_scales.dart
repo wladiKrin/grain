@@ -37,6 +37,15 @@ class GearScales {
   final List<ScaleValue> apertures, shutters, isos, focals;
   final bool hasBulb;
   final FilmFormat format;
+
+  GearScales withIsos(List<ScaleValue> isos) => GearScales(
+    apertures: apertures,
+    shutters: shutters,
+    isos: isos,
+    focals: focals,
+    hasBulb: hasBulb,
+    format: format,
+  );
 }
 
 double _log2(double x) => math.log(x) / math.ln2;

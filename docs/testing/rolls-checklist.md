@@ -20,3 +20,13 @@ Device: Pixel 10, release build
 | Location on: log a frame | A fix is attached within 10 s (indoors: the last known fix) | |
 | Airplane mode + GPS off, location on: log a frame | Frame logs with no location and no delay | |
 | Revoke the location permission in system settings, log a frame | Logging still works, no location | |
+
+## Meter: log frame, save reading (Task 7)
+
+| check | expected | result |
+| --- | --- | --- |
+| Log frame feels instant | The new frame number shows with no visible delay (at most one frame); the snapshot and location arrive later without blocking | |
+| Narrow header and bottom row at 360 px | "Roll 12 · frame 37/36 +1" and "Delta 3200 · 3200 → 12800" fit the header without overflow; the Log button, rolls button and Start roll link fit | |
+| 360 x 800 phone, Manual mode, viewfinder on, no roll | Nothing overflows; the numerals step down to their smallest and the viewfinder is small but usable (about 90 px) | |
+| Tap Log frame twice quickly | The Undo snack bar floats above the button and never covers it; both frames log | |
+| Cold start with an active roll of 72 frames | The meter is up in 1.5 s or less | |

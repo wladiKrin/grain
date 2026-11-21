@@ -108,4 +108,20 @@ void main() {
       '1/1000',
     );
   });
+
+  testWidgets('the default roll controller saves a reading', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final src = FakeMeterSource(logRegions: false);
+    await tester.pumpWidget(GrainApp(source: src, haptics: _Haptics()));
+    await tester.pump();
+    expect(find.text('Save reading'), findsOneWidget);
+    await tester.tap(find.text('Save reading'));
+    await tester.pump();
+    expect(find.text('Reading saved'), findsOneWidget);
+    // The default controller takes snapshots through the app's source.
+    expect(src.calls.where((c) => c.startsWith('snapshot(')), hasLength(1));
+  });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
@@ -18,6 +19,9 @@ import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
 import 'rolls/location.dart';
 import 'rolls/location_channel.dart';
+import 'rolls/roll_controller.dart';
+import 'rolls/roll_repository.dart';
+import 'rolls/snapshot_store.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
@@ -34,14 +38,32 @@ Future<void> main() async {
     Settings.load(),
     GearLibrary.load(rootBundle),
   ).wait;
+  final db = GrainDatabase.open();
   final gear = GearController(
     library: library,
-    repository: DriftGearRepository(GrainDatabase.open()),
+    repository: DriftGearRepository(db),
   );
-  await gear.load();
-  // One bridge, shared by the settings screen (permission) and, from the
-  // rolls wiring on, the roll controller (fixes).
-  runApp(GrainApp(settings: settings, gear: gear, location: LocationChannel()));
+  final source = MeterChannel();
+  // One bridge, shared by the settings screen (permission) and the roll
+  // controller (fixes).
+  final location = LocationChannel();
+  final rolls = RollController(
+    repository: DriftRollRepository(db),
+    snapshots: await SnapshotStore.open(),
+    settings: settings,
+    takeSnapshot: source.snapshot,
+    location: location,
+  );
+  await (gear.load(), rolls.load()).wait;
+  runApp(
+    GrainApp(
+      source: source,
+      settings: settings,
+      gear: gear,
+      location: location,
+      rolls: rolls,
+    ),
+  );
 }
 
 class GrainApp extends StatefulWidget {
@@ -53,6 +75,7 @@ class GrainApp extends StatefulWidget {
     GearController? gear,
     GearPlatform? platform,
     LocationSource? location,
+    this.rolls,
   }) : source = source ?? MeterChannel(),
        platform = platform ?? const SystemGearPlatform(),
        settings = settings ?? Settings.inMemory(),
@@ -69,6 +92,9 @@ class GrainApp extends StatefulWidget {
   final GearPlatform platform;
   final LocationSource location;
 
+  /// Defaults to an in-memory controller owned by the app (tests).
+  final RollController? rolls;
+
   @override
   State<GrainApp> createState() => _GrainAppState();
 }
@@ -82,6 +108,17 @@ class _GrainAppState extends State<GrainApp> {
     calibrationEv: _settings.calibrationEv,
     viewfinderOn: _settings.viewfinderOn,
   );
+  late final bool _ownsRolls = widget.rolls == null;
+  late final RollController _rolls =
+      widget.rolls ??
+      RollController.inMemory(
+        settings: _settings,
+        snapshots: SnapshotStore(
+          Directory.systemTemp.createTempSync('grain-snapshots'),
+        ),
+        takeSnapshot: widget.source.snapshot,
+        location: widget.location,
+      );
   late final SystemHaptics _systemHaptics = SystemHaptics(
     enabled: _settings.haptics,
   );
@@ -102,6 +139,8 @@ class _GrainAppState extends State<GrainApp> {
     _settings.addListener(_onSettings);
     _controller.addListener(_onController);
     _gear.addListener(_onGear);
+    _rolls.addListener(_onRolls);
+    _syncRollIso();
     _controller.resume();
   }
 
@@ -115,7 +154,27 @@ class _GrainAppState extends State<GrainApp> {
 
   /// Equal setups are a no-op on the controller, so the two-way sync below
   /// settles after one round trip.
-  void _onGear() => _controller.setGear(_gear.setup);
+  void _onGear() {
+    _controller.setGear(_gear.setup);
+    _syncRollIso();
+  }
+
+  String? _rollId;
+
+  /// The meter follows the active roll's exposed-at ISO while the roll logs
+  /// for the selected body.
+  void _onRolls() => _syncRollIso();
+
+  void _syncRollIso() {
+    final logs = _rolls.logsFor(_gear.body);
+    final roll = _rolls.active;
+    // A new roll starts at its own ISO even when it equals the old roll's.
+    if (roll?.id != _rollId) {
+      _rollId = roll?.id;
+      _controller.setRollIso(null);
+    }
+    _controller.setRollIso(logs ? roll!.exposedIso : null);
+  }
 
   /// The eye toggle is the same preference as the settings switch; a zoom
   /// change goes back to the gear selection.
@@ -131,6 +190,8 @@ class _GrainAppState extends State<GrainApp> {
     _settings.removeListener(_onSettings);
     _controller.removeListener(_onController);
     _gear.removeListener(_onGear);
+    _rolls.removeListener(_onRolls);
+    if (_ownsRolls) _rolls.dispose();
     _lifecycle.dispose();
     _controller.pause();
     _controller.dispose();
@@ -217,6 +278,7 @@ class _GrainAppState extends State<GrainApp> {
         controller: _controller,
         haptics: _haptics,
         gear: _gear,
+        rolls: _rolls,
         onOpenLibrary: _openLibrary,
         onOpenLensPicker: _openLensPicker,
         onOpenSettings: _openSettings,

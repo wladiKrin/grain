@@ -15,6 +15,7 @@ import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_source.dart';
+import '../support/rolls_fixtures.dart';
 import '../support/gear_fixtures.dart';
 
 class _Haptics implements Haptics {
@@ -80,6 +81,7 @@ void main() {
         theme: grainTheme(),
         home: MeterScreen(
           controller: c,
+          rolls: inMemoryRolls(),
           gear: gear,
           haptics: haptics,
           onOpenLensPicker: () => pickerOpened++,

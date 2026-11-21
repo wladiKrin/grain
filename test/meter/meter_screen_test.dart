@@ -16,6 +16,7 @@ import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../support/fake_source.dart';
+import '../support/rolls_fixtures.dart';
 
 class FakeHaptics implements Haptics {
   final ticks = <bool>[];
@@ -84,6 +85,7 @@ void main() {
         theme: grainTheme(),
         home: MeterScreen(
           controller: c,
+          rolls: inMemoryRolls(),
           haptics: haptics,
           gear: GearController.inMemory(),
           requestCameraPermission: () async {

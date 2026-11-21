@@ -35,3 +35,7 @@ String rollStatus(Roll r, int next) {
   final over = overrun(r, next);
   return over > 0 ? '$base +$over' : base;
 }
+
+/// Screen-reader label of an ISO value; [differs] when it is not the roll's.
+String isoSemantics(String iso, {bool differs = false}) =>
+    differs ? 'ISO $iso, differs from the roll' : 'ISO $iso';

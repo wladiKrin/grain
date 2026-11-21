@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
@@ -6,6 +7,8 @@ import '../exposure/mode.dart';
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
 import '../gear/gear_controller.dart';
+import '../rolls/push.dart';
+import '../rolls/roll_controller.dart';
 import '../ui/haptics.dart';
 import '../ui/theme.dart';
 import 'meter_controller.dart';
@@ -14,6 +17,7 @@ import 'widgets/focal_chip.dart';
 import 'widgets/header.dart';
 import 'widgets/iso_stepper.dart';
 import 'widgets/lens_chip.dart';
+import 'widgets/log_button.dart';
 import 'widgets/mode_tabs.dart';
 import 'widgets/offset_scale.dart';
 import 'widgets/value_row.dart';
@@ -27,6 +31,9 @@ class MeterScreen extends StatefulWidget {
     required this.controller,
     required this.haptics,
     required this.gear,
+    required this.rolls,
+    this.onStartRoll,
+    this.onOpenRolls,
     this.onOpenSettings,
     this.onOpenLibrary,
     this.onOpenLensPicker,
@@ -38,6 +45,15 @@ class MeterScreen extends StatefulWidget {
 
   /// Source of the header and lens chip, and the lens cycling.
   final GearController gear;
+
+  /// The active roll and saved readings the Log / Save button writes to.
+  final RollController rolls;
+
+  /// The "Start roll" link under the button (shown when no roll logs).
+  final VoidCallback? onStartRoll;
+
+  /// The rolls button beside the Log / Save button.
+  final VoidCallback? onOpenRolls;
 
   /// Settings button action.
   final VoidCallback? onOpenSettings;
@@ -61,6 +77,78 @@ class _MeterScreenState extends State<MeterScreen> {
 
   GearController get _gear => widget.gear;
 
+  RollController get _rolls => widget.rolls;
+
+  final _logKey = GlobalKey();
+
+  /// Records the current exposure, as a frame of the active roll when it
+  /// logs for the selected body, else as a saved reading. The new state is
+  /// in memory before this returns; the writes follow on their own.
+  void _log() {
+    final e = _c.captureExposure();
+    widget.haptics.tick(strong: true);
+    final messenger = ScaffoldMessenger.of(context);
+    final String message;
+    final Future<void> Function() undo;
+    final Future<void> done;
+    if (_rolls.logsFor(_gear.body)) {
+      message = 'Frame ${_rolls.nextLabel} logged';
+      final frame = _rolls.logFrame(e);
+      done = frame;
+      undo = () async {
+        final f = await frame;
+        await _rolls.deleteFrame(f.rollId, f.id);
+      };
+    } else {
+      message = 'Reading saved';
+      final reading = _rolls.saveReading(
+        e,
+        body: _gear.body,
+        format: _c.format,
+      );
+      done = reading;
+      undo = () async => _rolls.deleteReading((await reading).id);
+    }
+    unawaited(
+      done.catchError((Object error) {
+        messenger.clearSnackBars();
+        messenger.showSnackBar(const SnackBar(content: Text('Not saved')));
+      }),
+    );
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        // Above the button row, so the next log is never covered.
+        margin: EdgeInsets.fromLTRB(24, 0, 24, _aboveLogButton()),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => unawaited(undo()),
+        ),
+      ),
+    );
+  }
+
+  /// Bottom margin that floats a snack bar just above the button row.
+  double _aboveLogButton() {
+    final box = _logKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return 16;
+    final top = box.localToGlobal(Offset.zero).dy;
+    return math.max(16, MediaQuery.sizeOf(context).height - top + 8);
+  }
+
+  /// Line 2 of the header: roll progress, the meter-only note, or the format.
+  String _statusLine(String formatLabel) {
+    final roll = _rolls.active;
+    if (roll == null) return formatLabel;
+    if (_rolls.logsFor(_gear.body)) {
+      return rollStatus(roll, _rolls.nextFrameNumber!);
+    }
+    return 'Meter only · roll ${roll.number} is in the ${roll.bodyName}';
+  }
+
   /// Aperture scale labelled "f/5.6" for display, rebuilt whenever the
   /// controller swaps its aperture list (gear or focal change).
   List<ScaleValue>? _aperturesFor;
@@ -78,41 +166,68 @@ class _MeterScreenState extends State<MeterScreen> {
   }
 
   /// Value numeral sizes with the viewfinder on, largest first.
-  static const _rowSizes = [64.0, 52.0, 44.0];
+  static const _rowSizes = [64.0, 52.0, 44.0, 36.0];
+
+  /// Same with the viewfinder off, where the numerals are bigger.
+  static const _bareSizes = [92.0, 72.0, 56.0, 44.0, 36.0, 28.0];
 
   /// Smallest viewfinder height the numerals step down for.
   static const _viewfinderFloor = 150.0;
 
+  /// Room the EV line needs above the rows when the viewfinder is off.
+  static const _bareFloor = 24.0;
+
   /// Keeps a step down from flipping back on a pixel's difference.
   static const _hysteresis = 8.0;
 
-  /// Index into [_rowSizes] of the numerals in use.
-  int _rowStep = 0;
+  /// Index into [_rowSizes] / [_bareSizes] of the numerals in use.
+  int _rowStep = 0, _bareStep = 0;
+
+  /// Height last measured at each numeral step (see [_fitRows]).
+  final _seenRows = List<double?>.filled(_rowSizes.length, null);
+  final _seenBare = List<double?>.filled(_bareSizes.length, null);
   bool _fitScheduled = false;
 
-  /// Picks the largest numeral size that leaves the viewfinder its floor,
-  /// given that it got [height] at the current size. Both value rows carry
-  /// one numeral line each, so a step frees twice its size difference. The
-  /// new size applies from the next frame.
-  void _fitRows(double height) {
+  /// Picks the largest numeral size that leaves the viewfinder (or, bare,
+  /// the EV line) its floor, given that it got [height] at the current size.
+  /// Both value rows carry one numeral line each, so a step frees twice its
+  /// size difference. The new size applies from the next frame.
+  void _fitRows(double height, {required bool bare}) {
+    final sizes = bare ? _bareSizes : _rowSizes;
+    final floor = bare ? _bareFloor : _viewfinderFloor;
+    final current = bare ? _bareStep : _rowStep;
     final scaler = MediaQuery.textScalerOf(context);
-    double line(int step) => scaler.scale(_rowSizes[step]);
-    double at(int step) => height + 2 * (line(_rowStep) - line(step));
-    var step = _rowSizes.length - 1;
-    for (var i = 0; i < _rowSizes.length; i++) {
-      final need = i < _rowStep
-          ? _viewfinderFloor + _hysteresis
-          : _viewfinderFloor;
+    double line(int step) => scaler.scale(sizes[step]);
+    // What this step gave last time it was in use, when that is still
+    // current; else the estimate. Without the record a step whose real
+    // effect is larger than the estimate would flip back and forth.
+    final seen = bare ? _seenBare : _seenRows;
+    if (seen[current] != null && (seen[current]! - height).abs() > .5) {
+      seen.fillRange(0, seen.length, null);
+    }
+    seen[current] = height;
+    double at(int step) =>
+        seen[step] ?? height + 2 * (line(current) - line(step));
+    var step = sizes.length - 1;
+    for (var i = 0; i < sizes.length; i++) {
+      final need = i < current ? floor + _hysteresis : floor;
       if (at(i) >= need) {
         step = i;
         break;
       }
     }
-    if (step == _rowStep || _fitScheduled) return;
+    if (step == current || _fitScheduled) return;
     _fitScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fitScheduled = false;
-      if (mounted && step != _rowStep) setState(() => _rowStep = step);
+      if (!mounted) return;
+      setState(() {
+        if (bare) {
+          _bareStep = step;
+        } else {
+          _rowStep = step;
+        }
+      });
     });
   }
 
@@ -124,33 +239,42 @@ class _MeterScreenState extends State<MeterScreen> {
     }
   }
 
+  bool _seeded = false;
+
   @override
   Widget build(BuildContext context) {
     final inset = MediaQuery.paddingOf(context);
+    if (!_seeded) {
+      _seeded = true;
+      // The first frame cannot measure itself (the fit runs after layout):
+      // a short screen starts the bare numerals one step down so that frame
+      // does not overflow either.
+      if (MediaQuery.sizeOf(context).height < 840) _bareStep = 1;
+    }
     return Scaffold(
       body: Padding(
         padding: EdgeInsets.fromLTRB(
           24,
-          math.max(52, inset.top + 12),
+          math.max(44, inset.top + 8),
           24,
-          math.max(28, inset.bottom + 12),
+          math.max(24, inset.bottom + 8),
         ),
         child: _Select(
           controller: _c,
           select: (c) => c.viewfinderOn,
           builder: (context, viewfinderOn) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: 16,
+            spacing: 12,
             children: [
               _Select(
                 controller: _c,
                 select: (c) => (c.gear, c.focalValues, c.focalIndex, c.mode),
                 builder: (context, _) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 16,
+                  spacing: 12,
                   children: [
                     ListenableBuilder(
-                      listenable: _gear,
+                      listenable: Listenable.merge([_gear, _rolls]),
                       builder: (context, _) => _gearHeader(viewfinderOn),
                     ),
                     ListenableBuilder(
@@ -167,38 +291,71 @@ class _MeterScreenState extends State<MeterScreen> {
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, box) {
-                      _fitRows(box.maxHeight);
+                      _fitRows(box.maxHeight, bare: false);
                       return RepaintBoundary(child: _viewfinder());
                     },
                   ),
                 )
               else ...[
-                const Spacer(),
-                _Select(
-                  controller: _c,
-                  // Without the preview, the EV line (and its range flag)
-                  // still shows above the rows.
-                  select: (c) => (
-                    c.cameraDenied,
-                    c.cameraError,
-                    c.reading?.ev100,
-                    c.reading?.flag,
-                    c.area,
-                    c.held,
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      _fitRows(box.maxHeight, bare: true);
+                      return Align(
+                        alignment: Alignment.bottomCenter,
+                        child: _Select(
+                          controller: _c,
+                          // Without the preview, the EV line (and its range
+                          // flag) still shows above the rows.
+                          select: (c) => (
+                            c.cameraDenied,
+                            c.cameraError,
+                            c.reading?.ev100,
+                            c.reading?.flag,
+                            c.area,
+                            c.held,
+                          ),
+                          builder: (context, _) => _notice() ?? _evText(),
+                        ),
+                      );
+                    },
                   ),
-                  builder: (context, _) => _notice() ?? _evText(),
                 ),
               ],
               RepaintBoundary(child: _valueRows(viewfinderOn)),
-              _Select(
-                controller: _c,
-                select: (c) => (c.isoIndex, c.isos),
-                builder: (context, sel) => IsoStepper(
-                  values: sel.$2,
-                  index: sel.$1,
-                  onChanged: _c.setIso,
-                  haptics: widget.haptics,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 8,
+                children: [
+                  _Select(
+                    controller: _c,
+                    select: (c) => (c.isoIndex, c.isos, c.isoDiffersFromRoll),
+                    builder: (context, sel) => IsoStepper(
+                      values: sel.$2,
+                      index: sel.$1,
+                      onChanged: _c.setIso,
+                      haptics: widget.haptics,
+                      marked: sel.$3,
+                    ),
+                  ),
+                  ListenableBuilder(
+                    listenable: Listenable.merge([_gear, _rolls]),
+                    builder: (context, _) {
+                      final logs = _rolls.logsFor(_gear.body);
+                      return LogButton(
+                        key: _logKey,
+                        label: logs
+                            ? 'Log frame ${_rolls.nextLabel}'
+                            : 'Save reading',
+                        onPressed: _log,
+                        onStartRoll: logs
+                            ? null
+                            : (widget.onStartRoll ?? () {}),
+                        onOpenRolls: widget.onOpenRolls ?? () {},
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -210,9 +367,13 @@ class _MeterScreenState extends State<MeterScreen> {
   Widget _gearHeader(bool viewfinderOn) {
     final body = _gear.body;
     final onLibrary = widget.onOpenLibrary ?? () {};
+    final roll = _rolls.active;
     return MeterHeader(
       title: body?.displayName ?? 'No camera',
-      subtitle: body?.format.label ?? 'Free mode',
+      subtitle: _statusLine(body?.format.label ?? 'Free mode'),
+      detail: roll != null && _rolls.logsFor(body) && roll.pushThirds != 0
+          ? filmLine(roll)
+          : null,
       viewfinderOn: viewfinderOn,
       onToggleViewfinder: _c.toggleViewfinder,
       onOpenSettings: widget.onOpenSettings ?? () {},
@@ -354,7 +515,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.solvedAperture?.flag,
     ),
     builder: (context, _) {
-      final size = viewfinderOn ? _rowSizes[_rowStep] : 92.0;
+      final size = viewfinderOn ? _rowSizes[_rowStep] : _bareSizes[_bareStep];
       final apertures = _displayApertures();
       final bulb = _c.bulbSeconds;
       final aperture = ValueRow.input(
@@ -403,7 +564,7 @@ class _MeterScreenState extends State<MeterScreen> {
           aperture,
           shutter,
           Padding(
-            padding: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.only(top: 6),
             // Own selector so offset changes don't rebuild the dials.
             child: _Select(
               controller: _c,

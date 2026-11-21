@@ -9,6 +9,7 @@ class MeterHeader extends StatelessWidget {
     super.key,
     required this.title,
     required this.subtitle,
+    this.detail,
     required this.viewfinderOn,
     required this.onToggleViewfinder,
     required this.onOpenSettings,
@@ -17,6 +18,9 @@ class MeterHeader extends StatelessWidget {
 
   final String title;
   final String subtitle;
+
+  /// Optional third line, styled like [subtitle].
+  final String? detail;
   final bool viewfinderOn;
   final VoidCallback onToggleViewfinder;
   final VoidCallback onOpenSettings;
@@ -44,15 +48,16 @@ class MeterHeader extends StatelessWidget {
                     color: GrainColors.ink,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: GrainColors.secondary,
+                for (final line in [subtitle, ?detail])
+                  Text(
+                    line,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: GrainColors.secondary,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
