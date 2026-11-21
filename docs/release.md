@@ -54,6 +54,16 @@ $ANDROID_HOME/build-tools/<version>/apksigner verify --print-certs build/app/out
 
 ## Unsigned build (F-Droid, reproducibility checks)
 
+`android/gradlew` and the Gradle wrapper jar are not in the repository (Flutter's
+default `.gitignore`); Flutter writes them, with `android/local.properties`, on
+its first Gradle build. On a fresh clone, run this once first:
+
+```
+flutter build apk --release
+```
+
+Then:
+
 ```
 cd android && GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease
 ```
@@ -61,6 +71,13 @@ cd android && GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease
 `GRAIN_UNSIGNED=1` takes precedence over `key.properties`. The output is
 `build/app/outputs/apk/release/app-release-unsigned.apk`; F-Droid signs it with
 its own key.
+
+This plain Gradle build is not the same build as the published APKs: it passes
+none of `--split-per-abi`, `--obfuscate` and `--split-debug-info`, so it is one
+universal, unobfuscated APK. Do not compare it with the published split APKs.
+Compare like with like: two plain Gradle builds, or a Gradle build with the
+same options as the release command,
+`GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease -Psplit-per-abi=true -Pdart-obfuscation=true -Psplit-debug-info="$PWD/../build/symbols"` (an absolute path).
 
 ## Reproducible builds
 

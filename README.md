@@ -7,8 +7,10 @@ of each roll. There is no paywall, no ads and no tracking.
 
 ## Features
 
-- One-swipe dials: one stop per detent, with haptic feedback.
-- Average and spot metering (tap the preview).
+- One-swipe dials: one value per detent, in your camera's steps (full, half or
+  third stops), with haptic feedback.
+- Average metering over what the lens sees (centre-weighted) and spot metering
+  (tap the preview).
 - Aperture priority, shutter priority and manual modes, plus a free mode with
   no gear restrictions.
 - Viewfinder crop.
@@ -64,6 +66,10 @@ flutter analyze
 cd android && ./gradlew :app:testDebugUnitTest
 ```
 
+`android/gradlew` is not in the repository; Flutter writes it on its first
+Gradle build. On a fresh clone, run `flutter build apk --release` once before
+the Gradle command.
+
 The checks that need a real phone (camera, haptics, sharing) are listed in
 `docs/testing/device-test-script.md`, one ordered session with an expected result
 and a box to tick for each step; there is no automated device test.
@@ -105,5 +111,18 @@ All files in `library/` are dedicated to the public domain under CC0 1.0, see
 - Gear library (`library/`): CC0 1.0, see `library/LICENSE`.
 - Inter Tight font subset: SIL Open Font License, see `assets/fonts/OFL.txt`.
 - SQLite (vendored in `third_party/sqlite/`): public domain.
+
+### Third-party notices
+
+The APK also contains code under other licences. The app shows all of these
+notices under Settings > Licences.
+
+- ZXing core 3.5.4 (`com.google.zxing:core`, QR code decoding): Apache
+  License 2.0. The full text is in `assets/licenses/apache-2.0.txt`.
+- The Flutter engine and framework and the pub packages (BSD, MIT and Apache
+  2.0 licences): Flutter collects their notices into the build.
+- Inter Tight: SIL Open Font License 1.1 (`assets/licenses/ofl-1.1.txt`).
+- SQLite: public domain (`assets/licenses/sqlite.txt`).
+- The gear library: CC0 1.0 (`assets/licenses/cc0-1.0.txt`).
 
 The source will be at <https://github.com/wladiKrin/grain>.
