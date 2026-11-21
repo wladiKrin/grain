@@ -38,28 +38,26 @@ Future<void> lockPortrait() =>
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await lockPortrait();
-  final (settings, library) = await (
-    Settings.load(),
-    GearLibrary.load(rootBundle),
-  ).wait;
   final db = GrainDatabase.open();
-  final gear = GearController(
-    library: library,
-    repository: DriftGearRepository(db),
-  );
   final source = MeterChannel();
   // One bridge, shared by the settings screen (permission) and the roll
   // controller (fixes).
   final location = LocationChannel();
-  final rolls = RollController(
-    repository: DriftRollRepository(db),
-    snapshots: await SnapshotStore.open(),
-    settings: settings,
-    takeSnapshot: source.snapshot,
-    location: location,
+  final (:settings, :gear, :rolls) = await loadStartup(
+    settings: Settings.load(),
+    library: GearLibrary.load(rootBundle),
+    snapshots: SnapshotStore.open(),
+    alongside: lockPortrait(),
+    makeGear: (library) =>
+        GearController(library: library, repository: DriftGearRepository(db)),
+    makeRolls: (settings, snapshots) => RollController(
+      repository: DriftRollRepository(db),
+      snapshots: snapshots,
+      settings: settings,
+      takeSnapshot: source.snapshot,
+      location: location,
+    ),
   );
-  await (gear.load(), rolls.load()).wait;
   runApp(
     GrainApp(
       source: source,
@@ -69,6 +67,43 @@ Future<void> main() async {
       rolls: rolls,
     ),
   );
+}
+
+/// Everything the app needs before its first frame, loaded on two
+/// independent chains so neither waits on the other's inputs: the gear
+/// (library asset, then its tables) and the rolls (settings and snapshot
+/// directory, then its tables). [alongside] (the orientation lock) runs in
+/// parallel. Both controllers are loaded when this returns.
+Future<({Settings settings, GearController gear, RollController rolls})>
+loadStartup({
+  required Future<Settings> settings,
+  required Future<GearLibrary> library,
+  required Future<SnapshotStore> snapshots,
+  required GearController Function(GearLibrary library) makeGear,
+  required RollController Function(Settings settings, SnapshotStore snapshots)
+  makeRolls,
+  Future<void>? alongside,
+}) async {
+  Future<GearController> gear() async {
+    final g = makeGear(await library);
+    await g.load();
+    return g;
+  }
+
+  Future<RollController> rolls() async {
+    final (s, store) = await (settings, snapshots).wait;
+    final r = makeRolls(s, store);
+    await r.load();
+    return r;
+  }
+
+  final (s, g, r, _) = await (
+    settings,
+    gear(),
+    rolls(),
+    alongside ?? Future<void>.value(),
+  ).wait;
+  return (settings: s, gear: g, rolls: r);
 }
 
 class GrainApp extends StatefulWidget {
