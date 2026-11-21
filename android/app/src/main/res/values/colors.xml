@@ -2,4 +2,6 @@
 <resources>
     <!-- Paper ground, #F4F2EE: the window behind Flutter and the launch screen. -->
     <color name="grain_ground">#FFF4F2EE</color>
+    <!-- Adaptive launcher icon ground, same Paper colour. -->
+    <color name="ic_launcher_background">#FFF4F2EE</color>
 </resources>

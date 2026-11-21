@@ -1,7 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Release signing: android/key.properties (gitignored) points at the keystore.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
 android {
@@ -27,11 +37,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Debug-signed for now: F-Droid builds and signs releases itself, and a
-            // release keystore for self-distributed APKs is a later step.
-            signingConfig = signingConfigs.getByName("debug")
+            // No key.properties: debug-signed so `flutter build apk` installs. F-Droid and reproducibility checks build unsigned with GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease. Never commit key.properties or the keystore (both gitignored).
+            signingConfig = when {
+                System.getenv("GRAIN_UNSIGNED") == "1" -> null
+                hasKeystore -> signingConfigs.getByName("release")
+                else -> signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

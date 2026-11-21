@@ -34,6 +34,7 @@ pubspec_overrides.yaml
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 *.jks
+*.keystore
 
 # iOS
 **/ios/**/Pods/

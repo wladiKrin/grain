@@ -1,38 +1,82 @@
 # Grain
 
-Grain is an open-source film lightmeter for Android (iOS to follow). It helps
-film photographers read exposure with their phone and set aperture, shutter
-speed and ISO. It is free software with no proprietary dependencies and no
-network access.
+Grain is a free, open-source lightmeter for film photographers on Android
+(iOS is not built yet). It meters with the phone camera, changes any value with
+one swipe, knows your actual cameras and lenses, and keeps a frame-by-frame log
+of each roll. There is no paywall, no ads and no tracking.
 
-## Toolchain
+## Features
 
-Install JDK 17, the Flutter stable SDK
-(<https://docs.flutter.dev/get-started/install>) and the Android SDK
-(command-line tools, platform-tools, a current platform and build-tools), then
-accept licences with `flutter doctor --android-licenses` and check
+- One-swipe dials: one stop per detent, with haptic feedback.
+- Average and spot metering (tap the preview).
+- Aperture priority, shutter priority and manual modes, plus a free mode with
+  no gear restrictions.
+- Viewfinder crop.
+- Histogram with film latitude markers.
+- Gear library (bundled community bodies and lenses, your own profiles,
+  favourites) and QR sharing of profiles.
+- Rolls and a frame log with a reference snapshot per frame.
+- CSV, JSON and zip export of rolls, and backup and restore.
+- Works offline: no network access, no ads, no tracking, no Google Play Services.
+
+## Screenshots
+
+To be added after the first device session.
+
+## Build and run from source
+
+You need:
+
+- Flutter 3.50.1 (stable)
+- JDK 17
+- The Android SDK (platform 36 or 37, build-tools, platform-tools and the NDK
+  that `flutter doctor` asks for; Gradle installs a missing NDK itself once the
+  licences are accepted)
+- A C compiler on the host (SQLite is compiled from the vendored source in
+  `third_party/sqlite/`, also for the host tests)
+
+Accept the Android licences with `flutter doctor --android-licenses` and check
 `flutter doctor`.
 
-On the maintainer's machine, `source ~/.grain-env.sh` sets up the user-space
-toolchain (JDK 17, Android SDK, Flutter at `~/flutter`).
-
-## Run and test
+The maintainer keeps a user-space toolchain in an environment script,
+`~/.grain-env.sh`. You do not have that file; write your own with the paths of
+your installation, for example:
 
 ```
+export JAVA_HOME="$HOME/.local/jdk-17"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$HOME/flutter/bin:$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+```
+
+Source it in every shell (`source ~/my-grain-env.sh`), then:
+
+```
+flutter pub get
 flutter run
-flutter test
 ```
 
-## Install from APK
+## Tests
+
+```
+flutter test
+flutter analyze
+cd android && ./gradlew :app:testDebugUnitTest
+```
+
+The checks that need a real phone (camera, haptics, sharing) are listed in
+`docs/testing/*-checklist.md`; there is no automated device script.
+
+## Release build
 
 ```
 flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
-`--split-debug-info` keeps the Dart symbols out of the APK (about 1 MB
-smaller). Keep `build/symbols/` of a build you ship: `flutter symbolize`
-needs it to read that build's stack traces.
+Without `android/key.properties` this is debug-signed, which is fine for your
+own phone. Signing, the unsigned F-Droid build and reproducibility notes are in
+[docs/release.md](docs/release.md).
 
 ## Contributing gear
 
@@ -56,5 +100,9 @@ All files in `library/` are dedicated to the public domain under CC0 1.0, see
 
 ## Licence
 
-GPLv3, see [LICENSE](LICENSE). The bundled Inter Tight font is licensed under
-the SIL Open Font License, see `assets/fonts/OFL.txt`.
+- Code: GPLv3, see [LICENSE](LICENSE).
+- Gear library (`library/`): CC0 1.0, see `library/LICENSE`.
+- Inter Tight font subset: SIL Open Font License, see `assets/fonts/OFL.txt`.
+- SQLite (vendored in `third_party/sqlite/`): public domain.
+
+The source will be at <https://github.com/wladiKrin/grain>.

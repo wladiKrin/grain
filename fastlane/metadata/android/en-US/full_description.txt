@@ -1,0 +1,25 @@
+Grain is a free, open-source lightmeter for film photographers. It reads the light through the phone camera and gives you aperture, shutter speed and ISO, with one gesture to change any value: swipe a dial and it moves one stop per detent, with haptic feedback.
+
+<b>Metering</b>
+- Average metering over the whole frame, or spot metering by tapping the preview.
+- Aperture priority, shutter priority and manual modes, plus a free mode with no gear restrictions.
+- Viewfinder crop to match the frame of your camera.
+- Optional histogram overlay with film latitude markers, so you can see where highlights and shadows land.
+
+<b>Your gear</b>
+- A bundled library of camera bodies and lenses, plus your own profiles and favourites.
+- The dials offer only the apertures, shutter speeds and ISO values your camera and lens can actually set.
+- Share a profile as a QR code or file, and add new gear to the community library by pull request.
+
+<b>Rolls and frame log</b>
+- Start a roll, log each frame with its settings and notes, and keep a reference snapshot per frame.
+- Export a roll as CSV, JSON or a zip with the snapshots, so the settings can go with your photos when you post them.
+- Back up and restore all your data.
+
+<b>Private by design</b>
+- Works fully offline. There is no network access, no account, no ads, no tracking and no paywall.
+- No Google Play Services or other proprietary dependencies.
+
+Grain is free software under the GPLv3. The gear library is CC0.
+
+Android only for now.

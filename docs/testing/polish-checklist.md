@@ -52,3 +52,9 @@ Offline source build verified on the host: with `.dart_tool/hooks_runner/shared/
 - [ ] Install the Task 8 release build over an existing install: the app opens existing rolls and gear with no database error after the SQLite switch.
 - [ ] Create a roll, log and edit a frame, export the roll (CSV and backup zip): all work.
 - [ ] Fonts look unchanged (Light/Regular/Medium/SemiBold); ⅓ and ½ stops, −, ≈, ▲ ▼, → render; ⅔ was never in Inter Tight and uses the system font, as before.
+
+## Task 9: release readiness
+
+- [ ] Launcher icon on the Pixel home screen: Paper ground, ink aperture disc, red dot in the middle.
+- [ ] Themed icons switched on (Settings, Wallpaper & style): the icon becomes the monochrome aperture, tinted by the wallpaper.
+- [ ] App info shows version 1.0.0.
