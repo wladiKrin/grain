@@ -62,3 +62,12 @@ Device: Pixel 10, release build
 | Pick a file that is not a zip (e.g. a photo or a text file) | "Can't import" with "Not a Grain backup"; nothing changes | |
 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default and snapshots follow the file; calibration and location stay as they were | |
 | Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |
+
+## Auto-backup and release (Task 13)
+
+| check | expected | result |
+| --- | --- | --- |
+| `adb shell bmgr backupnow io.github.wladikrin.grain`, uninstall, reinstall from the same signing key (`adb shell bmgr restore`) | Rolls, readings, profiles and settings are back; thumbnails show placeholders | |
+| `adb shell run-as io.github.wladikrin.grain ls files/snapshots` after the restore | Empty (snapshots are not backed up) | |
+
+Release build recorded (arm64, `--split-debug-info --obfuscate`): 22,262,896 bytes (22.3 MB, plan-2 baseline 20.5 MB). Permissions: CAMERA, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION (plus the app's own DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION); no INTERNET; 0 com/google/android/gms classes.
