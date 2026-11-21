@@ -13,6 +13,7 @@ class Settings extends ChangeNotifier {
     required this._location,
     required this._histogram,
     required this._shakeWarning,
+    required this._clickSound,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -26,6 +27,7 @@ class Settings extends ChangeNotifier {
   static const _kLocation = 'location';
   static const _kHistogram = 'histogram';
   static const _kShake = 'shakeWarning';
+  static const _kClick = 'clickSound';
 
   /// Calibration range in thirds of a stop (±3 EV).
   static const maxThirds = 9;
@@ -41,6 +43,7 @@ class Settings extends ChangeNotifier {
       location: p.getBool(_kLocation) ?? false,
       histogram: p.getBool(_kHistogram) ?? false,
       shakeWarning: p.getBool(_kShake) ?? false,
+      clickSound: p.getBool(_kClick) ?? false,
     );
   }
 
@@ -53,6 +56,7 @@ class Settings extends ChangeNotifier {
   bool _location = false;
   bool _histogram = false;
   bool _shakeWarning = false;
+  bool _clickSound = false;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
@@ -71,6 +75,9 @@ class Settings extends ChangeNotifier {
 
   /// Mark shutter speeds slower than 1/focal length (35 mm equivalent).
   bool get shakeWarning => _shakeWarning;
+
+  /// Play a soft click with every dial detent.
+  bool get clickSound => _clickSound;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -122,6 +129,13 @@ class Settings extends ChangeNotifier {
     await _prefs?.setBool(_kShake, v);
   }
 
+  Future<void> setClickSound(bool v) async {
+    if (v == _clickSound) return;
+    _clickSound = v;
+    notifyListeners();
+    await _prefs?.setBool(_kClick, v);
+  }
+
   /// The settings a backup carries. Calibration belongs to this phone's
   /// sensor and location to its owner's choice: neither travels.
   Map<String, Object?> backupMap() => {
@@ -130,6 +144,7 @@ class Settings extends ChangeNotifier {
     _kSnapshots: _snapshots,
     _kHistogram: _histogram,
     _kShake: _shakeWarning,
+    _kClick: _clickSound,
   };
 
   /// Applies [m] from a backup: only the keys of [backupMap]; a value of the
@@ -140,5 +155,6 @@ class Settings extends ChangeNotifier {
     if (m[_kSnapshots] case final bool v) await setSnapshots(v);
     if (m[_kHistogram] case final bool v) await setHistogram(v);
     if (m[_kShake] case final bool v) await setShakeWarning(v);
+    if (m[_kClick] case final bool v) await setClickSound(v);
   }
 }

@@ -290,6 +290,7 @@ void main() {
         'snapshots': false,
         'histogram': true,
         'shakeWarning': false,
+        'clickSound': false,
       });
       final c = await exportFrom(a);
 
@@ -484,6 +485,7 @@ void main() {
       'snapshots': true,
       'histogram': false,
       'shakeWarning': false,
+      'clickSound': false,
     });
   });
 

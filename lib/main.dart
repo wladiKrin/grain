@@ -30,6 +30,7 @@ import 'rolls/ui/roll_editor.dart';
 import 'rolls/ui/rolls_screen.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
+import 'ui/click_sound.dart';
 import 'ui/haptics.dart';
 import 'ui/theme.dart';
 
@@ -112,6 +113,7 @@ class GrainApp extends StatefulWidget {
     super.key,
     MeterSource? source,
     this.haptics,
+    this.clickSound,
     Settings? settings,
     GearController? gear,
     GearPlatform? platform,
@@ -128,6 +130,9 @@ class GrainApp extends StatefulWidget {
   /// Overrides the system haptics (tests); otherwise [SystemHaptics] follows
   /// the haptics setting.
   final Haptics? haptics;
+
+  /// Overrides the native click (tests); defaults to [ClickChannel].
+  final ClickSound? clickSound;
   final Settings settings;
   final GearController gear;
   final GearPlatform platform;
@@ -169,7 +174,11 @@ class _GrainAppState extends State<GrainApp> {
   late final SystemHaptics _systemHaptics = SystemHaptics(
     enabled: _settings.haptics,
   );
-  Haptics get _haptics => widget.haptics ?? _systemHaptics;
+  late final ClickingHaptics _haptics = ClickingHaptics(
+    widget.haptics ?? _systemHaptics,
+    widget.clickSound ?? ClickChannel(),
+    enabled: _settings.clickSound,
+  );
   final _navigator = GlobalKey<NavigatorState>();
   late final AppLifecycleListener _lifecycle;
 
@@ -194,6 +203,7 @@ class _GrainAppState extends State<GrainApp> {
 
   void _onSettings() {
     _systemHaptics.enabled = _settings.haptics;
+    _haptics.enabled = _settings.clickSound;
     _controller.calibrationEv = _settings.calibrationEv;
     _controller.shakeWarning = _settings.shakeWarning;
     if (_controller.viewfinderOn != _settings.viewfinderOn) {
@@ -255,6 +265,7 @@ class _GrainAppState extends State<GrainApp> {
         // best effort
       }
     }
+    _haptics.enabled = false;
     _lifecycle.dispose();
     _controller.pause();
     _controller.dispose();

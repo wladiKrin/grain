@@ -129,6 +129,13 @@ class SettingsScreen extends StatelessWidget {
             ),
             const _Divider(),
             _SwitchRow(
+              label: 'Click sound',
+              subtitle: 'A soft click at each dial step.',
+              value: settings.clickSound,
+              onChanged: settings.setClickSound,
+            ),
+            const _Divider(),
+            _SwitchRow(
               label: 'Camera-shake warning',
               subtitle: 'Marks shutter speeds slower than 1/focal length (35 mm equivalent).',
               value: settings.shakeWarning,

@@ -12,3 +12,8 @@ Device: Pixel 10, release build
 | Shake warning on, 50 mm, shutter priority 1/30 | a quiet hand mark (secondary grey, not accent) beside SHUTTER | |
 | Same at 1/60 | the mark is gone | |
 | 6x7 body with a 90 mm lens | the mark appears at 1/60 | |
+| Click sound on, turn the aperture dial | a soft click per detent, louder on full stops | |
+| Click sound on, swipe fast | haptics stay crisp, no lag (compare with click off) | |
+| Enable click sound, turn a dial at once | the first detent right after enabling may be silent (the sound loads asynchronously) | |
+| Ringer on silent, click sound on | note whether the click follows (expected: system-sound volume rules) | |
+| Click sound off, `adb shell dumpsys media.audio_flinger \| grep -i soundpool` | no Grain track | |

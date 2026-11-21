@@ -47,6 +47,21 @@ void main() {
     expect(r.shakeWarning, isFalse);
   });
 
+  test('click sound defaults off, persists and travels in the backup', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.clickSound, isFalse);
+    expect(s.backupMap()['clickSound'], isFalse);
+    await s.setClickSound(true);
+    final r = await Settings.load();
+    expect(r.clickSound, isTrue);
+    expect(r.backupMap()['clickSound'], isTrue);
+    await r.applyBackupMap({'clickSound': false});
+    expect(r.clickSound, isFalse);
+    await r.applyBackupMap({'clickSound': 'yes'});
+    expect(r.clickSound, isFalse);
+  });
+
   test('histogram defaults off, persists and travels in the backup', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();

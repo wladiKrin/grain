@@ -8,6 +8,7 @@ import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'support/fake_click.dart';
 import 'support/fake_source.dart';
 import 'support/gear_fixtures.dart';
 
@@ -123,5 +124,42 @@ void main() {
     expect(find.text('Reading saved'), findsOneWidget);
     // The default controller takes snapshots through the app's source.
     expect(src.calls.where((c) => c.startsWith('snapshot(')), hasLength(1));
+  });
+
+  testWidgets('the click follows the setting and plays once per detent', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.75;
+    addTearDown(tester.view.reset);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final log = <String>[];
+    final settings = Settings.inMemory();
+    await tester.pumpWidget(
+      GrainApp(
+        source: FakeMeterSource(logRegions: false),
+        haptics: LogHaptics(log),
+        clickSound: FakeClickSound(log),
+        settings: settings,
+      ),
+    );
+    await tester.pump();
+    expect(log, isEmpty);
+
+    await settings.setClickSound(true);
+    await tester.pump();
+    expect(log, ['setEnabled true']);
+
+    log.clear();
+    final g = await tester.startGesture(
+      tester.getCenter(find.byType(SwipeDial).first),
+    );
+    await g.moveBy(const Offset(-40, 0));
+    await tester.pump();
+    await g.up();
+    await tester.pump();
+    expect(log.where((e) => e.startsWith('click')), hasLength(1));
+    expect(log.first, startsWith('tick'));
+    expect(log[1], startsWith('click'));
   });
 }

@@ -20,6 +20,15 @@ class _Haptics implements Haptics {
   void tick({required bool strong}) {}
 }
 
+/// The Switch in the row that carries [label].
+Finder _switchOf(String label) => find.descendant(
+  of: find.ancestor(
+    of: find.text(label),
+    matching: find.byType(MergeSemantics),
+  ),
+  matching: find.byType(Switch),
+);
+
 Widget _app(
   Settings s, [
   FakeLocation? location,
@@ -72,9 +81,9 @@ void main() {
     );
     expect(find.text('Haptic feedback'), findsOneWidget);
     expect(find.text('Open with viewfinder on'), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
     await _reveal(tester, find.textContaining('Grain · GPLv3 · '));
     expect(find.textContaining('Grain · GPLv3 · '), findsOneWidget);
-    expect(find.text('0'), findsOneWidget);
   });
 
   testWidgets('dial shows stored calibration label', (tester) async {
@@ -98,6 +107,9 @@ void main() {
     await tester.tap(find.text('Haptic feedback'));
     await tester.pump();
     expect(s.haptics, isFalse);
+    await tester.tap(find.text('Click sound'));
+    await tester.pump();
+    expect(s.clickSound, isTrue);
     await tester.tap(find.text('Camera-shake warning'));
     await tester.pump();
     expect(s.shakeWarning, isTrue);
@@ -110,14 +122,16 @@ void main() {
     final s = Settings.inMemory();
     final loc = FakeLocation();
     await tester.pumpWidget(_app(s, loc));
+    await _reveal(tester, find.text('Save location'));
     expect(find.text('Save location'), findsOneWidget);
     expect(find.text('Off: no location is stored anywhere.'), findsOneWidget);
     expect(loc.permissionRequests, 0);
+    await _reveal(tester, find.text('Save location'));
     await tester.tap(find.text('Save location'));
     await tester.pump();
     expect(loc.permissionRequests, 1);
     expect(s.location, isTrue);
-    expect(tester.widget<Switch>(find.byType(Switch).at(4)).value, isTrue);
+    expect(tester.widget<Switch>(_switchOf('Save location')).value, isTrue);
     expect(loc.calls, 0);
   });
 
@@ -126,6 +140,7 @@ void main() {
     await s.setLocation(true);
     final loc = FakeLocation();
     await tester.pumpWidget(_app(s, loc));
+    await _reveal(tester, find.text('Save location'));
     await tester.tap(find.text('Save location'));
     await tester.pump();
     expect(s.location, isFalse);
@@ -136,12 +151,13 @@ void main() {
     final s = Settings.inMemory();
     final loc = FakeLocation()..granted = false;
     await tester.pumpWidget(_app(s, loc));
+    await _reveal(tester, find.text('Save location'));
     await tester.tap(find.text('Save location'));
     await tester.pump();
     await tester.pump();
     expect(s.location, isFalse);
     expect(find.text('Location permission was not granted.'), findsOneWidget);
-    expect(tester.widget<Switch>(find.byType(Switch).at(4)).value, isFalse);
+    expect(tester.widget<Switch>(_switchOf('Save location')).value, isFalse);
   });
 
   testWidgets('snapshots switch toggles the setting', (tester) async {
