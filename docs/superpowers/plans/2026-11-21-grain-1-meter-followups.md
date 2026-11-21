@@ -1,6 +1,6 @@
 # Grain 1 — Meter: follow-ups
 
-Recorded when plan 1 finished (2026-11-21). The device was never connected during the build, so every on-device check in docs/testing/metering-checklist.md is still open.
+Recorded when plan 1 finished (2026-11-21). The device was never connected during the build, so every on-device check in docs/testing/device-test-script.md is still open.
 
 ## Decisions made during the build
 - Branch: feat/meter (from main @ 2aafc5f). Ruling: work on a feature branch in the fresh repo instead of a separate worktree — repo was just created, nothing else lives on main — cost if wrong: none (branch is isolated).

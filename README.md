@@ -65,7 +65,8 @@ cd android && ./gradlew :app:testDebugUnitTest
 ```
 
 The checks that need a real phone (camera, haptics, sharing) are listed in
-`docs/testing/*-checklist.md`; there is no automated device script.
+`docs/testing/device-test-script.md`, one ordered session with an expected result
+and a box to tick for each step; there is no automated device test.
 
 ## Release build
 

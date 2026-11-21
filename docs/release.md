@@ -85,3 +85,14 @@ its own key.
 - The app has no ads, no tracking and no Google Play Services.
 - `tool/icon/icon.svg` is the source of the store icon:
   `rsvg-convert -w 512 -h 512 tool/icon/icon.svg -o fastlane/metadata/android/en-US/images/icon.png`.
+
+### Reproducibility spot check (2026-11-21)
+
+Two release builds of the same tree with the documented command, with
+`flutter clean` between them, in the same path. The arm64 APKs were compared
+after extraction: every entry was byte-identical (`diff -rq` of the two
+extracted trees is empty), including `lib/arm64-v8a/libapp.so`
+(sha256 `7d61b774...1a52`) and `lib/arm64-v8a/libsqlite3.so`
+(sha256 `bed1fbe8...8df5`). The APK files themselves differ in their sha256
+(same size, 21,262,803 bytes); the cause was not investigated (zip container
+metadata or the signature are the likely places), and no entry differs. Compare unsigned APKs for a bit-exact check; that was not done here.

@@ -1,6 +1,6 @@
 # Grain 3 — Rolls & logging: follow-ups
 
-Recorded when plan 3 finished (2026-11-21). Branch feat/rolls on top of feat/gear. No device was connected: every on-device check in docs/testing/rolls-checklist.md (and the gear/metering checklists) is still open.
+Recorded when plan 3 finished (2026-11-21). Branch feat/rolls on top of feat/gear. No device was connected: every on-device check in docs/testing/device-test-script.md is still open.
 
 ## Decisions made during the build
 - - R1 Task 3: Ruling: Drift tables use @DataClassName('RollRow'/'FrameRow'/'SavedReadingRow') to avoid clashing with model classes — cost if wrong: none.
