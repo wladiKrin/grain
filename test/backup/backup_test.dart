@@ -691,4 +691,79 @@ void main() {
     expect(again.renames, {'lens:my-50': 'my-50-2'});
     expect(g.userProfiles, hasLength(4));
   });
+  group(
+    'local actions that only bump updatedAt keep a re-import identical',
+    () {
+      Future<void> expectSkipped(Phone a, BackupContents c) async {
+        final before = a.store.dir.listSync().map((f) => f.path).toSet();
+        final report = await importInto(a, c);
+        expect(report.rollsSkipped, 2);
+        expect(report.readingsSkipped, 1);
+        expect(report.rollsAdded + report.rollsCopied, 0);
+        expect(report.readingsAdded + report.readingsCopied, 0);
+        expect(report.snapshotsAdded, 0);
+        expect(a.rolls.rolls, hasLength(2));
+        expect(a.rolls.readings, hasLength(1));
+        expect(a.store.dir.listSync().map((f) => f.path).toSet(), before);
+      }
+
+      test('deleteFrameSnapshot, then the older backup', () async {
+        final a = await filledPhone();
+        final c = await exportFrom(a);
+        a.clock = a.clock.add(const Duration(hours: 1));
+        final f = a.rolls.activeFrames.first;
+        await a.rolls.deleteFrameSnapshot(f.rollId, f.id);
+        expect(a.rolls.activeFrames.first.updatedAt, isNot(f.updatedAt));
+        await expectSkipped(a, c);
+        expect(a.rolls.activeFrames.first.snapshot, isNull);
+        final stored = (await a.rolls.allFrames())
+            .firstWhere((r) => r.$1.id == f.rollId)
+            .$2
+            .first;
+        expect(stored.snapshot, isNull);
+      });
+
+      test('updateFrame with no change, then the older backup', () async {
+        final a = await filledPhone();
+        final c = await exportFrom(a);
+        a.clock = a.clock.add(const Duration(hours: 1));
+        final f = a.rolls.activeFrames.first;
+        await a.rolls.updateFrame(f);
+        expect(a.rolls.activeFrames.first.updatedAt, isNot(f.updatedAt));
+        await expectSkipped(a, c);
+      });
+
+      test('deleteReadingSnapshot, then the older backup', () async {
+        final a = await filledPhone();
+        final c = await exportFrom(a);
+        a.clock = a.clock.add(const Duration(hours: 1));
+        final r = a.rolls.readings.single;
+        await a.rolls.deleteReadingSnapshot(r.id);
+        expect(a.rolls.readings.single.updatedAt, isNot(r.updatedAt));
+        await expectSkipped(a, c);
+        expect(a.rolls.readings.single.snapshot, isNull);
+      });
+
+      test('updateReading with no change, then the older backup', () async {
+        final a = await filledPhone();
+        final c = await exportFrom(a);
+        a.clock = a.clock.add(const Duration(hours: 1));
+        final r = a.rolls.readings.single;
+        await a.rolls.updateReading(r);
+        expect(a.rolls.readings.single.updatedAt, isNot(r.updatedAt));
+        await expectSkipped(a, c);
+      });
+
+      test(
+        'updateRoll with no change on the active roll, then the older backup',
+        () async {
+          final a = await filledPhone();
+          final c = await exportFrom(a);
+          a.clock = a.clock.add(const Duration(hours: 1));
+          await a.rolls.updateRoll(a.rolls.active!);
+          await expectSkipped(a, c);
+        },
+      );
+    },
+  );
 }

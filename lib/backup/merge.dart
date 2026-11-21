@@ -116,32 +116,30 @@ DateTime finishTimeFor(Roll r, List<Frame> frames) {
   return last ?? r.startedAt;
 }
 
-/// A roll as compared on import: ids, frames' roll ids and snapshot names
-/// left out (they change when a record is copied or a snapshot renamed; a
-/// snapshot is an attachment, not part of the log). [loose] also leaves out
-/// status, finishing time and updatedAt, which finishing a roll changes.
+/// A roll as compared on import: ids, frames' roll ids, snapshot names and
+/// every updatedAt left out (ids and names change when a record is copied or
+/// a snapshot renamed; a snapshot is an attachment, not part of the log;
+/// updatedAt moves on a no-op save or a snapshot delete). [loose] also leaves
+/// out status and finishing time, which finishing a roll changes.
 String _rollKey(Roll r, List<Frame> frames, {required bool loose}) {
-  var k = r.copyWith(id: '');
+  var k = r.copyWith(id: '', updatedAt: _epoch);
   if (loose) {
-    k = k.copyWith(
-      status: RollStatus.finished,
-      finishedAt: () => null,
-      updatedAt: _epoch,
-    );
+    k = k.copyWith(status: RollStatus.finished, finishedAt: () => null);
   }
   return _json(
     rollToJson(k, [
       for (final f in frames)
-        f.copyWith(id: '', rollId: '', snapshot: () => null),
+        f.copyWith(id: '', rollId: '', snapshot: () => null, updatedAt: _epoch),
     ]),
   );
 }
 
-String _readingKey(SavedReading s) =>
-    _json(readingToJson(s.copyWith(id: '', snapshot: () => null)));
+String _readingKey(SavedReading s) => _json(
+  readingToJson(s.copyWith(id: '', snapshot: () => null, updatedAt: _epoch)),
+);
 
 /// The same roll: identical content; when only one of the two is active,
-/// the active/finished difference (status, finishedAt, updatedAt) is not
+/// the active/finished difference (status, finishedAt) is not
 /// compared, so a roll finished here since the backup, or restored finished
 /// because another roll was active, still matches (R4).
 bool _sameRoll((Roll, List<Frame>) a, (Roll, List<Frame>) b) {
