@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import '../rolls/codec.dart';
 import '../rolls/model.dart';
-import 'backup.dart';
+import 'contents.dart';
 
 /// A snapshot file name as the app makes them: `<uuid>.jpg`, lower case.
 /// Nothing else is ever read from or written into the snapshots directory.
@@ -34,21 +34,22 @@ class ImportReport {
   final int profilesAdded, profilesCopied, profilesSkipped;
   final int snapshotsAdded;
 
-  ImportReport withProfiles({
-    required int added,
-    required int copied,
-    required int skipped,
+  ImportReport copyWith({
+    int? rollsDeactivated,
+    int? profilesAdded,
+    int? profilesCopied,
+    int? profilesSkipped,
   }) => ImportReport(
     rollsAdded: rollsAdded,
     rollsCopied: rollsCopied,
     rollsSkipped: rollsSkipped,
-    rollsDeactivated: rollsDeactivated,
+    rollsDeactivated: rollsDeactivated ?? this.rollsDeactivated,
     readingsAdded: readingsAdded,
     readingsCopied: readingsCopied,
     readingsSkipped: readingsSkipped,
-    profilesAdded: added,
-    profilesCopied: copied,
-    profilesSkipped: skipped,
+    profilesAdded: profilesAdded ?? this.profilesAdded,
+    profilesCopied: profilesCopied ?? this.profilesCopied,
+    profilesSkipped: profilesSkipped ?? this.profilesSkipped,
     snapshotsAdded: snapshotsAdded,
   );
 
@@ -82,31 +83,87 @@ class MergePlan {
     required this.rolls,
     required this.readings,
     required this.snapshots,
+    this.restores = const {},
     required this.report,
   });
 
   final List<(Roll, List<Frame>)> rolls;
   final List<SavedReading> readings;
 
-  /// Backup snapshot name → name to store it under here.
+  /// Backup snapshot name → name to store it under here, for the records
+  /// in this plan.
   final Map<String, String> snapshots;
+
+  /// Snapshot files missing here for records that were skipped as already
+  /// here: name here → backup name to copy it from (restores thumbnails
+  /// after a system restore, which leaves the snapshot files out).
+  final Map<String, String> restores;
   final ImportReport report;
 }
 
 String _json(Object? o) => jsonEncode(o);
 
+final _epoch = DateTime.utc(1970);
+
+/// When a roll finished by an import ends: its latest frame time, else its
+/// start.
+DateTime finishTimeFor(Roll r, List<Frame> frames) {
+  DateTime? last;
+  for (final f in frames) {
+    final t = f.takenAt;
+    if (t != null && (last == null || t.isAfter(last))) last = t;
+  }
+  return last ?? r.startedAt;
+}
+
+/// A roll as compared on import: ids, frames' roll ids and snapshot names
+/// left out (they change when a record is copied or a snapshot renamed; a
+/// snapshot is an attachment, not part of the log). [loose] also leaves out
+/// status, finishing time and updatedAt, which finishing a roll changes.
+String _rollKey(Roll r, List<Frame> frames, {required bool loose}) {
+  var k = r.copyWith(id: '');
+  if (loose) {
+    k = k.copyWith(
+      status: RollStatus.finished,
+      finishedAt: () => null,
+      updatedAt: _epoch,
+    );
+  }
+  return _json(
+    rollToJson(k, [
+      for (final f in frames)
+        f.copyWith(id: '', rollId: '', snapshot: () => null),
+    ]),
+  );
+}
+
+String _readingKey(SavedReading s) =>
+    _json(readingToJson(s.copyWith(id: '', snapshot: () => null)));
+
+/// The same roll: identical content; when only one of the two is active,
+/// the active/finished difference (status, finishedAt, updatedAt) is not
+/// compared, so a roll finished here since the backup, or restored finished
+/// because another roll was active, still matches (R4).
+bool _sameRoll((Roll, List<Frame>) a, (Roll, List<Frame>) b) {
+  final loose = a.$1.status != b.$1.status;
+  return _rollKey(a.$1, a.$2, loose: loose) ==
+      _rollKey(b.$1, b.$2, loose: loose);
+}
+
 /// Plans an import of [incoming] against what is here.
 ///
-/// Same id and identical content (after [profileIds] remapping; a roll's
-/// active/finished status is not compared) → skipped. Same id, different
-/// content → stored as a copy with new ids for the record (and a roll's
-/// frames). New id → added. At most one roll is active afterwards: an
-/// imported active roll is stored finished when another is active.
+/// Same id and the same content (after [profileIds] remapping; see
+/// [_sameRoll]) → skipped. Same id, different content → stored as a copy
+/// with new ids for the record (and a roll's frames), unless an earlier
+/// import already stored such a copy (then skipped). New id → added. At most
+/// one roll is active afterwards: an imported active roll is stored finished
+/// when another is active.
 ///
-/// [localSnapshots] lists snapshot names that already have a file here:
+/// [localSnapshots] has an entry for each snapshot name that has a file here:
 /// true when its bytes equal the backup's, false otherwise. A snapshot whose
 /// name is referenced here or whose file here differs is stored under a new
-/// name, so two records never share a file.
+/// name, so two records never share a file. For skipped records, snapshot
+/// files missing here are restored from the backup ([MergePlan.restores]).
 MergePlan planMerge({
   required List<(Roll, List<Frame>)> localRolls,
   required List<SavedReading> localReadings,
@@ -125,6 +182,14 @@ MergePlan planMerge({
     for (final r in localRolls)
       for (final f in r.$2) ?f.snapshot,
     for (final r in localReadings) ?r.snapshot,
+  };
+  // Content index for finding a copy stored by an earlier import.
+  final rollsByKey = <String, List<(Roll, List<Frame>)>>{};
+  for (final r in localRolls) {
+    (rollsByKey[_rollKey(r.$1, r.$2, loose: true)] ??= []).add(r);
+  }
+  final readingsByKey = <String, SavedReading>{
+    for (final r in localReadings) _readingKey(r): r,
   };
   var activeHere = localRolls.any((r) => r.$1.isActive);
 
@@ -152,13 +217,33 @@ MergePlan planMerge({
     return snapshots[name] = '${newId()}.jpg';
   }
 
+  final restores = <String, String>{};
+  void restore(String? here, String? source) {
+    if (here == null || source == null) return;
+    if (localSnapshots.containsKey(here) || restores.containsKey(here)) return;
+    if (!isSnapshotName(here) || !incoming.snapshotNames.contains(source)) {
+      return;
+    }
+    restores[here] = source;
+  }
+
   var rollsAdded = 0, rollsCopied = 0, rollsSkipped = 0, deactivated = 0;
   final rolls = <(Roll, List<Frame>)>[];
   for (final (r0, f0) in incoming.rolls) {
     final r = r0.copyWith(bodyId: () => body(r0.bodyId));
     final frames = [for (final f in f0) f.copyWith(exposure: lens(f.exposure))];
     final local = rollsHere[r.id];
-    if (local != null && _sameRoll((r, frames), local)) {
+    final match = local == null
+        ? null
+        : _sameRoll((r, frames), local)
+        ? local
+        : rollsByKey[_rollKey(r, frames, loose: true)]
+              ?.where((c) => _sameRoll((r, frames), c))
+              .firstOrNull;
+    if (match != null) {
+      for (var i = 0; i < frames.length; i++) {
+        restore(match.$2[i].snapshot, frames[i].snapshot);
+      }
       rollsSkipped++;
       continue;
     }
@@ -177,7 +262,7 @@ MergePlan planMerge({
       if (activeHere) {
         out = out.copyWith(
           status: RollStatus.finished,
-          finishedAt: () => _lastTaken(outFrames) ?? out.startedAt,
+          finishedAt: () => finishTimeFor(out, outFrames),
         );
         deactivated++;
       } else {
@@ -196,8 +281,9 @@ MergePlan planMerge({
       exposure: lens(s0.exposure),
     );
     final local = readingsHere[s.id];
-    if (local != null &&
-        _json(readingToJson(s)) == _json(readingToJson(local))) {
+    final match = local == null ? null : readingsByKey[_readingKey(s)];
+    if (match != null) {
+      restore(match.snapshot, s.snapshot);
       readingsSkipped++;
       continue;
     }
@@ -215,6 +301,7 @@ MergePlan planMerge({
     rolls: rolls,
     readings: readings,
     snapshots: snapshots,
+    restores: restores,
     report: ImportReport(
       rollsAdded: rollsAdded,
       rollsCopied: rollsCopied,
@@ -223,27 +310,7 @@ MergePlan planMerge({
       readingsAdded: readingsAdded,
       readingsCopied: readingsCopied,
       readingsSkipped: readingsSkipped,
-      snapshotsAdded: snapshots.length,
+      snapshotsAdded: snapshots.length + restores.length,
     ),
   );
-}
-
-DateTime? _lastTaken(List<Frame> frames) {
-  for (final f in frames.reversed) {
-    if (f.takenAt != null) return f.takenAt;
-  }
-  return null;
-}
-
-/// Equal as exported. When only one of the two is active, status and
-/// finishing time are left out: the same roll restored where another roll
-/// was active is stored finished, and must still match on the way back.
-bool _sameRoll((Roll, List<Frame>) a, (Roll, List<Frame>) b) {
-  var (ra, fa) = a;
-  var (rb, fb) = b;
-  if (ra.status != rb.status) {
-    ra = ra.copyWith(status: RollStatus.finished, finishedAt: () => null);
-    rb = rb.copyWith(status: RollStatus.finished, finishedAt: () => null);
-  }
-  return _json(rollToJson(ra, fa)) == _json(rollToJson(rb, fb));
 }

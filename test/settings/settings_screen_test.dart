@@ -242,6 +242,7 @@ void main() {
     await tester.tap(find.text('Import'));
     await _until(tester, () => _showsPart('Added 1 roll,'));
     expect(here.rolls.single.filmStock, 'Kodak Tri-X 400');
+    expect(platform.discarded, [zip.path]);
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Added 1 roll,'), findsNothing);

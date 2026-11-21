@@ -86,24 +86,34 @@ class _BackupSectionState extends State<BackupSection> {
     try {
       final path = await widget.platform.pickFilePath();
       if (path == null) return;
-      final contents = await readBackup(path);
-      if (!mounted) return;
-      final useSettings = await _confirm(contents);
-      if (useSettings == null) return;
-      final report = await importBackup(
-        contents,
-        gear: widget.gear,
-        rolls: widget.rolls,
-        settings: widget.settings,
-        applySettings: useSettings,
-      );
-      await _message('Imported', report.summary);
+      final ImportReport? report;
+      try {
+        report = await _importFrom(path);
+      } finally {
+        await widget.platform.discardPicked(path);
+      }
+      if (report != null) await _message('Imported', report.summary);
     } on BackupFormatException catch (e) {
       await _message("Can't import", e.message);
     } on Object {
       await _message("Can't import", 'The file could not be imported.');
     }
   });
+
+  /// Null when cancelled at the confirmation.
+  Future<ImportReport?> _importFrom(String path) async {
+    final contents = await readBackup(path);
+    if (!mounted) return null;
+    final useSettings = await _confirm(contents);
+    if (useSettings == null) return null;
+    return importBackup(
+      contents,
+      gear: widget.gear,
+      rolls: widget.rolls,
+      settings: widget.settings,
+      applySettings: useSettings,
+    );
+  }
 
   /// Null when cancelled; else whether to use the file's settings.
   Future<bool?> _confirm(BackupContents c) {

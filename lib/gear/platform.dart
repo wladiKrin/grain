@@ -22,6 +22,10 @@ abstract class GearPlatform {
   /// cancelled.
   Future<String?> pickFilePath();
 
+  /// Done with a path from [pickFilePath]: removes it if it is a temporary
+  /// copy made by the pick (never the user's own file).
+  Future<void> discardPicked(String path);
+
   /// An empty `<temp>/exports` directory for files about to be shared.
   Future<Directory> exportDirectory();
 }
@@ -81,6 +85,18 @@ class SystemGearPlatform implements GearPlatform {
       await sink.close();
     }
     return copy.path;
+  }
+
+  @override
+  Future<void> discardPicked(String path) async {
+    final dir = await getTemporaryDirectory();
+    final name = path.substring(path.lastIndexOf('/') + 1);
+    if (path != '${dir.path}/$name' || !name.startsWith('picked-')) return;
+    try {
+      await File(path).delete();
+    } on FileSystemException {
+      // already gone
+    }
   }
 
   @override

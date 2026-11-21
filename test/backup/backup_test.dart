@@ -32,6 +32,7 @@ class Phone {
     rolls = RollController.inMemory(
       settings: settings,
       snapshots: store,
+      now: () => clock,
       takeSnapshot: (id) async {
         final f = store.file('$id.jpg')..writeAsBytesSync(snapshotBytes);
         return f.path;
@@ -39,6 +40,8 @@ class Phone {
     );
   }
 
+  /// The phone's clock; tests move it on.
+  DateTime clock = DateTime.utc(2026, 11, 1, 10);
   final settings = Settings.inMemory();
   final gear = GearController(
     library: fixtureLibrary(),
@@ -244,8 +247,16 @@ void main() {
         size: 36,
         startFrame: StartFrame.one,
       );
+      await b.rolls.logFrame(exposure, note: 'here');
+      await settleSnapshots(b.rolls);
       final mine = b.rolls.active!.id;
+      final framesHere = b.rolls.activeFrames;
       final report = await importInto(b, c);
+      expect(b.rolls.activeFrames, framesHere);
+      expect(
+        (await b.rolls.allFrames()).firstWhere((r) => r.$1.id == mine).$2,
+        framesHere,
+      );
       expect(report.rollsDeactivated, 1);
       expect(
         report.summary,
@@ -256,6 +267,7 @@ void main() {
       final fromB = await exportFrom(b);
       final back = await importInto(a, fromB);
       expect(back.rollsAdded, 1); // Fomapan
+      expect(back.rollsDeactivated, 1);
       expect(back.rollsSkipped, 2);
       expect(back.rollsCopied, 0);
       expect(a.rolls.rolls.where((r) => r.isActive), hasLength(1));
@@ -482,7 +494,167 @@ void main() {
         .firstWhere((f) => f.id == c.rolls.first.$2.first.id);
     expect(f.snapshot, isNot(name));
     expect(b.store.file(f.snapshot!).readAsBytesSync(), [1, 2, 3]);
+    // The renamed snapshot does not make the roll differ next time.
+    final again = await importInto(b, c);
+    expect(again.rollsSkipped, 2);
+    expect(again.rollsAdded + again.rollsCopied, 0);
+    expect(again.snapshotsAdded, 0);
   });
+
+  test(
+    'a roll finished here since the backup re-imports as the same roll',
+    () async {
+      final a = await filledPhone();
+      final c = await exportFrom(a);
+      final hp5 = a.rolls.active!;
+      a.clock = a.clock.add(const Duration(days: 2));
+      await a.rolls.finishRoll(hp5.id);
+      final finished = a.rolls.rolls.firstWhere((r) => r.id == hp5.id);
+      expect(finished.updatedAt, isNot(hp5.updatedAt));
+      final report = await importInto(a, c);
+      expect(report.rollsSkipped, 2);
+      expect(report.rollsCopied + report.rollsAdded, 0);
+      expect(a.rolls.rolls, hasLength(2));
+      // Also when the next roll was started (which finishes the old one).
+      final b = Phone();
+      await importInto(b, c);
+      b.clock = b.clock.add(const Duration(days: 3));
+      await b.rolls.startRoll(
+        filmStock: 'Fomapan 100',
+        filmType: FilmType.bwNeg,
+        boxIso: 100,
+        pushThirds: 0,
+        body: null,
+        size: 36,
+        startFrame: StartFrame.one,
+      );
+      final again = await importInto(b, c);
+      expect(again.rollsSkipped, 2);
+      expect(again.rollsCopied + again.rollsAdded, 0);
+      expect(again.rollsDeactivated, 0);
+      expect(b.rolls.rolls, hasLength(3));
+    },
+  );
+
+  test('an edited backup imported twice is kept as a copy only once', () async {
+    final a = await filledPhone();
+    final b = Phone();
+    await importInto(b, await exportFrom(a));
+    final roll = a.rolls.rolls.last;
+    a.clock = a.clock.add(const Duration(hours: 1));
+    await a.rolls.updateRoll(roll.copyWith(notes: 'developed in Rodinal'));
+    await a.rolls.updateReading(
+      a.rolls.readings.single.copyWith(note: () => 'by the window'),
+    );
+    final edited = await exportFrom(a);
+    final first = await importInto(b, edited);
+    expect(first.rollsCopied, 1);
+    expect(first.readingsCopied, 1);
+    expect(first.snapshotsAdded, 3); // the copies get their own files
+    final second = await importInto(b, edited);
+    expect(second.rollsCopied + second.readingsCopied, 0);
+    expect(second.rollsAdded + second.readingsAdded, 0);
+    expect(second.rollsSkipped, 2);
+    expect(second.readingsSkipped, 1);
+    expect(second.snapshotsAdded, 0);
+    expect(b.rolls.rolls, hasLength(3));
+    expect(b.rolls.readings, hasLength(2));
+  });
+
+  test(
+    'snapshot files missing here are restored for records already here',
+    () async {
+      final a = await filledPhone();
+      final c = await exportFrom(a);
+      final b = Phone();
+      await importInto(b, c);
+      // A system restore brings the database back without snapshots/.
+      for (final f in b.store.dir.listSync()) {
+        f.deleteSync();
+      }
+      final report = await importInto(b, c);
+      expect(report.rollsSkipped, 2);
+      expect(report.readingsSkipped, 1);
+      expect(report.rollsAdded + report.rollsCopied, 0);
+      expect(report.snapshotsAdded, 4);
+      for (final (_, frames) in await b.rolls.allFrames()) {
+        for (final f in frames) {
+          expect(b.store.file(f.snapshot!).readAsBytesSync(), [1, 2, 3]);
+        }
+      }
+      expect(
+        b.store.file(b.rolls.readings.single.snapshot!).readAsBytesSync(),
+        [1, 2, 3],
+      );
+      expect(
+        b.store.dir.listSync().where((f) => f.path.endsWith('.part')),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'an active roll started after planning is finished at write time',
+    () async {
+      final p = Phone();
+      await p.rolls.startRoll(
+        filmStock: 'Fomapan 100',
+        filmType: FilmType.bwNeg,
+        boxIso: 100,
+        pushThirds: 0,
+        body: null,
+        size: 36,
+        startFrame: StartFrame.one,
+      );
+      final t = DateTime.utc(2026, 10, 1, 12);
+      final incoming = Roll(
+        id: 'other',
+        number: 7,
+        filmStock: 'Kodak Gold 200',
+        filmType: FilmType.colorNeg,
+        boxIso: 200,
+        pushThirds: 0,
+        format: FilmFormat.f135,
+        size: 36,
+        startFrame: StartFrame.one,
+        status: RollStatus.active,
+        startedAt: t,
+        updatedAt: t,
+      );
+      // Position order is not time order (a frame inserted later).
+      final frames = [
+        Frame(
+          id: 'x1',
+          rollId: 'other',
+          position: 0,
+          number: 1,
+          takenAt: t.add(const Duration(hours: 5)),
+          updatedAt: t,
+        ),
+        Frame(
+          id: 'x2',
+          rollId: 'other',
+          position: 1,
+          number: 2,
+          takenAt: t.add(const Duration(hours: 1)),
+          updatedAt: t,
+        ),
+      ];
+      final finished = await p.rolls.importRecords(
+        MergePlan(
+          rolls: [(incoming, frames)],
+          readings: const [],
+          snapshots: const {},
+          report: const ImportReport(rollsAdded: 1),
+        ),
+      );
+      expect(finished, 1);
+      final stored = p.rolls.rolls.firstWhere((r) => r.id == 'other');
+      expect(stored.status, RollStatus.finished);
+      expect(stored.finishedAt, t.add(const Duration(hours: 5)));
+      expect(p.rolls.rolls.where((r) => r.isActive), hasLength(1));
+    },
+  );
 
   test('gear mergeProfiles: identical skipped, different suffixed, favorites unioned', () async {
     final g = GearController(

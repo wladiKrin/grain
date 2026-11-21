@@ -37,6 +37,11 @@ class FakeGearPlatform implements GearPlatform {
   @override
   Future<String?> pickFilePath() async => pickedPath;
 
+  final discarded = <String>[];
+
+  @override
+  Future<void> discardPicked(String path) async => discarded.add(path);
+
   @override
   Future<Directory> exportDirectory() async {
     final d = exportDir ?? Directory.systemTemp.createTempSync('grain-export');

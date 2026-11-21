@@ -11,10 +11,10 @@ import '../ui/dial/swipe_dial.dart';
 import '../ui/haptics.dart';
 import '../ui/round_button.dart';
 import '../ui/theme.dart';
+import '../version.dart';
 import 'settings.dart';
 
-/// Version shown in the footer; keep in step with pubspec.yaml.
-const appVersion = '1.0.0';
+export '../version.dart' show appVersion;
 
 /// Calibration dial values: -9..+9 thirds of a stop.
 final List<ScaleValue> _calibrationValues = [

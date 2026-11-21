@@ -12,18 +12,20 @@ import '../rolls/ids.dart' as ids;
 import '../rolls/model.dart';
 import '../rolls/roll_controller.dart';
 import '../settings/settings.dart';
-import '../settings/settings_screen.dart' show appVersion;
+import '../version.dart';
+import 'contents.dart';
 import 'merge.dart';
 
+export 'contents.dart';
 export 'merge.dart' show ImportReport, MergePlan, planMerge;
 
 const backupEntry = 'grain-backup.json';
-const _snapshotDir = 'snapshots/';
 
-/// Larger entries are not read: the JSON of tens of thousands of frames is
-/// well below this, and a snapshot is a few hundred KB at most.
+/// A larger JSON entry is not read: tens of thousands of frames are well
+/// below this.
 const _maxJsonBytes = 64 * 1024 * 1024;
-const _maxSnapshotBytes = 16 * 1024 * 1024;
+const _maxSnapshotBytes = maxSnapshotBytes;
+const _snapshotDir = snapshotEntryDir;
 
 class BackupFormatException implements Exception {
   BackupFormatException(this.message);
@@ -31,39 +33,6 @@ class BackupFormatException implements Exception {
 
   @override
   String toString() => 'BackupFormatException: $message';
-}
-
-/// A backup as read from its zip. The JSON is parsed up front; snapshot
-/// bytes stay in the zip until asked for.
-class BackupContents {
-  BackupContents({
-    this.profiles = const [],
-    this.favorites = const {},
-    this.rolls = const [],
-    this.readings = const [],
-    this.settings = const {},
-    this.snapshotNames = const {},
-    this.zipPath,
-  });
-
-  final List<GearProfile> profiles;
-  final Map<ProfileKind, Set<String>> favorites;
-  final List<(Roll, List<Frame>)> rolls;
-  final List<SavedReading> readings;
-  final Map<String, Object?> settings;
-
-  /// Snapshot files present in the zip (valid names only).
-  final Set<String> snapshotNames;
-
-  /// The zip this was read from; null for contents built in memory.
-  final String? zipPath;
-
-  /// The bytes of snapshot [name], or null when the backup has none.
-  Future<List<int>?> snapshot(String name) async {
-    final path = zipPath;
-    if (path == null || !snapshotNames.contains(name)) return null;
-    return Isolate.run(() => _readEntry(path, '$_snapshotDir$name'));
-  }
 }
 
 // ---- export ----------------------------------------------------------------
@@ -315,17 +284,6 @@ BackupContents _parse(Object? json, Set<String> names, String zipPath) {
   );
 }
 
-List<int>? _readEntry(String zipPath, String name) {
-  final input = InputFileStream(zipPath);
-  try {
-    final f = ZipDecoder().decodeStream(input).findFile(name);
-    if (f == null || f.size > _maxSnapshotBytes) return null;
-    return f.readBytes();
-  } finally {
-    input.closeSync();
-  }
-}
-
 // ---- import ----------------------------------------------------------------
 
 /// For every snapshot name in the backup or its records that already has a
@@ -369,18 +327,20 @@ bool _sameBytes(List<int> a, List<int> b) {
   return true;
 }
 
-/// Copies backup snapshots into [dir] (source → target name); an existing
-/// file is never replaced. Returns the names written.
+/// Copies backup snapshots into [dir] ([pairs] of backup name, name here);
+/// an existing file is never replaced. Returns the names written. If a copy
+/// fails, the files written so far (and the partial one) are removed.
 List<String> _copySnapshots(
   String zipPath,
   String dir,
-  Map<String, String> plan,
+  List<(String, String)> pairs,
 ) {
   final written = <String>[];
+  File? part;
   final input = InputFileStream(zipPath);
   try {
     final archive = ZipDecoder().decodeStream(input);
-    for (final MapEntry(key: src, value: target) in plan.entries) {
+    for (final (src, target) in pairs) {
       if (!isSnapshotName(src) || !isSnapshotName(target)) continue;
       final dest = File('$dir/$target');
       if (dest.existsSync()) continue;
@@ -388,11 +348,21 @@ List<String> _copySnapshots(
       if (entry == null || entry.size > _maxSnapshotBytes) continue;
       final bytes = entry.readBytes();
       if (bytes == null) continue;
-      final part = File('$dir/.$target.part');
+      part = File('$dir/.$target.part');
       part.writeAsBytesSync(bytes, flush: true);
       part.renameSync(dest.path);
+      part = null;
       written.add(target);
     }
+  } on Object {
+    for (final f in [?part, for (final n in written) File('$dir/$n')]) {
+      try {
+        f.deleteSync();
+      } on FileSystemException {
+        // best effort
+      }
+    }
+    rethrow;
   } finally {
     input.closeSync();
   }
@@ -415,11 +385,15 @@ Future<ImportReport> importBackup(
   final localReadings = rolls.readings;
   final dir = rolls.snapshots.dir.path;
   final zip = c.zipPath;
+  // Backup names, and the names here: whether each has a file here.
   final names = <String>{
     ...c.snapshotNames,
     for (final (_, frames) in c.rolls)
       for (final f in frames) ?f.snapshot,
     for (final r in c.readings) ?r.snapshot,
+    for (final (_, frames) in localRolls)
+      for (final f in frames) ?f.snapshot,
+    for (final r in localReadings) ?r.snapshot,
   }.where(isSnapshotName).toList();
   final inZip = c.snapshotNames;
   final localSnapshots = zip == null
@@ -433,22 +407,28 @@ Future<ImportReport> importBackup(
     newId: ids.newId,
     localSnapshots: localSnapshots,
   );
-  final copies = plan.snapshots;
-  final written = zip == null || copies.isEmpty
+  final pairs = [
+    for (final e in plan.snapshots.entries) (e.key, e.value),
+    for (final e in plan.restores.entries) (e.value, e.key),
+  ];
+  final written = zip == null || pairs.isEmpty
       ? const <String>[]
-      : await Isolate.run(() => _copySnapshots(zip, dir, copies));
+      : await Isolate.run(() => _copySnapshots(zip, dir, pairs));
+  final int finishedLate;
   try {
-    await rolls.importRecords(plan);
+    finishedLate = await rolls.importRecords(plan);
   } on Object {
+    // Restored files belong to records already here; keep those.
     for (final n in written) {
-      await rolls.snapshots.delete(n);
+      if (!plan.restores.containsKey(n)) await rolls.snapshots.delete(n);
     }
     rethrow;
   }
   if (applySettings) await settings.applyBackupMap(c.settings);
-  return plan.report.withProfiles(
-    added: profiles.added,
-    copied: profiles.copied,
-    skipped: profiles.skipped,
+  return plan.report.copyWith(
+    rollsDeactivated: plan.report.rollsDeactivated + finishedLate,
+    profilesAdded: profiles.added,
+    profilesCopied: profiles.copied,
+    profilesSkipped: profiles.skipped,
   );
 }

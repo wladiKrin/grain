@@ -273,17 +273,23 @@ class RollController extends ChangeNotifier {
   Future<List<Frame>> _loadFrames(String rollId) =>
       _enqueue(() => _repo.frames(rollId));
 
-  /// Stores the records of an import in one transaction and reloads. The
-  /// plan only holds new records; an imported active roll is stored finished
-  /// if a roll became active here since the plan was made.
-  Future<void> importRecords(MergePlan plan) async {
-    final now = _now();
+  /// Stores the records of an import in one transaction, then reloads the
+  /// roll and reading lists (loaded frames stay cached, so a late snapshot or
+  /// location for a frame logged just before still lands). The plan only
+  /// holds new records. An imported active roll is stored finished if a roll
+  /// became active here since the plan was made; returns how many were.
+  Future<int> importRecords(MergePlan plan) async {
     var activeId = active?.id;
+    var finished = 0;
     final rolls = <(Roll, List<Frame>)>[];
     for (final (r, frames) in plan.rolls) {
       if (r.isActive && activeId != null && activeId != r.id) {
+        finished++;
         rolls.add((
-          r.copyWith(status: RollStatus.finished, finishedAt: () => now),
+          r.copyWith(
+            status: RollStatus.finished,
+            finishedAt: () => finishTimeFor(r, frames),
+          ),
           frames,
         ));
       } else {
@@ -302,7 +308,18 @@ class RollController extends ChangeNotifier {
         }
       }),
     );
-    await load();
+    final (all, readings) = await (
+      _enqueue(_repo.rolls),
+      _enqueue(_repo.readings),
+    ).wait;
+    _rolls = all;
+    _readings = readings;
+    final a = active;
+    if (a != null && !_frames.containsKey(a.id)) {
+      _frames[a.id] = await _loadFrames(a.id);
+    }
+    notifyListeners();
+    return finished;
   }
 
   // ---- logging -----------------------------------------------------------

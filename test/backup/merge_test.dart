@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/backup/backup.dart';
+import 'package:grain/backup/merge.dart' show finishTimeFor;
 import 'package:grain/gear/model.dart';
 import 'package:grain/rolls/model.dart';
 
@@ -323,5 +324,111 @@ void main() {
       'Added 0 rolls, 1 saved reading, 1 profile. Kept 3 as copies because they differ from what is here. '
       'Skipped 2 already on this phone. 2 imported active rolls are now finished.',
     );
+  });
+
+  test(
+    'a roll finished here since (status, finishedAt, updatedAt) is identical',
+    () {
+      final frames = [frame('f1', 'r1', 0)];
+      final later = t0.add(const Duration(days: 2));
+      final p = plan(
+        localRolls: [
+          (roll('r1', finishedAt: later).copyWith(updatedAt: later), frames),
+        ],
+        rolls: [(roll('r1', status: RollStatus.active), frames)],
+      );
+      expect(p.rolls, isEmpty);
+      expect(p.report.rollsSkipped, 1);
+      // Both finished, at different times: a real difference.
+      final q = plan(
+        localRolls: [
+          (roll('r1', finishedAt: later).copyWith(updatedAt: later), frames),
+        ],
+        rolls: [(roll('r1'), frames)],
+      );
+      expect(q.report.rollsCopied, 1);
+    },
+  );
+
+  test('a copy stored by an earlier import is recognised', () {
+    final original = (roll('r1'), [frame('f1', 'r1', 0, snapshot: snapA)]);
+    final edited = (
+      roll('r1', notes: 'x'),
+      [frame('f1', 'r1', 0, snapshot: snapA)],
+    );
+    final earlierCopy = (
+      roll('c1', notes: 'x'),
+      [
+        frame(
+          'c1-f',
+          'c1',
+          0,
+          snapshot: '22222222-2222-4222-8222-222222222222.jpg',
+        ),
+      ],
+    );
+    final p = plan(
+      localRolls: [original, earlierCopy],
+      localReadings: [
+        reading('s1'),
+        reading('s2', note: 'edited'),
+      ],
+      rolls: [edited],
+      readings: [reading('s1', note: 'edited')],
+      snapshotNames: {snapA},
+      localSnapshots: {
+        snapA: true,
+        '22222222-2222-4222-8222-222222222222.jpg': false,
+      },
+    );
+    expect(p.rolls, isEmpty);
+    expect(p.readings, isEmpty);
+    expect(p.report.rollsSkipped, 1);
+    expect(p.report.readingsSkipped, 1);
+    expect(p.snapshots, isEmpty);
+  });
+
+  test('skipped records get their missing snapshot files back', () {
+    const renamed = '33333333-3333-4333-8333-333333333333.jpg';
+    final p = plan(
+      localRolls: [
+        (roll('r1'), [frame('f1', 'r1', 0, snapshot: snapA)]),
+      ],
+      localReadings: [reading('s1', snapshot: renamed)],
+      rolls: [
+        (roll('r1'), [frame('f1', 'r1', 0, snapshot: snapA)]),
+      ],
+      readings: [reading('s1', snapshot: snapA)],
+      snapshotNames: {snapA},
+    );
+    expect(p.report.rollsSkipped, 1);
+    expect(p.report.readingsSkipped, 1);
+    expect(p.restores, {snapA: snapA, renamed: snapA});
+    expect(p.snapshots, isEmpty);
+    expect(p.report.snapshotsAdded, 2);
+    // Files that are here are left alone.
+    final q = plan(
+      localRolls: [
+        (roll('r1'), [frame('f1', 'r1', 0, snapshot: snapA)]),
+      ],
+      rolls: [
+        (roll('r1'), [frame('f1', 'r1', 0, snapshot: snapA)]),
+      ],
+      snapshotNames: {snapA},
+      localSnapshots: {snapA: false},
+    );
+    expect(q.restores, isEmpty);
+  });
+
+  test('a finished time is the latest frame time, not the last position', () {
+    final late = t0.add(const Duration(hours: 5));
+    expect(
+      finishTimeFor(roll('r1'), [
+        frame('a', 'r1', 0, takenAt: late),
+        frame('b', 'r1', 1, takenAt: t0),
+      ]),
+      late,
+    );
+    expect(finishTimeFor(roll('r1'), const []), t0);
   });
 }
