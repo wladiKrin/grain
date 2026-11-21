@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
+import '../gear/gear_scales.dart';
+import '../gear/model.dart';
 import '../metering/fov.dart';
 import '../metering/meter_channel.dart';
 import '../metering/reading.dart';
@@ -12,6 +15,7 @@ import '../metering/reading.dart';
 enum MeterMode { aperturePriority, shutterPriority, manual }
 
 const _centre = Offset(.5, .5);
+
 /// Spot radius relative to the crop width: a 4 % circle (spec §5.2: ~3–5 %).
 const _spotRadius = 0.02;
 
@@ -22,19 +26,35 @@ class MeterController extends ChangeNotifier {
     required this._source,
     this._calibrationEv = 0,
     this.viewfinderOn = true,
-  }) {
-    apertureIndex = _indexOf(apertures, '5.6');
-    shutterIndex = _indexOf(shutters, '1/125');
-    isoIndex = _indexOf(isos, '400');
-    focalIndex = focalStops.indexOf(50);
+    GearSetup gear = const GearSetup(),
+  }) : _gear = gear {
+    _scales = _scalesAt(gear);
+    // Nearest, never -1: the gear may lack the defaults (e.g. ISO 400).
+    apertureIndex = nearestIndex(apertures, 5.6);
+    shutterIndex = nearestIndex(shutters, 1 / 125);
+    isoIndex = nearestIndex(isos, 400);
   }
 
   final MeterSource _source;
 
-  /// Free-mode scales, thirds over the full ranges.
-  final List<ScaleValue> apertures = apertureScale(step: StepSize.third);
-  final List<ScaleValue> shutters = shutterScale(step: StepSize.third);
-  final List<ScaleValue> isos = isoScale();
+  GearSetup _gear;
+  late GearScales _scales;
+
+  /// The selected body, lens and focal length; [setFocal] keeps its focal
+  /// in step with the dial.
+  GearSetup get gear => _gear;
+
+  /// Scales of the current gear (free-mode thirds over the full ranges when
+  /// no body or lens is selected).
+  List<ScaleValue> get apertures => _scales.apertures;
+  List<ScaleValue> get shutters => _scales.shutters;
+  List<ScaleValue> get isos => _scales.isos;
+  List<ScaleValue> get focalValues => _scales.focals;
+
+  /// Selected focal length of the lens, mm on its own film format.
+  double get focal => focalValues[focalIndex].value;
+  bool get hasBulb => _scales.hasBulb;
+  FilmFormat get format => _scales.format;
 
   MeterMode mode = MeterMode.aperturePriority;
   late int apertureIndex, shutterIndex, isoIndex, focalIndex;
@@ -74,8 +94,16 @@ class MeterController extends ChangeNotifier {
   bool _wantRunning = false;
   bool _disposed = false;
 
-  static int _indexOf(List<ScaleValue> s, String label) =>
-      s.indexWhere((v) => v.label == label);
+  /// Scales for [g] at its focal length snapped to a focal detent, which
+  /// also sets [focalIndex].
+  GearScales _scalesAt(GearSetup g) {
+    final s = scalesFor(g);
+    focalIndex = nearestIndex(s.focals, g.focal);
+    final f = s.focals[focalIndex].value;
+    return f == g.focal
+        ? s
+        : scalesFor(GearSetup(body: g.body, lens: g.lens, focal: f));
+  }
 
   double get _ev100 => reading!.ev100;
   double get _iso => isos[isoIndex].value;
@@ -100,6 +128,17 @@ class MeterController extends ChangeNotifier {
           apertures: apertures,
         );
 
+  /// Exact time, seconds, when aperture priority needs longer than the
+  /// slowest timed speed and the body has B (or T); null otherwise.
+  double? get bulbSeconds {
+    final solved = solvedShutter;
+    if (solved == null || solved.flag != RangeFlag.under || !hasBulb) {
+      return null;
+    }
+    final n = apertures[apertureIndex].value;
+    return n * n / math.pow(2, evAtIso(_ev100, _iso));
+  }
+
   double? get offset => reading == null || mode != MeterMode.manual
       ? null
       : manualOffset(
@@ -123,6 +162,8 @@ class MeterController extends ChangeNotifier {
         if (_wantRunning && !_disposed) {
           preview = info;
           _running = true;
+          _session++;
+          _wideFailed = false;
           _sub = _source.stats.listen(_onStats, onError: _onStatsError);
           _sendRegions();
           break;
@@ -141,7 +182,9 @@ class MeterController extends ChangeNotifier {
     } finally {
       _starting = false;
     }
-    if (!_disposed) notifyListeners();
+    if (_disposed) return;
+    notifyListeners();
+    await _syncWide();
   }
 
   Future<void> pause() async {
@@ -210,9 +253,18 @@ class MeterController extends ChangeNotifier {
     if (p == null || size == null) return null;
     return lensCrop(
       preview: size,
-      lensFocal: focalStops[focalIndex].toDouble(),
+      lensFocal: equivalentFocal(focal, format),
       phoneEqFocal: p.phoneEqFocal,
+      aspect: format.portraitAspect,
     );
+  }
+
+  /// Whether the lens sees more than the camera in use (the crop cannot
+  /// show all of its field).
+  bool get lensWiderThanCamera {
+    final p = preview;
+    return p != null &&
+        widerThanPhone(equivalentFocal(focal, format), p.phoneEqFocal);
   }
 
   /// Spot radius relative to the crop width.
@@ -245,9 +297,81 @@ class MeterController extends ChangeNotifier {
   }
 
   void setFocal(int i) {
-    focalIndex = i.clamp(0, focalStops.length - 1);
+    focalIndex = i.clamp(0, focalValues.length - 1);
+    _gear = GearSetup(body: _gear.body, lens: _gear.lens, focal: focal);
+    final lens = _gear.lens;
+    if (lens != null && lens.maxAperture.length > 1) {
+      // A varying-aperture zoom: the widest aperture follows the focal.
+      final value = apertures[apertureIndex].value;
+      _scales = scalesFor(_gear);
+      apertureIndex = nearestIndex(apertures, value);
+    }
     _sendRegions();
+    unawaited(_syncWide());
     notifyListeners();
+  }
+
+  /// Switches to [g]: the dials keep their values where the new scales have
+  /// them, else snap to the nearest. No-op when [g] equals [gear].
+  void setGear(GearSetup g) {
+    if (g == _gear) return;
+    final aperture = apertures[apertureIndex].value;
+    final shutter = shutters[shutterIndex].value;
+    final iso = isos[isoIndex].value;
+    _gear = g;
+    _scales = _scalesAt(g);
+    apertureIndex = nearestIndex(apertures, aperture);
+    shutterIndex = nearestIndex(shutters, shutter);
+    isoIndex = nearestIndex(isos, iso);
+    _sendRegions();
+    unawaited(_syncWide());
+    notifyListeners();
+  }
+
+  /// Bumped on every successful start; a switch answer from an earlier
+  /// camera session is dropped.
+  int _session = 0;
+  bool _wideBusy = false;
+
+  /// A switch failed in this camera session: stay on the main camera until
+  /// the next start.
+  bool _wideFailed = false;
+
+  /// Moves to the ultra-wide when the lens is wider than the main camera
+  /// and back when it is not. One call in flight; the wanted state is
+  /// re-checked when it answers, so the last focal change wins.
+  Future<void> _syncWide() async {
+    if (_wideBusy) return;
+    _wideBusy = true;
+    try {
+      while (true) {
+        final p = preview;
+        if (!_running || _disposed || _wideFailed || p == null) return;
+        final wideEq = p.wideEqFocal;
+        final want =
+            wideEq != null && equivalentFocal(focal, format) < p.mainEqFocal;
+        if (want == p.wide) return;
+        final session = _session;
+        final PreviewInfo next;
+        try {
+          next = await _source.setWide(want);
+        } on PlatformException catch (e) {
+          if (session == _session) _wideFailed = true;
+          debugPrint('GRAIN setWide($want) failed: ${e.code} ${e.message}');
+          continue; // Re-check: a new session may want a switch.
+        }
+        // Paused, stopped or restarted meanwhile: the answer is stale.
+        if (session != _session || !_running || _disposed) continue;
+        preview = next;
+        // The camera could not switch (it answered its unchanged preview):
+        // asking again would loop.
+        if (next.wide != want) _wideFailed = true;
+        _sendRegions();
+        notifyListeners();
+      }
+    } finally {
+      _wideBusy = false;
+    }
   }
 
   void toggleViewfinder() {

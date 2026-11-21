@@ -4,7 +4,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
-import '../metering/fov.dart';
 import '../ui/haptics.dart';
 import '../ui/theme.dart';
 import 'meter_controller.dart';
@@ -212,12 +211,7 @@ class _MeterScreenState extends State<MeterScreen> {
         ev: _c.reading?.ev100,
         flag: _c.reading?.flag ?? RangeFlag.ok,
         held: _c.held,
-        widerThanPhone:
-            p != null &&
-            widerThanPhone(
-              focalStops[_c.focalIndex].toDouble(),
-              p.phoneEqFocal,
-            ),
+        widerThanPhone: _c.lensWiderThanCamera,
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,
         onToggleHold: _c.toggleHold,
