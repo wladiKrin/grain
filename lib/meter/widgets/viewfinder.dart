@@ -249,7 +249,8 @@ class _OverlayPainter extends CustomPainter {
     final s = spot;
     if (s != null) {
       final centre = _map(s);
-      final r = math.max(12.0, spotRadius * cropPx.width);
+      // The circle is the metered area; the ticks keep it findable.
+      final r = spotRadius * cropPx.width;
       canvas.drawCircle(centre, r, stroke);
       _ticks(canvas, centre, r + 4, 8, stroke);
     } else {

@@ -224,7 +224,8 @@ void main() {
       expect(c.area, MeterArea.spot);
       expect(c.spot, const Offset(.2, .7));
       expect(src.regions.last.$2, const Offset(.2, .7));
-      expect(src.regions.last.$3, .04);
+      expect(src.regions.last.$3, .02);
+      expect(c.spotRadius, .02);
       c.clearSpot();
       expect(c.area, MeterArea.average);
       expect(c.spot, const Offset(.5, .5));

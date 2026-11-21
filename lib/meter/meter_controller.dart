@@ -12,7 +12,8 @@ import '../metering/reading.dart';
 enum MeterMode { aperturePriority, shutterPriority, manual }
 
 const _centre = Offset(.5, .5);
-const _spotRadius = 0.04;
+/// Spot radius relative to the crop width: a 4 % circle (spec §5.2: ~3–5 %).
+const _spotRadius = 0.02;
 
 /// State and lifecycle of the meter screen. Owns the camera subscription:
 /// [resume] opens it, [pause] releases it.
