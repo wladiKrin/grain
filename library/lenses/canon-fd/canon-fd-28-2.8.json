@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "canon-fd-28-2.8",
+  "make": "Canon",
+  "name": "FD 28mm f/2.8",
+  "mount": "canon-fd",
+  "focal": 28,
+  "maxAperture": 2.8,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

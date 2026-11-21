@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "pentax-m-28-2.8",
+  "make": "Pentax",
+  "name": "SMC Pentax-M 28mm f/2.8",
+  "mount": "pentax-k",
+  "focal": 28,
+  "maxAperture": 2.8,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

@@ -30,6 +30,26 @@ flutter build apk --release --split-per-abi
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
+## Contributing gear
+
+Every camera body and every lens is one JSON file, in the format described by
+`library/schema/gear-1.schema.json`.
+
+- Bodies go in `library/bodies/<make>/<id>.json`, where `<make>` is the make in
+  lower case with spaces replaced by `-` (for example `library/bodies/canon/canon-a1.json`).
+- Lenses go in `library/lenses/<mount>/<id>.json`, where `<mount>` is the
+  lens mount id (for example `library/lenses/canon-fd/canon-fd-50-1.8.json`).
+- The file name is the `id` plus `.json`. Ids are unique and use only
+  `a-z`, `0-9`, `.` and `-`.
+- Use the manufacturer's specifications: real shutter speeds (including B or
+  T), ISO range, maximum and minimum aperture and zoom breakpoints.
+- Every new directory needs an entry under `flutter: assets:` in `pubspec.yaml`.
+- Run `flutter test test/library` to check your files against the schema and
+  the layout rules. CI runs the same check.
+
+All files in `library/` are dedicated to the public domain under CC0 1.0, see
+`library/LICENSE`. By contributing you agree to that.
+
 ## Licence
 
 GPLv3, see [LICENSE](LICENSE). The bundled Inter Tight font is licensed under

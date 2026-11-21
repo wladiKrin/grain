@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "canon-fd-135-3.5",
+  "make": "Canon",
+  "name": "FD 135mm f/3.5",
+  "mount": "canon-fd",
+  "focal": 135,
+  "maxAperture": 3.5,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

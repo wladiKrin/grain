@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "zuiko-50-1.8",
+  "make": "Olympus",
+  "name": "Zuiko 50mm f/1.8",
+  "mount": "olympus-om",
+  "focal": 50,
+  "maxAperture": 1.8,
+  "minAperture": 16,
+  "apertureStep": "half"
+}

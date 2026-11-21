@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "leica-summicron-35-2",
+  "make": "Leica",
+  "name": "Summicron-M 35mm f/2",
+  "mount": "leica-m",
+  "focal": 35,
+  "maxAperture": 2,
+  "minAperture": 16,
+  "apertureStep": "half"
+}

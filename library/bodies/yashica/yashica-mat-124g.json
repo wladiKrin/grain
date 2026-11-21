@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "type": "body",
+  "id": "yashica-mat-124g",
+  "make": "Yashica",
+  "model": "Mat-124G",
+  "mount": "yashica-mat-124g",
+  "format": "120-66",
+  "frames": 12,
+  "shutter": [
+    "1/500",
+    "1/250",
+    "1/125",
+    "1/60",
+    "1/30",
+    "1/15",
+    "1/8",
+    "1/4",
+    "1/2",
+    "1",
+    "B"
+  ],
+  "iso": [
+    25,
+    400
+  ]
+}

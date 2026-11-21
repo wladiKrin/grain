@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "canon-fd-50-1.8",
+  "make": "Canon",
+  "name": "FD 50mm f/1.8",
+  "mount": "canon-fd",
+  "focal": 50,
+  "maxAperture": 1.8,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

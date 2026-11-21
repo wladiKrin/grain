@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "minolta-md-50-1.7",
+  "make": "Minolta",
+  "name": "MD Rokkor 50mm f/1.7",
+  "mount": "minolta-sr",
+  "focal": 50,
+  "maxAperture": 1.7,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

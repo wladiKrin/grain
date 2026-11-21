@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "yashinon-80-3.5",
+  "make": "Yashica",
+  "name": "Yashinon 80mm f/3.5",
+  "mount": "yashica-mat-124g",
+  "focal": 80,
+  "maxAperture": 3.5,
+  "minAperture": 32,
+  "apertureStep": "full"
+}

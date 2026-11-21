@@ -48,6 +48,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  json_schema: ^5.2.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -71,6 +72,23 @@ flutter:
           weight: 500
         - asset: assets/fonts/InterTight-SemiBold.ttf
           weight: 600
+
+  assets:
+    - library/bodies/canon/
+    - library/bodies/leica/
+    - library/bodies/minolta/
+    - library/bodies/nikon/
+    - library/bodies/olympus/
+    - library/bodies/pentax/
+    - library/bodies/yashica/
+    - library/lenses/canon-fd/
+    - library/lenses/leica-m/
+    - library/lenses/minolta-sr/
+    - library/lenses/nikon-f/
+    - library/lenses/olympus-om/
+    - library/lenses/pentax-67/
+    - library/lenses/pentax-k/
+    - library/lenses/yashica-mat-124g/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

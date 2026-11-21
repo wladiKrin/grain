@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "pentax-m-50-1.7",
+  "make": "Pentax",
+  "name": "SMC Pentax-M 50mm f/1.7",
+  "mount": "pentax-k",
+  "focal": 50,
+  "maxAperture": 1.7,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

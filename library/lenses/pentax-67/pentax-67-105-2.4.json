@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "pentax-67-105-2.4",
+  "make": "Pentax",
+  "name": "SMC Takumar 6x7 105mm f/2.4",
+  "mount": "pentax-67",
+  "focal": 105,
+  "maxAperture": 2.4,
+  "minAperture": 22,
+  "apertureStep": "half"
+}

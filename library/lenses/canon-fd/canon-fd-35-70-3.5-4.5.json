@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "canon-fd-35-70-3.5-4.5",
+  "make": "Canon",
+  "name": "FD 35-70mm f/3.5-4.5",
+  "mount": "canon-fd",
+  "focal": [
+    35,
+    70
+  ],
+  "maxAperture": [
+    [
+      35,
+      3.5
+    ],
+    [
+      70,
+      4.5
+    ]
+  ],
+  "minAperture": 22,
+  "apertureStep": "half"
+}

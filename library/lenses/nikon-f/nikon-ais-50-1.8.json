@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "type": "lens",
+  "id": "nikon-ais-50-1.8",
+  "make": "Nikon",
+  "name": "Nikkor 50mm f/1.8 AI-S",
+  "mount": "nikon-f",
+  "focal": 50,
+  "maxAperture": 1.8,
+  "minAperture": 22,
+  "apertureStep": "full"
+}
