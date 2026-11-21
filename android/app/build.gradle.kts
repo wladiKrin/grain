@@ -53,5 +53,6 @@ flutter {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.4")
     testImplementation("junit:junit:4.13.2")
 }

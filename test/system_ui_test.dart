@@ -1,34 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/main.dart';
-import 'package:grain/metering/meter_channel.dart';
-import 'package:grain/metering/reading.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
-class _Source implements MeterSource {
-  @override
-  Future<PreviewInfo> start() async => const PreviewInfo(
-    textureId: 1,
-    size: Size(1440, 1080),
-    sensorOrientation: 90,
-    phoneEqFocal: 25,
-  );
-
-  @override
-  Future<void> stop() async {}
-
-  @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) async {}
-
-  @override
-  Stream<MeterStats> get stats => _stats.stream;
-  final _stats = StreamController<MeterStats>.broadcast();
-}
+import 'support/fake_source.dart';
 
 class _Haptics implements Haptics {
   @override
@@ -73,7 +51,9 @@ void main() {
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpWidget(GrainApp(source: _Source(), haptics: _Haptics()));
+    await tester.pumpWidget(
+      GrainApp(source: FakeMeterSource(), haptics: _Haptics()),
+    );
     await tester.pump();
     expect(SystemChrome.latestStyle, grainOverlayStyle);
 

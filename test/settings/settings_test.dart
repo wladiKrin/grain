@@ -5,7 +5,8 @@ import 'package:grain/settings/settings.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../meter/meter_controller_test.dart' show FakeSource, stats, settle;
+import '../meter/meter_controller_test.dart' show stats, settle;
+import '../support/fake_source.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,7 +64,7 @@ void main() {
 
   test('+3 thirds shifts the controller reading by +1 EV', () async {
     final s = Settings.inMemory();
-    final src = FakeSource();
+    final src = FakeMeterSource(size: const Size(4000, 3000));
     final c = MeterController(source: src);
     addTearDown(c.dispose);
     await c.resume();

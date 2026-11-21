@@ -1,39 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/main.dart';
 import 'package:grain/meter/meter_screen.dart';
-import 'package:grain/metering/meter_channel.dart';
-import 'package:grain/metering/reading.dart';
 import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
-class _Source implements MeterSource {
-  final calls = <String>[];
-
-  @override
-  Future<PreviewInfo> start() async {
-    calls.add('start');
-    return const PreviewInfo(
-      textureId: 1,
-      size: Size(1440, 1080),
-      sensorOrientation: 90,
-      phoneEqFocal: 25,
-    );
-  }
-
-  @override
-  Future<void> stop() async => calls.add('stop');
-
-  @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) async {}
-
-  @override
-  Stream<MeterStats> get stats => _stats.stream;
-  final _stats = StreamController<MeterStats>.broadcast();
-}
+import 'support/fake_source.dart';
 
 class _Haptics implements Haptics {
   @override
@@ -49,7 +22,7 @@ void main() {
     addTearDown(tester.view.reset);
     // A launched app starts in the foreground.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    final src = _Source();
+    final src = FakeMeterSource(logRegions: false);
     await tester.pumpWidget(GrainApp(source: src, haptics: _Haptics()));
     await tester.pump();
     expect(find.byType(MaterialApp), findsOneWidget);
@@ -81,7 +54,11 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     final settings = Settings.inMemory();
     await tester.pumpWidget(
-      GrainApp(source: _Source(), haptics: _Haptics(), settings: settings),
+      GrainApp(
+        source: FakeMeterSource(logRegions: false),
+        haptics: _Haptics(),
+        settings: settings,
+      ),
     );
     await tester.pump();
     expect(find.byType(Texture), findsOneWidget);

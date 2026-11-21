@@ -4,49 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/metering/fov.dart';
-import 'package:grain/metering/meter_channel.dart';
 import 'package:grain/metering/reading.dart';
 
-class FakeSource implements MeterSource {
-  final calls = <String>[];
-  final regions = <(Rect, Offset, double)>[];
-  final _stats = StreamController<MeterStats>.broadcast();
-  Object? startError;
-  Completer<void>? startGate;
-  Completer<void>? stopGate;
-
-  @override
-  Future<PreviewInfo> start() async {
-    calls.add('start');
-    await startGate?.future;
-    if (startError != null) throw startError!;
-    return const PreviewInfo(
-      textureId: 1,
-      size: Size(4000, 3000),
-      sensorOrientation: 90,
-      phoneEqFocal: 25,
-    );
-  }
-
-  @override
-  Future<void> stop() async {
-    calls.add('stop');
-    await stopGate?.future;
-  }
-
-  @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) async {
-    calls.add('setRegions');
-    regions.add((crop, spot, radius));
-  }
-
-  @override
-  Stream<MeterStats> get stats => _stats.stream;
-
-  bool get hasListener => _stats.hasListener;
-  void emit(MeterStats s) => _stats.add(s);
-  void fail(Object error) => _stats.addError(error);
-}
+import '../support/fake_source.dart';
 
 /// Stats giving EV100 = 15 (f/1, 1/32768 s, ISO 100, region == frame).
 MeterStats stats({
@@ -71,10 +31,10 @@ MeterStats stats({
 Future<void> settle() => Future<void>.delayed(Duration.zero);
 
 void main() {
-  late FakeSource src;
+  late FakeMeterSource src;
   late MeterController c;
   setUp(() {
-    src = FakeSource();
+    src = FakeMeterSource(size: const Size(4000, 3000));
     c = MeterController(source: src);
   });
   tearDown(() => c.dispose());

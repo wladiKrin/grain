@@ -17,8 +17,10 @@ import android.hardware.camera2.params.SessionConfiguration
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.util.Size
 import android.view.Surface
 import java.util.concurrent.Executor
@@ -28,22 +30,33 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * One Camera2 session on the main back camera: a preview into [surfaceTexture] and a small
- * YUV ImageReader whose Y plane feeds [LumaStats]. All camera work runs on a private
- * HandlerThread; [onReady], [onError] and [onStats] are invoked on the main thread.
+ * One Camera2 session on the main back camera (or its separate ultra-wide when opened with
+ * [startWide]): a preview into [surfaceTexture] and a YUV ImageReader whose Y plane feeds
+ * [LumaStats] in [Mode.METER] or [QrDecoder] in [Mode.SCAN]. All camera work runs on a private
+ * HandlerThread; [onReady], [onError], [onStats] and [onQr] are invoked on the main thread.
  */
 class CameraSession(
     context: Context,
     private val surfaceTexture: SurfaceTexture,
+    val mode: Mode,
+    private val startWide: Boolean,
     private val onReady: (PreviewSetup) -> Unit,
     private val onError: (String) -> Unit,
     private val onStats: (Map<String, Any>) -> Unit,
+    private val onQr: (String) -> Unit,
 ) {
+    enum class Mode { METER, SCAN }
+
     data class PreviewSetup(
         val previewWidth: Int,
         val previewHeight: Int,
         val sensorOrientation: Int,
+        /** The active camera's equivalent focal. */
         val phoneEqFocal: Double,
+        val mainEqFocal: Double,
+        /** Null when the phone has no ultra-wide. */
+        val wideEqFocal: Double?,
+        val wide: Boolean,
     )
 
     /** Regions in sensor-buffer coordinates, ready for [LumaStats.compute]. */
@@ -77,6 +90,10 @@ class CameraSession(
     private var maxIso = 0
     private var defaultAperture = 0.0
     private var latest: TotalCaptureResult? = null
+    private var wideSupport: Wide? = null
+    private var request: CaptureRequest.Builder? = null
+    private var current: PreviewSetup? = null
+    private var lastQr: String? = null
 
     /** Display (portrait) regions as sent by Dart; normalized 0..1, radius relative to crop width. */
     data class DisplayRegions(val crop: RectD, val cx: Double, val cy: Double, val radius: Double) {
@@ -86,6 +103,44 @@ class CameraSession(
     }
 
     fun open() = handler.post { openOnCameraThread() }
+
+    /**
+     * Switches to or from the ultra-wide. On the zoom-ratio path this updates the repeating
+     * request in place and [onDone] gets the new setup; without an ultra-wide it gets the
+     * unchanged setup. Null means this session cannot switch in place (the ultra-wide is a
+     * separate camera, or the session is closed): the caller reopens with `startWide = want`.
+     * [onDone] runs on the main thread.
+     */
+    fun setWide(want: Boolean, onDone: (PreviewSetup?) -> Unit) {
+        val posted = handler.post {
+            val result = setWideOnCameraThread(want)
+            mainHandler.post { onDone(result) }
+        }
+        if (!posted) onDone(null) // The thread already quit after close().
+    }
+
+    private fun setWideOnCameraThread(want: Boolean): PreviewSetup? {
+        val cur = current
+        if (closed || cur == null) return null
+        if (want == cur.wide) return cur
+        return when (val w = wideSupport) {
+            null -> cur
+            is Wide.Camera -> null
+            is Wide.ZoomRatio -> {
+                val s = session ?: return null
+                val b = request ?: return null
+                try {
+                    b.set(CaptureRequest.CONTROL_ZOOM_RATIO, if (want) w.ratio else 1f)
+                    s.setRepeatingRequest(b.build(), captureCallback, handler)
+                    cur.copy(wide = want, phoneEqFocal = if (want) w.eqFocal else cur.mainEqFocal)
+                        .also { current = it }
+                } catch (e: Exception) {
+                    Log.w(TAG, "zoom ratio switch failed", e)
+                    cur
+                }
+            }
+        }
+    }
 
     fun setRegions(r: DisplayRegions) {
         displayRegions = r
@@ -108,6 +163,8 @@ class CameraSession(
             reader = null
             previewSurface = null
             latest = null
+            request = null
+            current = null
             val finish: () -> Unit = {
                 thread.quitSafely()
                 mainHandler.post(onClosed)
@@ -130,13 +187,33 @@ class CameraSession(
     @SuppressLint("MissingPermission") // The plugin checks CAMERA before creating a session.
     private fun openOnCameraThread() {
         try {
-            val id = selectMainBackCamera(manager) ?: return fail("No back camera")
-            val ch = manager.getCameraCharacteristics(id)
+            val backs = backCameras(manager)
+            val mainId = selectMainBackCamera(backs) ?: return fail("No back camera")
+            val mainCh = backs.first { it.first == mainId }.second
+            val mainEq = phoneEqFocal(eqFocal(mainCh))
+            val zoomLower = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                mainCh.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)?.lower
+            } else {
+                null
+            }
+            val others = backs.filter { it.first != mainId }
+                .mapNotNull { (id, ch) -> eqFocal(ch)?.takeIf { it.isFinite() && it > 0 }?.let { id to it } }
+            val wideWay = WideSupport.choose(mainEq, zoomLower, Build.VERSION.SDK_INT, others)
+            wideSupport = wideWay
+            Log.i(TAG, "main camera $mainId eq ${"%.1f".format(mainEq)} mm; ultra-wide: ${describe(wideWay)}")
+
+            val wide = startWide && wideWay != null
+            val id = if (wide && wideWay is Wide.Camera) wideWay.id else mainId
+            val ch = if (id == mainId) mainCh else backs.first { it.first == id }.second
+            val activeEq = if (wide) eqOf(wideWay!!) else mainEq
+            val zoomRatio = if (wide && wideWay is Wide.ZoomRatio) wideWay.ratio else null
+
             val map = ch.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                 ?: return fail("No stream configuration")
             val preview = choosePreviewSize(map.getOutputSizes(SurfaceTexture::class.java))
                 ?: return fail("No preview size")
-            val yuv = chooseAnalysisSize(map.getOutputSizes(ImageFormat.YUV_420_888))
+            val yuvSizes = map.getOutputSizes(ImageFormat.YUV_420_888)
+            val yuv = (if (mode == Mode.SCAN) chooseScanSize(yuvSizes) else chooseAnalysisSize(yuvSizes))
                 ?: return fail("No YUV size")
 
             sensorOrientation = ch.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
@@ -152,7 +229,13 @@ class CameraSession(
             }
             defaultAperture = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
                 ?.firstOrNull()?.toDouble() ?: 0.0
-            val setup = PreviewSetup(preview.width, preview.height, sensorOrientation, phoneEqFocal(eqFocal(ch)))
+            val setup = PreviewSetup(
+                preview.width, preview.height, sensorOrientation,
+                phoneEqFocal = activeEq,
+                mainEqFocal = mainEq,
+                wideEqFocal = wideWay?.let(::eqOf),
+                wide = wide,
+            )
 
             surfaceTexture.setDefaultBufferSize(preview.width, preview.height)
             val surface = Surface(surfaceTexture).also { previewSurface = it }
@@ -165,7 +248,7 @@ class CameraSession(
                 override fun onOpened(camera: CameraDevice) {
                     if (openSettled(camera)) return
                     device = camera
-                    configure(camera, surface, r.surface, ch, setup)
+                    configure(camera, surface, r.surface, ch, setup, zoomRatio)
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
@@ -194,6 +277,7 @@ class CameraSession(
         analysis: Surface,
         ch: CameraCharacteristics,
         setup: PreviewSetup,
+        zoomRatio: Float?,
     ) {
         val outputs = listOf(OutputConfiguration(preview), OutputConfiguration(analysis))
         val config = SessionConfiguration(
@@ -206,7 +290,7 @@ class CameraSession(
                     }
                     session = s
                     try {
-                        val req = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                        val builder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
                             addTarget(preview)
                             addTarget(analysis)
                             set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
@@ -215,8 +299,13 @@ class CameraSession(
                             if (afModes?.contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE) == true) {
                                 set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
                             }
-                        }.build()
-                        s.setRepeatingRequest(req, captureCallback, handler)
+                            if (zoomRatio != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
+                            }
+                        }
+                        s.setRepeatingRequest(builder.build(), captureCallback, handler)
+                        request = builder
+                        current = setup
                         mainHandler.post { onReady(setup) }
                     } catch (e: Exception) {
                         fail(e.message ?: e.javaClass.simpleName)
@@ -241,7 +330,10 @@ class CameraSession(
         }
     }
 
-    /** Camera thread. Every Image is closed; stats are computed at most 15 times a second. */
+    /**
+     * Camera thread. Every Image is closed; stats are computed at most 15 times a second
+     * (METER), a QR decode is tried at most every 200 ms (SCAN).
+     */
     private fun onImage(r: ImageReader) {
         val image = try {
             r.acquireLatestImage()
@@ -251,6 +343,20 @@ class CameraSession(
         image.use { img ->
             if (closed) return
             val now = SystemClock.elapsedRealtime()
+            if (mode == Mode.SCAN) {
+                if (now - lastEmitMs < MIN_SCAN_INTERVAL_MS) return
+                lastEmitMs = now
+                val plane = img.planes[0]
+                val buf = plane.buffer
+                val n = buf.remaining()
+                if (yBuffer.size < n) yBuffer = ByteArray(n)
+                buf.get(yBuffer, 0, n)
+                val text = QrDecoder.decode(yBuffer, img.width, img.height, plane.rowStride) ?: return
+                if (text == lastQr) return
+                lastQr = text
+                mainHandler.post { onQr(text) }
+                return
+            }
             if (now - lastEmitMs < MIN_EVENT_INTERVAL_MS) return
             val result = latest ?: return
             val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
@@ -290,7 +396,11 @@ class CameraSession(
     }
 
     companion object {
+        private const val TAG = "GrainCamera"
         private const val MIN_EVENT_INTERVAL_MS = 1000L / 15 + 1
+        private const val MIN_SCAN_INTERVAL_MS = 200L
+        private const val MIN_SCAN_EDGE = 1280
+        private const val MAX_SCAN_EDGE = 1920
         private const val FULL_FRAME_DIAGONAL_MM = 43.27
         private const val TARGET_EQ_FOCAL_MM = 26.0
         private const val MAX_PREVIEW_EDGE = 1440
@@ -311,12 +421,26 @@ class CameraSession(
             return f * FULL_FRAME_DIAGONAL_MM / diag
         }
 
-        /** The back camera whose equivalent focal length is closest to 26 mm. */
-        fun selectMainBackCamera(manager: CameraManager): String? =
+        private fun eqOf(w: Wide) = when (w) {
+            is Wide.ZoomRatio -> w.eqFocal
+            is Wide.Camera -> w.eqFocal
+        }
+
+        private fun describe(w: Wide?) = when (w) {
+            null -> "none"
+            is Wide.ZoomRatio -> "zoom ratio ${w.ratio} (eq ${"%.1f".format(w.eqFocal)} mm)"
+            is Wide.Camera -> "separate camera ${w.id} (eq ${"%.1f".format(w.eqFocal)} mm)"
+        }
+
+        /** Every back-facing camera with its characteristics. */
+        fun backCameras(manager: CameraManager): List<Pair<String, CameraCharacteristics>> =
             manager.cameraIdList
                 .map { it to manager.getCameraCharacteristics(it) }
                 .filter { (_, ch) -> ch.get(CameraCharacteristics.LENS_FACING) == CameraMetadata.LENS_FACING_BACK }
-                .minByOrNull { (_, ch) -> eqFocal(ch)?.let { abs(it - TARGET_EQ_FOCAL_MM) } ?: Double.MAX_VALUE }
+
+        /** Of [backs], the camera whose equivalent focal length is closest to 26 mm. */
+        fun selectMainBackCamera(backs: List<Pair<String, CameraCharacteristics>>): String? =
+            backs.minByOrNull { (_, ch) -> eqFocal(ch)?.let { abs(it - TARGET_EQ_FOCAL_MM) } ?: Double.MAX_VALUE }
                 ?.first
 
         private fun is4by3(s: Size) = max(s.width, s.height) * 3 == min(s.width, s.height) * 4
@@ -335,6 +459,15 @@ class CameraSession(
             if (sizes.isNullOrEmpty()) return null
             return sizes.filter { is4by3(it) && max(it.width, it.height) >= 320 }.minByOrNull { it.width * it.height }
                 ?: sizes.minByOrNull { abs(it.width * it.height - 320 * 240) }
+        }
+
+        /** Smallest 4:3 size with long edge ≥ 1280 px; else the largest with long edge ≤ 1920 px. */
+        fun chooseScanSize(sizes: Array<Size>?): Size? {
+            if (sizes.isNullOrEmpty()) return null
+            return sizes.filter { is4by3(it) && max(it.width, it.height) >= MIN_SCAN_EDGE }
+                .minByOrNull { it.width * it.height }
+                ?: sizes.filter { max(it.width, it.height) <= MAX_SCAN_EDGE }.maxByOrNull { it.width * it.height }
+                ?: sizes.minByOrNull { it.width * it.height }
         }
 
         private fun toSensor(r: DisplayRegions, orientation: Int, buffer: Size): SensorRegions {

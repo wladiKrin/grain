@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -8,41 +7,13 @@ import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
 import 'package:grain/metering/fov.dart';
-import 'package:grain/metering/meter_channel.dart';
 import 'package:grain/metering/reading.dart';
 import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
-class FakeSource implements MeterSource {
-  final calls = <String>[];
-  final _stats = StreamController<MeterStats>.broadcast();
-  Object? startError;
-
-  @override
-  Future<PreviewInfo> start() async {
-    calls.add('start');
-    if (startError != null) throw startError!;
-    return const PreviewInfo(
-      textureId: 7,
-      size: Size(1440, 1080),
-      sensorOrientation: 90,
-      phoneEqFocal: 25,
-    );
-  }
-
-  @override
-  Future<void> stop() async => calls.add('stop');
-
-  @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) async {}
-
-  @override
-  Stream<MeterStats> get stats => _stats.stream;
-
-  void emit(MeterStats s) => _stats.add(s);
-}
+import '../support/fake_source.dart';
 
 class FakeHaptics implements Haptics {
   final ticks = <bool>[];
@@ -85,14 +56,14 @@ Future<void> loadFonts() async {
 void main() {
   setUpAll(loadFonts);
 
-  late FakeSource src;
+  late FakeMeterSource src;
   late FakeHaptics haptics;
   late MeterController c;
   var permissionRequests = 0;
   var grant = true;
 
   setUp(() {
-    src = FakeSource();
+    src = FakeMeterSource(textureId: 7);
     haptics = FakeHaptics();
     c = MeterController(source: src);
     permissionRequests = 0;

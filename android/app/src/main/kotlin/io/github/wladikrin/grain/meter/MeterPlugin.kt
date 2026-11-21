@@ -10,15 +10,18 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.TextureRegistry
 
 /**
- * `grain/meter` method channel (start / stop / setRegions) and `grain/meter/stats` event
- * channel. Everything here runs on the main thread.
+ * `grain/meter` method channel (start / startScan / setWide / stop / setRegions), the
+ * `grain/meter/stats` event channel (METER mode) and the `grain/meter/qr` event channel
+ * (SCAN mode). Everything here runs on the main thread.
  */
-class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.StreamHandler {
+class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private lateinit var context: Context
     private lateinit var textures: TextureRegistry
     private var methods: MethodChannel? = null
-    private var events: EventChannel? = null
-    private var sink: EventChannel.EventSink? = null
+    private var statsEvents: EventChannel? = null
+    private var qrEvents: EventChannel? = null
+    private var statsSink: EventChannel.EventSink? = null
+    private var qrSink: EventChannel.EventSink? = null
 
     private var regions = CameraSession.DisplayRegions.DEFAULT
     private var session: CameraSession? = null
@@ -30,38 +33,65 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel
     private var closing = false
     private val afterClose = mutableListOf<() -> Unit>()
 
+    /** Counts deliberate teardowns (stop, mode change, detach); a reopen only falls back without one. */
+    private var stops = 0
+
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
         textures = binding.textureRegistry
         methods = MethodChannel(binding.binaryMessenger, "grain/meter").also { it.setMethodCallHandler(this) }
-        events = EventChannel(binding.binaryMessenger, "grain/meter/stats").also { it.setStreamHandler(this) }
+        statsEvents = EventChannel(binding.binaryMessenger, "grain/meter/stats").also {
+            it.setStreamHandler(sinkHandler { statsSink = it })
+        }
+        qrEvents = EventChannel(binding.binaryMessenger, "grain/meter/qr").also {
+            it.setStreamHandler(sinkHandler { qrSink = it })
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methods?.setMethodCallHandler(null)
-        events?.setStreamHandler(null)
+        statsEvents?.setStreamHandler(null)
+        qrEvents?.setStreamHandler(null)
         methods = null
-        events = null
-        sink = null
+        statsEvents = null
+        qrEvents = null
+        statsSink = null
+        qrSink = null
+        stops++
         teardown("Engine detached") {}
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "start" -> start(result)
-            "stop" -> teardown("Stopped") { result.success(null) }
+            "start" -> start(CameraSession.Mode.METER, false, result)
+            "startScan" -> start(CameraSession.Mode.SCAN, false, result)
+            "setWide" -> setWide(call.argument<Boolean>("wide") == true, result)
+            "stop" -> {
+                stops++
+                teardown("Stopped") { result.success(null) }
+            }
             "setRegions" -> setRegions(call, result)
             else -> result.notImplemented()
         }
     }
 
-    private fun start(result: MethodChannel.Result) {
+    /**
+     * Opens a session in [mode] (on the ultra-wide when [wide] and it is a separate camera), or
+     * answers the running one's preview map. A running session in the other mode is closed first.
+     */
+    private fun start(mode: CameraSession.Mode, wide: Boolean, result: MethodChannel.Result) {
         if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             result.error("denied", "Camera permission not granted", null)
             return
         }
         if (closing) {
-            afterClose.add { start(result) }
+            afterClose.add { start(mode, wide, result) }
+            return
+        }
+        val running = session
+        if (running != null && running.mode != mode) {
+            stops++
+            teardown("Camera mode changed") { start(mode, wide, result) }
             return
         }
         ready?.let {
@@ -69,7 +99,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel
             return
         }
         pendingStarts.add(result)
-        if (session != null) return // Already opening; answered when ready.
+        if (running != null) return // Already opening; answered when ready.
 
         val entry = textures.createSurfaceTexture()
         texture = entry
@@ -77,14 +107,17 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel
         created = CameraSession(
             context,
             entry.surfaceTexture(),
+            mode,
+            wide,
             onReady = { setup -> if (session === created) onSessionReady(entry, setup) },
             onError = { message ->
                 if (session === created) {
-                    if (ready != null) sink?.error("camera_error", message, null)
+                    if (ready != null) sinkFor(mode)?.error("camera_error", message, null)
                     teardown(message) {}
                 }
             },
-            onStats = { stats -> if (session === created) sink?.success(stats) },
+            onStats = { stats -> if (session === created) statsSink?.success(stats) },
+            onQr = { text -> if (session === created) qrSink?.success(text) },
         ).also {
             it.setRegions(regions)
             session = it
@@ -92,33 +125,85 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel
         }
     }
 
+    private fun sinkFor(mode: CameraSession.Mode) =
+        if (mode == CameraSession.Mode.SCAN) qrSink else statsSink
+
+    private fun previewMap(entry: TextureRegistry.SurfaceTextureEntry, setup: CameraSession.PreviewSetup) =
+        buildMap<String, Any> {
+            put("textureId", entry.id())
+            put("previewWidth", setup.previewWidth)
+            put("previewHeight", setup.previewHeight)
+            put("sensorOrientation", setup.sensorOrientation)
+            put("phoneEqFocal", setup.phoneEqFocal)
+            put("mainEqFocal", setup.mainEqFocal)
+            setup.wideEqFocal?.let { put("wideEqFocal", it) }
+            put("wide", setup.wide)
+        }
+
     private fun onSessionReady(entry: TextureRegistry.SurfaceTextureEntry, setup: CameraSession.PreviewSetup) {
-        val info = mapOf<String, Any>(
-            "textureId" to entry.id(),
-            "previewWidth" to setup.previewWidth,
-            "previewHeight" to setup.previewHeight,
-            "sensorOrientation" to setup.sensorOrientation,
-            "phoneEqFocal" to setup.phoneEqFocal,
-        )
+        val info = previewMap(entry, setup)
         ready = info
-        pendingStarts.forEach { it.success(info) }
+        val waiting = pendingStarts.toList()
         pendingStarts.clear()
+        waiting.forEach { it.success(info) }
+    }
+
+    /**
+     * Zoom-ratio ultra-wide: switched in place, same texture. Separate ultra-wide camera: the
+     * session is reopened on the other camera (new texture); if that camera fails to open, the
+     * other one is reopened so a preview keeps running, and its map is the answer.
+     */
+    private fun setWide(want: Boolean, result: MethodChannel.Result) {
+        val s = session
+        val entry = texture
+        if (s == null || entry == null || ready == null || closing) {
+            result.error("camera_error", "Camera not running", null)
+            return
+        }
+        s.setWide(want) { setup ->
+            if (session !== s) {
+                result.error("camera_error", "Camera stopped", null)
+            } else if (setup != null) {
+                previewMap(entry, setup).let {
+                    ready = it
+                    result.success(it)
+                }
+            } else {
+                teardown("Switching camera") { reopen(s.mode, want, result) }
+            }
+        }
+    }
+
+    private fun reopen(mode: CameraSession.Mode, wide: Boolean, result: MethodChannel.Result) {
+        val generation = stops
+        start(mode, wide, object : MethodChannel.Result {
+            override fun success(value: Any?) = result.success(value)
+
+            override fun error(code: String, message: String?, details: Any?) {
+                val failedToOpen = wide && code == "camera_error" && stops == generation
+                if (failedToOpen) start(mode, false, result) else result.error(code, message, details)
+            }
+
+            override fun notImplemented() = result.notImplemented()
+        })
     }
 
     /** Releases camera, session, reader and texture; pending starts fail with [reason]. */
     private fun teardown(reason: String, done: () -> Unit) {
-        pendingStarts.forEach { it.error("camera_error", reason, null) }
+        val waiting = pendingStarts.toList()
         pendingStarts.clear()
         val s = session
         val entry = texture
         session = null
         texture = null
         ready = null
+        if (s != null) closing = true
+        // After the state reset, so a failed start that retries is queued behind the close.
+        waiting.forEach { it.error("camera_error", reason, null) }
         if (s == null) {
             if (closing) afterClose.add(done) else done()
             return
         }
-        closing = true
         s.close {
             entry?.release()
             closing = false
@@ -144,11 +229,9 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel
         result.success(null)
     }
 
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
-        sink = events
-    }
+    private fun sinkHandler(set: (EventChannel.EventSink?) -> Unit) = object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink) = set(events)
 
-    override fun onCancel(arguments: Any?) {
-        sink = null
+        override fun onCancel(arguments: Any?) = set(null)
     }
 }
