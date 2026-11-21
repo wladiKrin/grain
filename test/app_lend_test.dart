@@ -103,6 +103,26 @@ void main() {
     expect(src.calls, ['start', 'stop', 'start']);
   });
 
+  testWidgets(
+    'returning from the library while backgrounded keeps the camera closed',
+    (t) async {
+      await pumpApp(t);
+      await t.tap(find.byIcon(Icons.photo_camera_outlined));
+      await settle(t);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await settle(t);
+      await back(t);
+      expect(src.calls, ['start', 'stop']);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await settle(t);
+      expect(src.calls, ['start', 'stop', 'start']);
+    },
+  );
+
   testWidgets('backgrounding mid-scan: scan reopens, meter waits for the pop', (
     t,
   ) async {

@@ -94,6 +94,12 @@ class MeterController extends ChangeNotifier {
   bool _wantRunning = false;
   bool _disposed = false;
 
+  /// Whether the app is in the foreground; the camera is held only then.
+  bool _foreground = true;
+
+  /// Whether a finished start may keep the camera.
+  bool get _mayRun => _wantRunning && !_disposed && _lends == 0 && _foreground;
+
   /// Scales for [g] at its focal length snapped to a focal detent, which
   /// also sets [focalIndex].
   GearScales _scalesAt(GearSetup g) {
@@ -152,14 +158,14 @@ class MeterController extends ChangeNotifier {
     if (_disposed) return;
     // Recorded before the guard so a resume during an in-flight start keeps it.
     _wantRunning = true;
-    if (_lends > 0 || _running || _starting) return;
+    if (!_foreground || _lends > 0 || _running || _starting) return;
     _starting = true;
     cameraDenied = false;
     cameraError = null;
     try {
       while (true) {
         final info = await _source.start();
-        if (_wantRunning && !_disposed) {
+        if (_mayRun) {
           preview = info;
           _running = true;
           _session++;
@@ -168,10 +174,11 @@ class MeterController extends ChangeNotifier {
           _sendRegions();
           break;
         }
-        // Paused or disposed while starting: release the camera again.
+        // Paused, lent, backgrounded or disposed while starting: release
+        // the camera again.
         await _source.stop();
         // Resumed again while it was being released: start over.
-        if (!_wantRunning || _disposed) break;
+        if (!_mayRun) break;
       }
     } on PlatformException catch (e) {
       if (e.code == 'denied') {
@@ -236,6 +243,19 @@ class MeterController extends ChangeNotifier {
     }();
     _released = release.then<void>((_) {}, onError: (Object _) {});
     return release;
+  }
+
+  /// The app went to the background: releases the camera and keeps
+  /// [resume] (a lend ending meanwhile) from reopening it.
+  Future<void> enterBackground() {
+    _foreground = false;
+    return pause();
+  }
+
+  /// The app is back in the foreground: reopens the camera unless lent.
+  Future<void> enterForeground() {
+    _foreground = true;
+    return resume();
   }
 
   bool _loggedFirstStats = false;

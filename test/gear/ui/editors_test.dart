@@ -59,6 +59,13 @@ class _GatedGear extends GearController {
   }
 }
 
+/// A repository whose every profile save fails, as a full disk would.
+class _FailingSaveRepository extends MemoryGearRepository {
+  @override
+  Future<void> saveProfile(GearProfile p) async =>
+      throw StateError('disk full');
+}
+
 /// Opens [screen] above a "below" route, counting the editor's pops.
 Future<List<Object?>> openAbove(
   WidgetTester t,
@@ -265,6 +272,48 @@ void main() {
     await t.tap(find.text('Save'));
     await t.pumpAndSettle();
     expect(find.text('minAperture: must be a number'), findsOneWidget);
+  });
+
+  Future<void> expectFailedSave(
+    WidgetTester t,
+    Widget Function() screen,
+  ) async {
+    final results = await openAbove(t, screen);
+    await t.tap(find.text('Save'));
+    await t.pumpAndSettle();
+    expect(find.text('Could not save: Bad state: disk full'), findsOneWidget);
+    final save = t.widget<TextButton>(find.widgetWithText(TextButton, 'Save'));
+    expect(save.onPressed, isNotNull);
+    expect(results, isEmpty);
+    expect(find.text('below'), findsNothing);
+  }
+
+  testWidgets('a failed save re-enables Save and says why: body', (t) async {
+    final g = GearController(
+      library: fixtureLibrary(),
+      repository: _FailingSaveRepository(),
+    );
+    final b = newBodyTemplate().copyWith(
+      make: 'Zenit',
+      model: 'E',
+      mount: 'm42',
+    );
+    await expectFailedSave(
+      t,
+      () => BodyEditorScreen(gear: g, initial: b, isNew: true),
+    );
+  });
+
+  testWidgets('a failed save re-enables Save and says why: lens', (t) async {
+    final g = GearController(
+      library: fixtureLibrary(),
+      repository: _FailingSaveRepository(),
+    );
+    final l = newLensTemplate('canon-fd').copyWith(make: 'Canon', name: 'T 50');
+    await expectFailedSave(
+      t,
+      () => LensEditorScreen(gear: g, initial: l, isNew: true),
+    );
   });
 
   testWidgets('a double tap on Save stores the body once and pops once', (

@@ -130,8 +130,14 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
       return;
     }
     setState(() => _saving = true);
-    final saved = await widget.gear.saveUser(parsed);
-    if (mounted) Navigator.pop(context, saved);
+    try {
+      final saved = await widget.gear.saveUser(parsed);
+      if (mounted) Navigator.pop(context, saved);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not save: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override

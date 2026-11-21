@@ -87,10 +87,10 @@ class _GrainAppState extends State<GrainApp> {
     super.initState();
     // Camera is held only while the app is in the foreground.
     _lifecycle = AppLifecycleListener(
-      onResume: _controller.resume,
-      onInactive: _controller.pause,
-      onHide: _controller.pause,
-      onPause: _controller.pause,
+      onResume: _controller.enterForeground,
+      onInactive: _controller.enterBackground,
+      onHide: _controller.enterBackground,
+      onPause: _controller.enterBackground,
     );
     _settings.addListener(_onSettings);
     _controller.addListener(_onController);

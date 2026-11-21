@@ -618,6 +618,38 @@ void main() {
       await settle();
       expect(calls(), ['start', 'stop', 'start']);
     });
+
+    test(
+      'a start in flight when a lend begins does not keep the camera',
+      () async {
+        src.startGate = Completer<void>();
+        final started = c.resume(); // start in flight
+        final lend = c.lendCamera(() async {
+          unawaited(c.resume()); // e.g. lifecycle onResume during the lend
+          src.startGate!.complete();
+          await started;
+          expect(src.hasListener, isFalse);
+          expect(calls(), ['start', 'stop']);
+        });
+        await lend;
+        await settle();
+        expect(calls(), ['start', 'stop', 'start']);
+        expect(src.hasListener, isTrue);
+      },
+    );
+
+    test(
+      'a lend ending in the background does not reopen the camera',
+      () async {
+        await c.resume();
+        await c.lendCamera(() => c.enterBackground());
+        await settle();
+        expect(calls(), ['start', 'stop']);
+        await c.enterForeground();
+        await settle();
+        expect(calls(), ['start', 'stop', 'start']);
+      },
+    );
   });
 }
 
