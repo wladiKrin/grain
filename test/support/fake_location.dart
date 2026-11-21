@@ -1,11 +1,12 @@
 import 'package:grain/rolls/location.dart';
 import 'package:grain/rolls/model.dart';
+import 'package:grain/ui/permissions.dart';
 
 class FakeLocation implements LocationSource {
   FakeLocation([this.fix]);
 
   GeoFix? fix;
-  bool granted = true;
+  PermissionOutcome outcome = PermissionOutcome.granted;
   int calls = 0;
   int permissionRequests = 0;
 
@@ -16,8 +17,8 @@ class FakeLocation implements LocationSource {
   }
 
   @override
-  Future<bool> requestPermission() async {
+  Future<PermissionOutcome> requestPermission() async {
     permissionRequests++;
-    return granted;
+    return outcome;
   }
 }

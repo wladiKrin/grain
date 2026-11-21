@@ -23,3 +23,7 @@ Device: Pixel 10, release build
 - [ ] Tap in the dimmed area: the spot lands on the crop edge.
 - [ ] Import a backup containing an active roll and start a roll in the seconds the import runs: one active roll afterwards.
 - [ ] On a phone that reports no aperture, the EV line reads "EV ≈..." (f/1.8 assumed).
+
+## Plan 4 Task 7: blocked permissions
+- [ ] Deny the camera twice: the prompt offers "Open settings"; grant the camera there, come back to Grain: the preview starts with no restart.
+- [ ] Same for location from Settings: after blocking, the snackbar offers "Open settings"; grant there, return, and the Save location switch can be turned on.

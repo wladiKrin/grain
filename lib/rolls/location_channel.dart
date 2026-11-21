@@ -1,23 +1,24 @@
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../ui/permissions.dart';
 import 'location.dart';
 import 'model.dart';
 
 /// [LocationSource] over the native `grain/location` channel (the platform
 /// LocationManager, no Play Services).
 class LocationChannel implements LocationSource {
-  LocationChannel({MethodChannel? channel, Future<bool> Function()? request})
-    : _channel = channel ?? const MethodChannel('grain/location'),
-      _request = request ?? _requestWhenInUse;
+  LocationChannel({
+    MethodChannel? channel,
+    Future<PermissionOutcome> Function()? request,
+  }) : _channel = channel ?? const MethodChannel('grain/location'),
+       _request = request ?? _requestWhenInUse;
 
   final MethodChannel _channel;
-  final Future<bool> Function() _request;
+  final Future<PermissionOutcome> Function() _request;
 
-  static Future<bool> _requestWhenInUse() async {
-    final status = await Permission.locationWhenInUse.request();
-    return status.isGranted || status.isLimited;
-  }
+  static Future<PermissionOutcome> _requestWhenInUse() async =>
+      outcomeOf(await Permission.locationWhenInUse.request());
 
   @override
   Future<GeoFix?> current() async {
@@ -39,5 +40,5 @@ class LocationChannel implements LocationSource {
   }
 
   @override
-  Future<bool> requestPermission() => _request();
+  Future<PermissionOutcome> requestPermission() => _request();
 }

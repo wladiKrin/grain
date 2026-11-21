@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show openAppSettings;
 
 import '../exposure/mode.dart';
 import '../exposure/scales.dart';
@@ -10,6 +12,7 @@ import '../gear/gear_controller.dart';
 import '../rolls/push.dart';
 import '../rolls/roll_controller.dart';
 import '../ui/haptics.dart';
+import '../ui/permissions.dart';
 import '../ui/theme.dart';
 import 'meter_controller.dart';
 import 'widgets/camera_permission.dart';
@@ -38,6 +41,7 @@ class MeterScreen extends StatefulWidget {
     this.onOpenLibrary,
     this.onOpenLensPicker,
     this.requestCameraPermission,
+    this.openSettings,
   });
 
   final MeterController controller;
@@ -67,6 +71,9 @@ class MeterScreen extends StatefulWidget {
 
   /// Defaults to the system permission request; tests pass a fake.
   final CameraPermissionRequest? requestCameraPermission;
+
+  /// Opens the system settings (default: the app's settings page).
+  final OpenSettings? openSettings;
 
   @override
   State<MeterScreen> createState() => _MeterScreenState();
@@ -421,6 +428,7 @@ class _MeterScreenState extends State<MeterScreen> {
       return CameraPermissionPrompt(
         onGranted: _c.resume,
         request: widget.requestCameraPermission ?? requestCameraPermission,
+        openSettings: widget.openSettings ?? openAppSettings,
       );
     }
     final error = _c.cameraError;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/reading.dart';
 import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
+import 'package:grain/ui/permissions.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -64,14 +66,16 @@ void main() {
   late FakeHaptics haptics;
   late MeterController c;
   var permissionRequests = 0;
-  var grant = true;
+  var outcome = PermissionOutcome.granted;
+  var settingsOpened = 0;
 
   setUp(() {
     src = FakeMeterSource(textureId: 7);
     haptics = FakeHaptics();
     c = MeterController(source: src);
     permissionRequests = 0;
-    grant = true;
+    outcome = PermissionOutcome.granted;
+    settingsOpened = 0;
   });
   tearDown(() => c.dispose());
 
@@ -91,7 +95,11 @@ void main() {
           gear: GearController.inMemory(),
           requestCameraPermission: () async {
             permissionRequests++;
-            return grant;
+            return outcome;
+          },
+          openSettings: () async {
+            settingsOpened++;
+            return true;
           },
         ),
       ),
@@ -257,13 +265,65 @@ void main() {
 
   testWidgets('refused permission keeps the explanation', (t) async {
     src.startError = PlatformException(code: 'denied');
-    grant = false;
+    outcome = PermissionOutcome.denied;
     await pumpScreen(t);
     await t.tap(find.text('Allow camera'));
     await t.pump();
     expect(permissionRequests, 1);
     expect(src.calls.where((e) => e == 'start'), hasLength(1));
     expect(find.text('Allow camera'), findsOneWidget);
+    expect(settingsOpened, 0);
+  });
+
+  testWidgets('a blocked camera offers the system settings', (t) async {
+    src.startError = PlatformException(code: 'denied');
+    outcome = PermissionOutcome.blocked;
+    await pumpScreen(t);
+    await t.tap(find.text('Allow camera'));
+    await t.pump();
+    expect(
+      find.text(
+        'Camera access is off for Grain. Turn it on in the system settings.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Allow camera'), findsNothing);
+    expect(settingsOpened, 0);
+    await t.tap(find.text('Open settings'));
+    await t.pump();
+    expect(settingsOpened, 1);
+    expect(permissionRequests, 1);
+  });
+
+  testWidgets('a double tap asks only once', (t) async {
+    src.startError = PlatformException(code: 'denied');
+    final gate = Completer<PermissionOutcome>();
+    var asked = 0;
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(
+      MaterialApp(
+        theme: grainTheme(),
+        home: MeterScreen(
+          controller: c,
+          rolls: inMemoryRolls(),
+          haptics: haptics,
+          gear: GearController.inMemory(),
+          requestCameraPermission: () {
+            asked++;
+            return gate.future;
+          },
+        ),
+      ),
+    );
+    await c.resume();
+    await t.pump();
+    await t.tap(find.text('Allow camera'));
+    await t.tap(find.text('Allow camera'));
+    expect(asked, 1);
+    gate.complete(PermissionOutcome.denied);
+    await t.pump();
   });
 
   testWidgets('camera error shows message, dials still there', (t) async {

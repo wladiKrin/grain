@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/rolls/location_channel.dart';
 import 'package:grain/rolls/model.dart';
+import 'package:grain/ui/permissions.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,12 +52,14 @@ void main() {
 
   test('requestPermission delegates to the injected request', () async {
     expect(
-      await LocationChannel(request: () async => true).requestPermission(),
-      isTrue,
+      await LocationChannel(request: () async => PermissionOutcome.granted)
+          .requestPermission(),
+      PermissionOutcome.granted,
     );
     expect(
-      await LocationChannel(request: () async => false).requestPermission(),
-      isFalse,
+      await LocationChannel(request: () async => PermissionOutcome.denied)
+          .requestPermission(),
+      PermissionOutcome.denied,
     );
   });
 }

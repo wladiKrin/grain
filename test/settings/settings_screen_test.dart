@@ -8,6 +8,7 @@ import 'package:grain/rolls/roll_controller.dart';
 import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
+import 'package:grain/ui/permissions.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -35,6 +36,7 @@ Widget _app(
   RollController? rolls,
   FakeGearPlatform? platform,
   GearController? gear,
+  OpenSettings? openSettings,
 ]) => MaterialApp(
   theme: grainTheme(),
   home: SettingsScreen(
@@ -45,6 +47,7 @@ Widget _app(
     rolls: rolls ?? inMemoryRolls(settings: s),
     platform: platform ?? FakeGearPlatform(),
     now: () => DateTime(2026, 11, 21, 9, 30),
+    openSettings: openSettings ?? () async => true,
   ),
 );
 
@@ -149,7 +152,7 @@ void main() {
 
   testWidgets('refused permission keeps location off', (tester) async {
     final s = Settings.inMemory();
-    final loc = FakeLocation()..granted = false;
+    final loc = FakeLocation()..outcome = PermissionOutcome.denied;
     await tester.pumpWidget(_app(s, loc));
     await _reveal(tester, find.text('Save location'));
     await tester.tap(find.text('Save location'));
@@ -158,6 +161,33 @@ void main() {
     expect(s.location, isFalse);
     expect(find.text('Location permission was not granted.'), findsOneWidget);
     expect(tester.widget<Switch>(_switchOf('Save location')).value, isFalse);
+  });
+
+  testWidgets('blocked location offers the system settings', (tester) async {
+    final s = Settings.inMemory();
+    final loc = FakeLocation()..outcome = PermissionOutcome.blocked;
+    var opened = 0;
+    await tester.pumpWidget(
+      _app(s, loc, null, null, null, () async {
+        opened++;
+        return true;
+      }),
+    );
+    await _reveal(tester, find.text('Save location'));
+    await tester.tap(find.text('Save location'));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text('Location is off for Grain in the system settings.'),
+      findsOneWidget,
+    );
+    expect(s.location, isFalse);
+    expect(tester.widget<Switch>(_switchOf('Save location')).value, isFalse);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Open settings'));
+    await tester.pump();
+    expect(opened, 1);
+    expect(s.location, isFalse);
   });
 
   testWidgets('snapshots switch toggles the setting', (tester) async {

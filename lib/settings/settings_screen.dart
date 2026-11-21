@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show openAppSettings;
 
 import '../backup/ui.dart';
 import '../exposure/scales.dart';
@@ -9,6 +11,7 @@ import '../rolls/roll_controller.dart';
 import '../rolls/location.dart';
 import '../ui/dial/swipe_dial.dart';
 import '../ui/haptics.dart';
+import '../ui/permissions.dart';
 import '../ui/round_button.dart';
 import '../ui/theme.dart';
 import '../version.dart';
@@ -32,6 +35,7 @@ class SettingsScreen extends StatelessWidget {
     required this.platform,
     this.location,
     this.now = DateTime.now,
+    this.openSettings = openAppSettings,
   });
 
   final Settings settings;
@@ -48,6 +52,9 @@ class SettingsScreen extends StatelessWidget {
   final RollController rolls;
   final GearPlatform platform;
 
+  /// Opened from the snackbar when location is blocked in the system.
+  final OpenSettings openSettings;
+
   /// The backup's date (file name, share subject).
   final DateTime Function() now;
 
@@ -55,11 +62,28 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _setLocation(BuildContext context, bool on) async {
     if (!on) return settings.setLocation(false);
     final messenger = ScaffoldMessenger.of(context);
-    final granted = await location?.requestPermission() ?? false;
-    if (granted) return settings.setLocation(true);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Location permission was not granted.')),
-    );
+    final outcome =
+        await location?.requestPermission() ?? PermissionOutcome.denied;
+    switch (outcome) {
+      case PermissionOutcome.granted:
+        return settings.setLocation(true);
+      case PermissionOutcome.denied:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Location permission was not granted.')),
+        );
+      case PermissionOutcome.blocked:
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Location is off for Grain in the system settings.',
+            ),
+            action: SnackBarAction(
+              label: 'Open settings',
+              onPressed: openSettings,
+            ),
+          ),
+        );
+    }
   }
 
   @override
