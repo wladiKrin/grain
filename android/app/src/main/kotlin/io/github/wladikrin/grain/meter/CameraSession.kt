@@ -87,8 +87,8 @@ class CameraSession(
     @Volatile private var regions = SensorRegions(RectD(0.0, 0.0, 1.0, 1.0), 0.5, 0.5, 0.0)
     @Volatile private var displayRegions = DisplayRegions.DEFAULT
 
-    // Camera-thread state; [closed] is also read by the snapshot encoder.
-    @Volatile private var closed = false
+    // Camera-thread state.
+    private var closed = false
     private var openInFlight = false
     private var finishClose: (() -> Unit)? = null
     private var device: CameraDevice? = null
@@ -158,8 +158,9 @@ class CameraSession(
 
     /**
      * METER mode: the next frame's lens crop, upright, as a JPEG at [out]; [onDone] gets the
-     * path, or null (other mode, no frame within [SNAPSHOT_TIMEOUT_MS], session closed, encode
-     * failed). The camera thread only copies the planes; encoding runs on a background thread.
+     * path, or null (other mode, no frame within [SNAPSHOT_TIMEOUT_MS], session closed before a
+     * frame arrived, encode failed). Once a frame is captured it is delivered even if the session
+     * closes meanwhile. The camera thread only copies the planes; encoding runs on a background thread.
      * [onDone] runs on the main thread.
      */
     fun requestSnapshot(out: File, onDone: (String?) -> Unit) {
@@ -199,23 +200,27 @@ class CameraSession(
         val uvPixelStride = up.pixelStride
         val crop = SnapshotEncoder.cropPixels(regions.crop, w, h)
         val orientation = sensorOrientation
+        // The planes are private copies now, so the encode no longer depends on the session:
+        // a close (Home, camera switch) during it still delivers the snapshot of the logged frame.
         encoder.execute {
-            val nv21 = if (closed) null else SnapshotEncoder.yuvToNv21(w, h, y, yRowStride, u, v, uvRowStride, uvPixelStride)
+            val jpeg = try {
+                val nv21 = SnapshotEncoder.yuvToNv21(w, h, y, yRowStride, u, v, uvRowStride, uvPixelStride)
+                SnapshotEncoder.encodeJpeg(nv21, w, h, crop, orientation)
+            } catch (e: Exception) {
+                Log.w(TAG, "snapshot encode failed", e)
+                null
+            }
+            // Requests waiting on the same frame share the one encode, each in its own file.
             for (req in waiting) {
-                if (closed || nv21 == null) {
+                if (jpeg == null) {
                     req.finish(null)
                     continue
                 }
                 try {
-                    SnapshotEncoder.encode(nv21, w, h, crop, orientation, req.out)
-                    if (closed) {
-                        req.out.delete()
-                        req.finish(null)
-                    } else {
-                        req.finish(req.out.path)
-                    }
+                    SnapshotEncoder.writeAtomically(jpeg, req.out)
+                    req.finish(req.out.path)
                 } catch (e: Exception) {
-                    Log.w(TAG, "snapshot encode failed", e)
+                    Log.w(TAG, "snapshot write failed", e)
                     req.out.delete()
                     req.finish(null)
                 }
@@ -449,14 +454,11 @@ class CameraSession(
             val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
             lastEmitMs = now
 
+            // Reads only the sampled pixels from the plane; no per-frame copy of the preview-size Y.
             val plane = img.planes[0]
-            val buf = plane.buffer
-            val n = buf.remaining()
-            if (yBuffer.size < n) yBuffer = ByteArray(n)
-            buf.get(yBuffer, 0, n)
             val reg = regions
             val stats = LumaStats.compute(
-                yBuffer, img.width, img.height, plane.rowStride, reg.crop, reg.cx, reg.cy, reg.r,
+                plane.buffer, img.width, img.height, plane.rowStride, reg.crop, reg.cx, reg.cy, reg.r,
                 step = LumaStats.samplingStep(img.width),
             )
             val event = mapOf<String, Any>(

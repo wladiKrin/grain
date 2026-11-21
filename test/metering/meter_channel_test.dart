@@ -193,4 +193,14 @@ void main() {
       isNull,
     );
   });
+
+  test('snapshot without the native plugin answers null', () async {
+    messenger.setMockMethodCallHandler(method, (call) async {
+      throw MissingPluginException();
+    });
+    expect(
+      await MeterChannel().snapshot('f47ac10b-58cc-4372-a567-0e02b2c3d479'),
+      isNull,
+    );
+  });
 }

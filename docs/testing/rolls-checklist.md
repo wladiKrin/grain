@@ -14,3 +14,5 @@ Device: Pixel 10, release build
 | CPU check: `adb shell top -H -p $(adb shell pidof io.github.wladikrin.grain)` while metering, this build vs plan-2 build | GrainCamera thread CPU about the same (preview-size YUV reader + `samplingStep`); GrainSnapshot busy only briefly after a log | |
 | Swipe dials while a snapshot encodes | No new jank | |
 | Open the phone's gallery app | No Grain snapshots appear there | |
+| Log a frame, press Home at once | The snapshot still attaches to that frame on return | |
+| Note: the activity is portrait-locked; snapshots are rotated by sensor orientation only, so a frame logged with the phone held landscape is stored sideways (by design for now; device orientation/EXIF is later work) | — | |

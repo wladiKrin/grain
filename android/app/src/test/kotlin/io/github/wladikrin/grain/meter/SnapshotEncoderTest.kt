@@ -2,9 +2,15 @@ package io.github.wladikrin.grain.meter
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class SnapshotEncoderTest {
+    @get:Rule val tmp = TemporaryFolder()
+
     @Test fun cropPixelsAlignsToEvenPixels() {
         assertEquals(PixelRect(360, 270, 1080, 810), SnapshotEncoder.cropPixels(RectD(.25, .25, .75, .75), 1440, 1080))
         assertEquals(PixelRect(332, 248, 666, 500), SnapshotEncoder.cropPixels(RectD(.333, .333, .667, .667), 1000, 750))
@@ -62,5 +68,19 @@ class SnapshotEncoderTest {
         assertEquals(2, SnapshotEncoder.sampleSize(3999, 1000))
         assertEquals(4, SnapshotEncoder.sampleSize(4000, 1000))
         assertEquals(1, SnapshotEncoder.sampleSize(600, 600))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun yuvToNv21RejectsOddSizes() {
+        SnapshotEncoder.yuvToNv21(3, 2, ByteArray(6), 3, ByteArray(2), ByteArray(2), 2, 1)
+    }
+
+    @Test fun writeAtomicallyLeavesOnlyTheFinalFile() {
+        val out = File(tmp.root, "snapshots/f47ac10b-58cc-4372-a567-0e02b2c3d479.jpg")
+        SnapshotEncoder.writeAtomically(byteArrayOf(1, 2, 3), out)
+        assertArrayEquals(byteArrayOf(1, 2, 3), out.readBytes())
+        assertFalse(File(out.path + ".tmp").exists())
+        SnapshotEncoder.writeAtomically(byteArrayOf(4), out)
+        assertArrayEquals(byteArrayOf(4), out.readBytes())
     }
 }

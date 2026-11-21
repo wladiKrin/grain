@@ -2,6 +2,7 @@ package io.github.wladikrin.grain.meter
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.nio.ByteBuffer
 
 class LumaStatsTest {
     @Test fun linearizesSrgb() {
@@ -90,5 +91,33 @@ class LumaStatsTest {
         assertEquals(small.spot, big.spot, small.spot * 0.01)
         val n = small.histogram.sum().toDouble()
         assertEquals(n, big.histogram.sum().toDouble(), n * 0.05)
+    }
+
+    @Test fun byteBufferReadsGiveTheSameStatsAsTheArray() {
+        // Padded rows (stride 1456) of a gradient scene; heap, offset and direct buffers.
+        val w = 1440; val h = 1080; val stride = 1456
+        val plane = ByteArray(stride * h) { i ->
+            val x = i % stride; val y = i / stride
+            if (x >= w) 77 else (30 + (200 * x / w) * (y + 200) / (h + 200)).toByte()
+        }
+        val crop = RectD(0.2, 0.3, 0.7, 0.8)
+        val step = LumaStats.samplingStep(w)
+        val expected = LumaStats.compute(plane, w, h, stride, crop, 0.6, 0.4, 0.03, step)
+
+        val heap = ByteBuffer.wrap(plane)
+        assertEquals(expected, LumaStats.compute(heap, w, h, stride, crop, 0.6, 0.4, 0.03, step))
+        assertEquals(0, heap.position())
+
+        val direct = ByteBuffer.allocateDirect(plane.size).put(plane).also { it.rewind() }
+        assertEquals(expected, LumaStats.compute(direct, w, h, stride, crop, 0.6, 0.4, 0.03, step))
+
+        val shifted = ByteBuffer.allocate(plane.size + 5).also { it.position(5); it.put(plane); it.position(5) }
+        assertEquals(expected, LumaStats.compute(shifted, w, h, stride, crop, 0.6, 0.4, 0.03, step))
+        // The empty-spot fallback (nearest pixel) also reads through the buffer.
+        assertEquals(
+            LumaStats.compute(plane, w, h, stride, crop, 0.6, 0.4, 0.0, step).spot,
+            LumaStats.compute(shifted, w, h, stride, crop, 0.6, 0.4, 0.0, step).spot,
+            0.0,
+        )
     }
 }

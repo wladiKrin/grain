@@ -129,6 +129,10 @@ class MeterChannel implements MeterSource {
     } on PlatformException catch (e) {
       debugPrint('snapshot failed: ${e.code} ${e.message}');
       return null;
+    } on MissingPluginException catch (e) {
+      // Not a PlatformException; only without the native plugin.
+      debugPrint('snapshot failed: $e');
+      return null;
     }
   }
 

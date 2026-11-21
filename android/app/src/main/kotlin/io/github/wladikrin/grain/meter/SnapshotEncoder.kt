@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.graphics.YuvImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.math.floor
 import kotlin.math.max
@@ -99,6 +100,7 @@ object SnapshotEncoder {
         uvRowStride: Int,
         uvPixelStride: Int,
     ): ByteArray {
+        require(width % 2 == 0 && height % 2 == 0) { "NV21 needs even dimensions, got ${width}x$height" }
         val cw = width / 2
         val ch = height / 2
         val out = ByteArray(width * height + 2 * cw * ch)
@@ -116,10 +118,13 @@ object SnapshotEncoder {
     }
 
     /**
-     * Encodes [crop] of the NV21 frame upright into [out] (written to `out.tmp`, then renamed,
-     * so a reader never sees half a file). Throws on failure; the tmp file is removed.
+     * Encodes [crop] of the NV21 frame upright into [out] (see [encodeJpeg], [writeAtomically]).
      */
-    fun encode(nv21: ByteArray, width: Int, height: Int, crop: PixelRect, orientation: Int, out: File) {
+    fun encode(nv21: ByteArray, width: Int, height: Int, crop: PixelRect, orientation: Int, out: File) =
+        writeAtomically(encodeJpeg(nv21, width, height, crop, orientation), out)
+
+    /** The upright JPEG of [crop] of the NV21 frame, at the first of [QUALITIES] that fits. Throws on failure. */
+    fun encodeJpeg(nv21: ByteArray, width: Int, height: Int, crop: PixelRect, orientation: Int): ByteArray {
         val cropJpeg = ByteArrayOutputStream().also {
             val rect = Rect(crop.l, crop.t, crop.r, crop.b)
             if (!YuvImage(nv21, ImageFormat.NV21, width, height, null).compressToJpeg(rect, CROP_QUALITY, it)) {
@@ -144,18 +149,27 @@ object SnapshotEncoder {
         val upright = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
         if (upright !== decoded) decoded.recycle()
 
-        val bytes = try {
+        return try {
             firstFitting { q ->
                 ByteArrayOutputStream().also { upright.compress(Bitmap.CompressFormat.JPEG, q, it) }.toByteArray()
             }
         } finally {
             upright.recycle()
         }
+    }
 
+    /**
+     * Writes [bytes] to `out.tmp`, syncs it to disk, then renames it to [out], so neither a
+     * reader nor a power loss leaves half a file at [out]. The tmp file is removed on failure.
+     */
+    fun writeAtomically(bytes: ByteArray, out: File) {
         out.parentFile?.mkdirs()
         val tmp = File(out.path + ".tmp")
         try {
-            tmp.writeBytes(bytes)
+            FileOutputStream(tmp).use {
+                it.write(bytes)
+                it.fd.sync()
+            }
             if (!tmp.renameTo(out)) throw IOException("Rename to ${out.name} failed")
         } catch (e: Exception) {
             tmp.delete()

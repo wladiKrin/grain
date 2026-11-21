@@ -1,5 +1,6 @@
 package io.github.wladikrin.grain.meter
 
+import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -63,6 +64,37 @@ object LumaStats {
         spotCy: Double,
         spotR: Double,
         step: Int = 2,
+    ): Stats = computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step) { plane[it] }
+
+    /**
+     * As [compute], reading only the sampled pixels straight from [plane] (absolute reads from
+     * its current position, which is left unchanged), so no copy of the whole plane is needed.
+     */
+    fun compute(
+        plane: ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        crop: RectD,
+        spotCx: Double,
+        spotCy: Double,
+        spotR: Double,
+        step: Int = 2,
+    ): Stats {
+        val base = plane.position()
+        return computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step) { plane.get(base + it) }
+    }
+
+    private inline fun computeWith(
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        crop: RectD,
+        spotCx: Double,
+        spotCy: Double,
+        spotR: Double,
+        step: Int,
+        byteAt: (Int) -> Byte,
     ): Stats {
         require(step >= 1) { "step must be ≥ 1" }
         val histogram = IntArray(HISTOGRAM_BINS)
@@ -86,7 +118,7 @@ object LumaStats {
             val row = py * rowStride
             var px = 0
             while (px < width) {
-                val g = plane[row + px].toInt() and 0xFF
+                val g = byteAt(row + px).toInt() and 0xFF
                 val lin = linearLut[g]
                 frameSum += lin
                 frameN++
@@ -115,7 +147,7 @@ object LumaStats {
         } else {
             val sx = cx.toInt().coerceIn(0, width - 1)
             val sy = cy.toInt().coerceIn(0, height - 1)
-            linearLut[plane[sy * rowStride + sx].toInt() and 0xFF]
+            linearLut[byteAt(sy * rowStride + sx).toInt() and 0xFF]
         }
         return Stats(frame, cropMean, spot, histogram)
     }
