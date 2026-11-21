@@ -329,4 +329,20 @@ void main() {
     expect(c.cameraError, isNotNull);
     expect(c.reading, same(held));
   });
+
+  test('held reading derives from the frozen frame, not newer stats', () async {
+    await run();
+    final frozen = c.reading!.ev100;
+    c.toggleHold();
+    src.emit(stats(exposureNs: 15259)); // one stop brighter scene
+    await settle();
+    c.tapSpot(const Offset(.3, .6));
+    expect(c.reading!.ev100, closeTo(frozen, 1e-9));
+    c.clearSpot();
+    expect(c.reading!.ev100, closeTo(frozen, 1e-9));
+    c.calibrationEv = 1;
+    expect(c.reading!.ev100, closeTo(frozen + 1, 1e-9));
+    c.toggleHold(); // released: the newest frame
+    expect(c.reading!.ev100, closeTo(frozen + 2, 1e-3));
+  });
 }

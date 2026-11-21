@@ -60,6 +60,10 @@ class MeterController extends ChangeNotifier {
   }
 
   MeterStats? _latest;
+
+  /// The frame captured by [toggleHold]; while [held], the reading derives
+  /// from it (spot, area and calibration changes included).
+  MeterStats? _frozenStats;
   StreamSubscription<MeterStats>? _sub;
   bool _running = false;
   bool _starting = false;
@@ -183,7 +187,7 @@ class MeterController extends ChangeNotifier {
   }
 
   void _derive() {
-    final s = _latest;
+    final s = held ? _frozenStats : _latest;
     if (s == null) {
       reading = null;
       return;
@@ -268,7 +272,8 @@ class MeterController extends ChangeNotifier {
 
   void toggleHold() {
     held = !held;
-    if (!held) _derive();
+    _frozenStats = held ? _latest : null;
+    _derive();
     notifyListeners();
   }
 
