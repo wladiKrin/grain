@@ -12,10 +12,12 @@ class FakeSource implements MeterSource {
   final regions = <(Rect, Offset, double)>[];
   final _stats = StreamController<MeterStats>.broadcast();
   Object? startError;
+  Completer<void>? startGate;
 
   @override
   Future<PreviewInfo> start() async {
     calls.add('start');
+    await startGate?.future;
     if (startError != null) throw startError!;
     return const PreviewInfo(
       textureId: 1,
@@ -137,6 +139,30 @@ void main() {
       'stop',
       'start',
     ]);
+  });
+
+  test('pause while start is in flight releases the camera', () async {
+    src.startGate = Completer<void>();
+    final starting = c.resume();
+    await c.pause();
+    src.startGate!.complete();
+    await starting;
+    expect(src.calls, ['start', 'stop']);
+    expect(src.hasListener, isFalse);
+    expect(c.preview, isNull);
+    await c.resume(); // can start again afterwards
+    expect(src.hasListener, isTrue);
+  });
+
+  test('dispose while start is in flight releases the camera', () async {
+    src.startGate = Completer<void>();
+    final starting = c.resume();
+    c.dispose();
+    src.startGate!.complete();
+    await starting;
+    expect(src.calls, ['start', 'stop']);
+    expect(src.hasListener, isFalse);
+    c = MeterController(source: src); // for tearDown
   });
 
   test('stats received while paused are ignored', () async {

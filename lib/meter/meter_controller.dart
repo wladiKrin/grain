@@ -63,6 +63,10 @@ class MeterController extends ChangeNotifier {
   StreamSubscription<MeterStats>? _sub;
   bool _running = false;
   bool _starting = false;
+
+  /// Set by resume, cleared by pause/dispose; lets an in-flight start notice
+  /// that it was cancelled.
+  bool _wantRunning = false;
   bool _disposed = false;
 
   static int _indexOf(List<ScaleValue> s, String label) =>
@@ -103,10 +107,17 @@ class MeterController extends ChangeNotifier {
   Future<void> resume() async {
     if (_running || _starting || _disposed) return;
     _starting = true;
+    _wantRunning = true;
     cameraDenied = false;
     cameraError = null;
     try {
-      preview = await _source.start();
+      final info = await _source.start();
+      if (!_wantRunning || _disposed) {
+        // Paused or disposed while starting: release the camera again.
+        await _source.stop();
+        return;
+      }
+      preview = info;
       _running = true;
       _sub = _source.stats.listen(_onStats);
       _sendRegions();
@@ -123,6 +134,7 @@ class MeterController extends ChangeNotifier {
   }
 
   Future<void> pause() async {
+    _wantRunning = false;
     final wasRunning = _running;
     _running = false;
     await _sub?.cancel();
@@ -215,6 +227,7 @@ class MeterController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _wantRunning = false;
     _sub?.cancel();
     super.dispose();
   }
