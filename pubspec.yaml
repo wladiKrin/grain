@@ -56,6 +56,15 @@ dev_dependencies:
   drift_dev: ^2.35.3
   build_runner: ^2.17.1
 
+hooks:
+  user_defines:
+    sqlite3:
+      # Build SQLite from the vendored amalgamation (F-Droid: no prebuilt
+      # binaries, no download). See third_party/sqlite/README.md.
+      source: source
+      path: third_party/sqlite/sqlite3.c
+      additional_flags: [-Os, -ffunction-sections, -fdata-sections, "-Wl,--gc-sections"]
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

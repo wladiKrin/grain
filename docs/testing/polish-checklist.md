@@ -27,3 +27,28 @@ Device: Pixel 10, release build
 ## Plan 4 Task 7: blocked permissions
 - [ ] Deny the camera twice: the prompt offers "Open settings"; grant the camera there, come back to Grain: the preview starts with no restart.
 - [ ] Same for location from Settings: after blocking, the snackbar offers "Open settings"; grant there, return, and the Save location switch can be turned on.
+
+## Plan 4 Task 8: APK size
+
+Command: `flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols --obfuscate`, `app-arm64-v8a-release.apk`. Plan-3 figure: 22,262,896 bytes (22.26 MB).
+
+| | before (HEAD b55e68d) | after (Task 8) |
+|---|---|---|
+| APK total | 22,345,232 | 21,265,732 (−1,079,500) |
+| `lib/arm64-v8a/libsqlite3.so` | 1,749,952 (prebuilt download) | 1,153,752 (vendored 3.54.1, `-Os`, gc-sections) |
+| 4 × `InterTight-*.ttf`, stored / compressed | 1,231,268 / 626,784 | 294,756 / 143,484 (subsets) |
+| `lib/arm64-v8a/libflutter.so` | 11,346,352 | 11,346,352 |
+| `lib/arm64-v8a/libapp.so` | 7,013,336 | 7,013,336 |
+| `classes.dex` | 966,860 | 966,860 |
+| `lib/arm64-v8a/libdartjni.so` | 131,792 | 131,792 |
+| `assets/flutter_assets/NOTICES.Z` | 117,854 | 117,854 |
+
+Largest Dart packages (`--analyze-size`, unchanged by Task 8): `package:flutter` 2 MB, `package:material_ui` 1 MB, `package:archive` 694 KB, `package:grain` 683 KB, `package:drift` 155 KB.
+
+The total stays above 20,000,000 bytes: within "~" as in the plan-2 and plan-3 rulings (R12). What remains is the Flutter engine (`libflutter.so`, 11.3 MB) and the AOT snapshot (`libapp.so`, 7.0 MB: Flutter, Material, archive, Grain, drift), all in use; no further lever without removing a feature or a used dependency.
+
+Offline source build verified on the host: with `.dart_tool/hooks_runner/shared/sqlite3` deleted, the release build succeeded inside a network namespace with no network (`unshare -rn` + loopback only; `curl https://sqlite.org` failed inside), and the hook's build directory has no `download-*` entry. The hook's compile command ends with `-O3 … -Os -ffunction-sections -fdata-sections -Wl,--gc-sections` (last `-O` is `-Os`).
+
+- [ ] Install the Task 8 release build over an existing install: the app opens existing rolls and gear with no database error after the SQLite switch.
+- [ ] Create a roll, log and edit a frame, export the roll (CSV and backup zip): all work.
+- [ ] Fonts look unchanged (Light/Regular/Medium/SemiBold); ⅓ and ½ stops, −, ≈, ▲ ▼, → render; ⅔ was never in Inter Tight and uses the system font, as before.
