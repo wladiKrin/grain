@@ -17,6 +17,7 @@ class ValueRow extends StatelessWidget {
     required ValueChanged<int> this.onChanged,
     required Haptics this.haptics,
     required this.fontSize,
+    this.warning = false,
   }) : solved = null,
        note = null,
        flag = RangeFlag.ok;
@@ -28,6 +29,7 @@ class ValueRow extends StatelessWidget {
     required this.flag,
     required this.fontSize,
     this.note,
+    this.warning = false,
   }) : values = null,
        index = null,
        onChanged = null,
@@ -49,6 +51,9 @@ class ValueRow extends StatelessWidget {
   /// e.g. the exact Bulb time.
   final String? note;
 
+  /// Marks the label with the quiet camera-shake icon.
+  final bool warning;
+
   bool get _isInput => values != null;
 
   @override
@@ -65,7 +70,22 @@ class ValueRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: grainLabelStyle),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 6,
+                children: [
+                  Text(label, style: grainLabelStyle),
+                  if (warning)
+                    Semantics(
+                      label: 'Camera shake risk',
+                      child: Icon(
+                        Icons.back_hand_outlined,
+                        size: 14,
+                        color: GrainColors.secondary,
+                      ),
+                    ),
+                ],
+              ),
               if (_isInput)
                 const Text(
                   '← swipe →',

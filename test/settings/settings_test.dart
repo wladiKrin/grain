@@ -32,6 +32,21 @@ void main() {
     expect(r.location, isTrue);
   });
 
+  test('shake warning defaults off, persists and travels in the backup', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.shakeWarning, isFalse);
+    expect(s.backupMap()['shakeWarning'], isFalse);
+    await s.setShakeWarning(true);
+    final r = await Settings.load();
+    expect(r.shakeWarning, isTrue);
+    expect(r.backupMap()['shakeWarning'], isTrue);
+    await r.applyBackupMap({'shakeWarning': false});
+    expect(r.shakeWarning, isFalse);
+    await r.applyBackupMap({'shakeWarning': 'yes'});
+    expect(r.shakeWarning, isFalse);
+  });
+
   test('histogram defaults off, persists and travels in the backup', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();

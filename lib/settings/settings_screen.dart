@@ -129,6 +129,13 @@ class SettingsScreen extends StatelessWidget {
             ),
             const _Divider(),
             _SwitchRow(
+              label: 'Camera-shake warning',
+              subtitle: 'Marks shutter speeds slower than 1/focal length (35 mm equivalent).',
+              value: settings.shakeWarning,
+              onChanged: settings.setShakeWarning,
+            ),
+            const _Divider(),
+            _SwitchRow(
               label: 'Open with viewfinder on',
               value: settings.viewfinderOn,
               onChanged: settings.setViewfinderOn,

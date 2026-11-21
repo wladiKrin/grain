@@ -123,6 +123,19 @@ void main() {
     expect(find.text('f/16'), findsOneWidget);
   });
 
+  testWidgets('the shutter row carries the shake mark', (t) async {
+    c.shakeWarning = true;
+    c.setIso(labelIndex(c.isos, '100'));
+    c.setMode(MeterMode.shutterPriority);
+    c.setShutter(labelIndex(c.shutters, '1/30'));
+    await pumpScreen(t, stats: ev15());
+    expect(find.bySemanticsLabel('Camera shake risk'), findsOneWidget);
+
+    c.setShutter(labelIndex(c.shutters, '1/250'));
+    await t.pump();
+    expect(find.bySemanticsLabel('Camera shake risk'), findsNothing);
+  });
+
   testWidgets('switching to Shutter priority swaps dial and result', (t) async {
     c.setIso(labelIndex(c.isos, '100'));
     await pumpScreen(t, stats: ev15());

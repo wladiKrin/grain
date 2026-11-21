@@ -289,6 +289,7 @@ void main() {
         'viewfinderOn': false,
         'snapshots': false,
         'histogram': true,
+        'shakeWarning': false,
       });
       final c = await exportFrom(a);
 
@@ -482,6 +483,7 @@ void main() {
       'viewfinderOn': true,
       'snapshots': true,
       'histogram': false,
+      'shakeWarning': false,
     });
   });
 

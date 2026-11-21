@@ -184,6 +184,7 @@ class _GrainAppState extends State<GrainApp> {
       onPause: _controller.enterBackground,
     );
     _settings.addListener(_onSettings);
+    _controller.shakeWarning = _settings.shakeWarning;
     _controller.addListener(_onController);
     _gear.addListener(_onGear);
     _rolls.addListener(_onRolls);
@@ -194,6 +195,7 @@ class _GrainAppState extends State<GrainApp> {
   void _onSettings() {
     _systemHaptics.enabled = _settings.haptics;
     _controller.calibrationEv = _settings.calibrationEv;
+    _controller.shakeWarning = _settings.shakeWarning;
     if (_controller.viewfinderOn != _settings.viewfinderOn) {
       _controller.toggleViewfinder();
     }

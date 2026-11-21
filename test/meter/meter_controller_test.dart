@@ -95,6 +95,52 @@ void main() {
     expect(c.solvedAperture, isNull);
   });
 
+  test('shutter priority 1/30 at 50 mm warns, 1/60 does not', () async {
+    await run();
+    c.shakeWarning = true;
+    c.setMode(MeterMode.shutterPriority);
+    c.setShutter(sh('1/30'));
+    expect(c.shakeRiskNow, isTrue);
+    c.setShutter(sh('1/60'));
+    expect(c.shakeRiskNow, isFalse);
+  });
+
+  test('manual mode uses the dialled shutter', () async {
+    await run();
+    c.shakeWarning = true;
+    c.setMode(MeterMode.manual);
+    c.setShutter(sh('1/30'));
+    expect(c.shakeRiskNow, isTrue);
+  });
+
+  test('the setter notifies only on a change', () {
+    var n = 0;
+    c.addListener(() => n++);
+    c.shakeWarning = true;
+    c.shakeWarning = true;
+    expect(n, 1);
+  });
+
+  test('warning off never warns', () async {
+    await run();
+    c.setMode(MeterMode.shutterPriority);
+    c.setShutter(sh('1/30'));
+    expect(c.shakeWarning, isFalse);
+    expect(c.shakeRiskNow, isFalse);
+  });
+
+  test('Bulb warns, no reading does not', () async {
+    await c.resume();
+    c.shakeWarning = true;
+    expect(c.shakeRiskNow, isFalse); // before any stats
+    src.emit(stats(exposureNs: 1000000000));
+    await settle(); // EV100 0
+    c.setIso(iso('100'));
+    c.setAperture(ap('22'));
+    expect(c.bulbSeconds, isNotNull);
+    expect(c.shakeRiskNow, isTrue);
+  });
+
   test('calibration setter re-derives the reading', () async {
     await run();
     c.calibrationEv = 1;

@@ -98,6 +98,9 @@ void main() {
     await tester.tap(find.text('Haptic feedback'));
     await tester.pump();
     expect(s.haptics, isFalse);
+    await tester.tap(find.text('Camera-shake warning'));
+    await tester.pump();
+    expect(s.shakeWarning, isTrue);
     await tester.tap(find.text('Open with viewfinder on'));
     await tester.pump();
     expect(s.viewfinderOn, isFalse);
@@ -114,7 +117,7 @@ void main() {
     await tester.pump();
     expect(loc.permissionRequests, 1);
     expect(s.location, isTrue);
-    expect(tester.widget<Switch>(find.byType(Switch).at(3)).value, isTrue);
+    expect(tester.widget<Switch>(find.byType(Switch).at(4)).value, isTrue);
     expect(loc.calls, 0);
   });
 
@@ -138,7 +141,7 @@ void main() {
     await tester.pump();
     expect(s.location, isFalse);
     expect(find.text('Location permission was not granted.'), findsOneWidget);
-    expect(tester.widget<Switch>(find.byType(Switch).at(3)).value, isFalse);
+    expect(tester.widget<Switch>(find.byType(Switch).at(4)).value, isFalse);
   });
 
   testWidgets('snapshots switch toggles the setting', (tester) async {

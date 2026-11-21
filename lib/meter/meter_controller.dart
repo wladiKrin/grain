@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../exposure/mode.dart';
 import '../exposure/scales.dart';
+import '../exposure/shake.dart' as shake;
 import '../exposure/solver.dart';
 import '../gear/gear_scales.dart';
 import '../gear/model.dart';
@@ -65,6 +66,16 @@ class MeterController extends ChangeNotifier {
 
   /// Whether the viewfinder shows the histogram overlay.
   bool histogramOn;
+
+  bool _shakeWarning = false;
+
+  /// Whether [shakeRiskNow] may report; set by the app from the settings.
+  bool get shakeWarning => _shakeWarning;
+  set shakeWarning(bool v) {
+    if (v == _shakeWarning) return;
+    _shakeWarning = v;
+    notifyListeners();
+  }
 
   /// The histogram of the shown frame (the held one while [held]); null
   /// while hidden or before a frame. Updated without [notifyListeners], so
@@ -240,6 +251,25 @@ class MeterController extends ChangeNotifier {
     }
     final n = apertures[apertureIndex].value;
     return n * n / math.pow(2, evAtIso(_ev100, _iso));
+  }
+
+  /// Whether the shutter speed in use is slower than 1/focal length on the
+  /// 135 equivalent. False while the warning is off, or in aperture priority
+  /// with no solved shutter.
+  bool get shakeRiskNow {
+    if (!_shakeWarning) return false;
+    final double seconds;
+    if (mode == MeterMode.aperturePriority) {
+      final solved = solvedShutter;
+      if (solved == null) return false;
+      seconds = bulbSeconds ?? shutters[solved.index].value;
+    } else {
+      seconds = shutters[shutterIndex].value;
+    }
+    return shake.shakeRisk(
+      seconds: seconds,
+      eqFocal: equivalentFocal(focal, format),
+    );
   }
 
   double? get offset => reading == null || mode != MeterMode.manual

@@ -523,6 +523,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.solvedShutter?.flag,
       c.solvedAperture?.index,
       c.solvedAperture?.flag,
+      c.shakeRiskNow,
     ),
     builder: (context, _) {
       final size = viewfinderOn ? _rowSizes[_rowStep] : _bareSizes[_bareStep];
@@ -543,6 +544,7 @@ class _MeterScreenState extends State<MeterScreen> {
         onChanged: _c.setShutter,
         haptics: widget.haptics,
         fontSize: size,
+        warning: _c.shakeRiskNow,
       );
       final rows = switch (_c.mode) {
         MeterMode.aperturePriority => [
@@ -557,6 +559,7 @@ class _MeterScreenState extends State<MeterScreen> {
             note: bulb == null ? null : formatSeconds(bulb),
             flag: _c.solvedShutter?.flag ?? .ok,
             fontSize: size,
+            warning: _c.shakeRiskNow,
           ),
         ],
         MeterMode.shutterPriority => [
