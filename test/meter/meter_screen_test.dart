@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/exposure/solver.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
@@ -50,18 +51,22 @@ class FakeHaptics implements Haptics {
 }
 
 /// Stats giving EV100 = 15 (f/1, 1/32768 s, ISO 100, region == frame).
-MeterStats ev15({int exposureNs = 30518}) => MeterStats.fromMap({
+MeterStats ev15({
+  int exposureNs = 30518,
+  int sensitivity = 100,
+  double luma = .18,
+}) => MeterStats.fromMap({
   'exposureNs': exposureNs,
-  'sensitivity': 100,
+  'sensitivity': sensitivity,
   'boost': 100,
   'aperture': 1.0,
   'minExposureNs': 10000,
   'maxExposureNs': 1000000000,
   'minIso': 50,
   'maxIso': 3200,
-  'frameLuma': .18,
-  'cropLuma': .18,
-  'spotLuma': .18,
+  'frameLuma': luma,
+  'cropLuma': luma,
+  'spotLuma': luma,
   'histogram': List<int>.filled(64, 0),
 });
 
@@ -341,6 +346,72 @@ void main() {
     c.setFocal(0); // 12 mm against a 25 mm phone camera.
     await pumpScreen(t, stats: ev15());
     expect(find.text('Wider than this camera'), findsOneWidget);
+  });
+
+  testWidgets('manual: live stats within the same third do not rebuild dials', (
+    t,
+  ) async {
+    c.setIso(labelIndex(c.isos, '100'));
+    c.setAperture(labelIndex(c.apertures, '16'));
+    c.setShutter(labelIndex(c.shutters, '1/60'));
+    c.setMode(MeterMode.manual);
+    await pumpScreen(t, stats: ev15());
+    expect(find.text('+1'), findsOneWidget);
+    final before = t.widgetList<SwipeDial>(find.byType(SwipeDial)).toList();
+
+    // ~0.1 stop brighter: still rounds to +1.
+    src.emit(ev15(exposureNs: 28500));
+    await t.pump();
+    expect(c.reading!.ev100, isNot(closeTo(15, .05)));
+    final after = t.widgetList<SwipeDial>(find.byType(SwipeDial)).toList();
+    expect(after, hasLength(2));
+    for (var i = 0; i < 2; i++) {
+      expect(identical(before[i], after[i]), isTrue, reason: 'dial $i');
+    }
+    expect(find.text('+1'), findsOneWidget);
+
+    // A full stop brighter moves the offset text without touching the dials.
+    src.emit(ev15(exposureNs: 30518 ~/ 2));
+    await t.pump();
+    expect(find.text('+2'), findsOneWidget);
+    final later = t.widgetList<SwipeDial>(find.byType(SwipeDial)).toList();
+    expect(identical(before[0], later[0]), isTrue);
+  });
+
+  testWidgets('phone AE over range flags the EV pill with ▲', (t) async {
+    // At min exposure and min ISO with near-white luma (reading.dart rules).
+    await pumpScreen(
+      t,
+      stats: ev15(exposureNs: 10000, sensitivity: 50, luma: .95),
+    );
+    expect(c.reading!.flag, RangeFlag.over);
+    expect(find.text('EV 17.6 ▲ · AVG'), findsOneWidget);
+
+    // Still visible with the viewfinder off.
+    await t.tap(find.byIcon(Icons.visibility));
+    await t.pump();
+    expect(find.text('EV 17.6 ▲ · AVG'), findsOneWidget);
+  });
+
+  testWidgets('phone AE under range flags the EV pill with ▼', (t) async {
+    // At max exposure and max ISO with near-black luma.
+    await pumpScreen(
+      t,
+      stats: ev15(exposureNs: 1000000000, sensitivity: 3200, luma: .005),
+    );
+    expect(c.reading!.flag, RangeFlag.under);
+    expect(find.text('EV −5.0 ▼ · AVG'), findsOneWidget);
+
+    await t.tap(find.byIcon(Icons.visibility));
+    await t.pump();
+    expect(find.text('EV −5.0 ▼ · AVG'), findsOneWidget);
+  });
+
+  testWidgets('viewfinder off shows the EV line without a flag', (t) async {
+    await pumpScreen(t, stats: ev15());
+    await t.tap(find.byIcon(Icons.visibility));
+    await t.pump();
+    expect(find.text('EV 15.0 · AVG'), findsOneWidget);
   });
 
   testWidgets('header shows profile and mode', (t) async {

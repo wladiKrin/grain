@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 
 import '../exposure/scales.dart';
+import '../exposure/solver.dart';
 import '../metering/fov.dart';
 import '../ui/haptics.dart';
 import '../ui/theme.dart';
@@ -96,8 +97,17 @@ class _MeterScreenState extends State<MeterScreen> {
                 const Spacer(),
                 _Select(
                   controller: _c,
-                  select: (c) => (c.cameraDenied, c.cameraError),
-                  builder: (context, _) => _notice() ?? const SizedBox.shrink(),
+                  // Without the preview, the EV line (and its range flag)
+                  // still shows above the rows.
+                  select: (c) => (
+                    c.cameraDenied,
+                    c.cameraError,
+                    c.reading?.ev100,
+                    c.reading?.flag,
+                    c.area,
+                    c.held,
+                  ),
+                  builder: (context, _) => _notice() ?? _evText(),
                 ),
               ],
               RepaintBoundary(child: _valueRows(viewfinderOn)),
@@ -149,6 +159,22 @@ class _MeterScreenState extends State<MeterScreen> {
     return null;
   }
 
+  Widget _evText() => Text(
+    evLine(
+      ev: _c.reading?.ev100,
+      flag: _c.reading?.flag ?? RangeFlag.ok,
+      area: _c.area,
+      held: _c.held,
+    ),
+    textAlign: TextAlign.center,
+    style: const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 12 * .06,
+      color: GrainColors.secondary,
+    ),
+  );
+
   Widget _viewfinder() => _Select(
     controller: _c,
     select: (c) => (
@@ -159,6 +185,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.area,
       c.spot,
       c.reading?.ev100,
+      c.reading?.flag,
       c.held,
     ),
     builder: (context, _) {
@@ -183,6 +210,7 @@ class _MeterScreenState extends State<MeterScreen> {
         spot: _c.spot,
         spotRadius: _c.spotRadius,
         ev: _c.reading?.ev100,
+        flag: _c.reading?.flag ?? RangeFlag.ok,
         held: _c.held,
         widerThanPhone:
             p != null &&
@@ -207,7 +235,6 @@ class _MeterScreenState extends State<MeterScreen> {
       c.solvedShutter?.flag,
       c.solvedAperture?.index,
       c.solvedAperture?.flag,
-      c.offset,
     ),
     builder: (context, _) {
       final size = viewfinderOn ? 64.0 : 92.0;
@@ -255,7 +282,13 @@ class _MeterScreenState extends State<MeterScreen> {
           shutter,
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: OffsetScale(offset: _c.offset),
+            // Own selector so offset changes don't rebuild the dials.
+            child: _Select(
+              controller: _c,
+              select: (c) => c.offset,
+              builder: (context, offset) =>
+                  RepaintBoundary(child: OffsetScale(offset: offset)),
+            ),
           ),
         ],
       };

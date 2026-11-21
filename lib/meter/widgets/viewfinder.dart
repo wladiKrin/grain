@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
+import '../../exposure/solver.dart';
 import '../../metering/reading.dart';
 import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
@@ -11,6 +12,30 @@ Rect coverRect(Size box, Size content) {
   final s = math.max(box.width / content.width, box.height / content.height);
   final w = content.width * s, h = content.height * s;
   return Rect.fromLTWH((box.width - w) / 2, (box.height - h) / 2, w, h);
+}
+
+/// "EV 12.3 · AVG": one decimal ("EV —" before a reading), ▲/▼ when the
+/// phone's AE is out of range, then SPOT, AVG or HELD.
+String evLine({
+  required double? ev,
+  required RangeFlag flag,
+  required MeterArea area,
+  required bool held,
+}) {
+  final value = ev == null
+      ? '—'
+      : ev.toStringAsFixed(1).replaceFirst('-', '\u2212');
+  final mark = switch (flag) {
+    RangeFlag.over => ' ▲',
+    RangeFlag.under => ' ▼',
+    RangeFlag.ok => '',
+  };
+  final tag = held
+      ? 'HELD'
+      : area == MeterArea.spot
+      ? 'SPOT'
+      : 'AVG';
+  return 'EV $value$mark · $tag';
 }
 
 /// Live preview in a rounded box, the lens crop as the clear area, a spot
@@ -26,6 +51,7 @@ class Viewfinder extends StatelessWidget {
     required this.spot,
     required this.spotRadius,
     required this.ev,
+    required this.flag,
     required this.held,
     required this.widerThanPhone,
     required this.onSpot,
@@ -51,23 +77,16 @@ class Viewfinder extends StatelessWidget {
 
   /// Scene EV at ISO 100; null before the first reading.
   final double? ev;
+
+  /// Whether the phone's own AE ran out of range for [ev].
+  final RangeFlag flag;
   final bool held;
   final bool widerThanPhone;
   final ValueChanged<Offset> onSpot;
   final VoidCallback onClearSpot;
   final VoidCallback onToggleHold;
 
-  String get _evLine {
-    final value = ev == null
-        ? '—'
-        : ev!.toStringAsFixed(1).replaceFirst('-', '−');
-    final tag = held
-        ? 'HELD'
-        : area == MeterArea.spot
-        ? 'SPOT'
-        : 'AVG';
-    return 'EV $value · $tag';
-  }
+  String get _evLine => evLine(ev: ev, flag: flag, area: area, held: held);
 
   @override
   Widget build(BuildContext context) {
