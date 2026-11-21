@@ -1,6 +1,8 @@
 package io.github.wladikrin.grain.meter
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CameraSessionTest {
@@ -15,5 +17,13 @@ class CameraSessionTest {
         assertEquals(1.8, CameraSession.phoneAperture(null), 0.0)
         assertEquals(1.8, CameraSession.phoneAperture(floatArrayOf()), 0.0)
         assertEquals(1.65, CameraSession.phoneAperture(floatArrayOf(1.65f)), 1e-6)
+        assertEquals(1.8, CameraSession.phoneAperture(floatArrayOf(0f, -1f)), 0.0)
+    }
+
+    @Test fun apertureListedOnlyForAPositiveAperture() {
+        assertFalse(CameraSession.hasListedAperture(null))
+        assertFalse(CameraSession.hasListedAperture(floatArrayOf()))
+        assertFalse(CameraSession.hasListedAperture(floatArrayOf(0f, -1f)))
+        assertTrue(CameraSession.hasListedAperture(floatArrayOf(0f, 1.65f)))
     }
 }

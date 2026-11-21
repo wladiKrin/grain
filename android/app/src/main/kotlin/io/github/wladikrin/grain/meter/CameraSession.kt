@@ -319,7 +319,7 @@ class CameraSession(
             }
             val availableApertures = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
             defaultAperture = phoneAperture(availableApertures)
-            apertureListed = availableApertures?.isNotEmpty() == true
+            apertureListed = hasListedAperture(availableApertures)
             val setup = PreviewSetup(
                 preview.width, preview.height, sensorOrientation,
                 phoneEqFocal = activeEq,
@@ -496,6 +496,10 @@ class CameraSession(
         /** The first positive listed aperture, else [FALLBACK_APERTURE]. */
         fun phoneAperture(available: FloatArray?): Double =
             available?.firstOrNull { it > 0f }?.toDouble() ?: FALLBACK_APERTURE
+
+        /** True when [phoneAperture] uses a reported aperture rather than the fallback. */
+        fun hasListedAperture(available: FloatArray?): Boolean =
+            available?.any { it > 0f } == true
 
         // 15 events/s at 30 and 60 fps (every 2nd / 4th frame); 1000/15+1 gave 10/s at 30 fps.
         private const val MIN_EVENT_INTERVAL_MS = 60L
