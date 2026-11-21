@@ -213,6 +213,15 @@ void main() {
     expect(r3.bodies.single.id, 'canon-a1-3');
   });
 
+  test('import with the id of an existing user profile keeps both', () async {
+    final mine = await c.saveUser(c.duplicateBody(a1));
+    final incoming = mine.copyWith(model: 'Different');
+    final r = await c.importDoc(incoming);
+    expect(r.bodies.single.id, '${mine.id}-2');
+    expect(c.bodies.firstWhere((b) => b.id == mine.id), mine);
+    expect((await repo.userBodies()).length, 2);
+  });
+
   test('import notifies once', () async {
     await c.importDoc(a1.copyWith(model: 'A-1 mine'));
     expect(notified, 1);

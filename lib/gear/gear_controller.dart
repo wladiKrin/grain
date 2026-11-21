@@ -271,8 +271,8 @@ class GearController extends ChangeNotifier {
     return stored;
   }
 
-  Future<T> _store<T extends GearProfile>(T p) async {
-    final existing = isUser(p);
+  Future<T> _store<T extends GearProfile>(T p, {bool forceNew = false}) async {
+    final existing = !forceNew && isUser(p);
     GearProfile out = p;
     if (!existing) {
       final id = uniqueId(p.id, _takenIds(p.kind));
@@ -303,6 +303,13 @@ class GearController extends ChangeNotifier {
 
   Future<void> deleteUser(GearProfile p) async {
     if (!isUser(p)) return;
+    final selected = p is Body
+        ? _setup.body?.id == p.id
+        : _setup.lens?.id == p.id;
+    if (selected) {
+      _focalTimer?.cancel();
+      _focalTimer = null;
+    }
     await _repo.deleteProfile(p.kind, p.id);
     switch (p) {
       case Body():
@@ -374,7 +381,7 @@ class GearController extends ChangeNotifier {
         break;
       }
     }
-    final GearProfile result = match ?? await _store(p);
+    final GearProfile result = match ?? await _store(p, forceNew: true);
     final set = p is Body ? _favBodies : _favLenses;
     if (set.add(result.id)) {
       await _repo.setFavorite(result.kind, result.id, true);
