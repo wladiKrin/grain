@@ -26,9 +26,13 @@ flutter test
 ## Install from APK
 
 ```
-flutter build apk --release --split-per-abi
+flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
+
+`--split-debug-info` keeps the Dart symbols out of the APK (about 1 MB
+smaller). Keep `build/symbols/` of a build you ship: `flutter symbolize`
+needs it to read that build's stack traces.
 
 ## Contributing gear
 

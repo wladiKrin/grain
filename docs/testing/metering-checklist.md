@@ -6,6 +6,7 @@ Device: Pixel 10. Fill the empty result columns on the device.
 ## Install
 
 ```
+flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
