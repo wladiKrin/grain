@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../../exposure/mode.dart';
 import '../../ui/theme.dart';
-import '../meter_controller.dart';
 
 const _labels = {
   MeterMode.aperturePriority: 'Aperture priority',

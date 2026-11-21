@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/exposure/mode.dart';
 import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/reading.dart';
 

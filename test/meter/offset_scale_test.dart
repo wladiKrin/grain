@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:grain/meter/widgets/offset_scale.dart';
+import 'package:grain/exposure/stops.dart';
 
 void main() {
   test('formatStops renders thirds with fraction glyphs', () {

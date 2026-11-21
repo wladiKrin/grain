@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/exposure/solver.dart';
 import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/exposure/mode.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
 import 'package:grain/metering/fov.dart';

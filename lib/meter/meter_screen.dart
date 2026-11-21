@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
+import '../exposure/mode.dart';
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
 import '../gear/gear_controller.dart';

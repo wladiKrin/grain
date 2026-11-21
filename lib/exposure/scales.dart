@@ -229,7 +229,7 @@ const _dropDistance = 0.25;
 double _log2(double x) => math.log(x) / math.ln2;
 
 /// Numeric value of a nominal label: `1.8`, `1/125`, `0.3"`, `30"`.
-double _nominal(String label) {
+double nominalValue(String label) {
   if (label.startsWith('1/')) return 1 / double.parse(label.substring(2));
   return double.parse(label.replaceAll('"', ''));
 }
@@ -239,7 +239,7 @@ double _nominal(String label) {
 /// grid's 32 s).
 bool _isLimit(ScaleValue v, double limit, double stopsPerLog2) =>
     _log2(v.value / limit).abs() * stopsPerLog2 <= _limitTolerance ||
-    _nominal(v.label) == limit;
+    nominalValue(v.label) == limit;
 
 /// Builds a scale from a label table of third (or half) steps.
 ///

@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../exposure/scales.dart';
-import '../meter/widgets/offset_scale.dart';
+import '../exposure/stops.dart';
 import '../ui/dial/swipe_dial.dart';
 import '../ui/haptics.dart';
 import '../ui/round_button.dart';

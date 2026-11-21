@@ -8,6 +8,7 @@ import 'package:grain/exposure/solver.dart';
 import 'package:grain/gear/gear_scales.dart';
 import 'package:grain/gear/model.dart';
 import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/exposure/mode.dart';
 import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/meter_channel.dart';
 import 'package:grain/metering/reading.dart';

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../exposure/mode.dart';
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
 import '../gear/gear_scales.dart';
@@ -11,8 +12,6 @@ import '../gear/model.dart';
 import '../metering/fov.dart';
 import '../metering/meter_channel.dart';
 import '../metering/reading.dart';
-
-enum MeterMode { aperturePriority, shutterPriority, manual }
 
 const _centre = Offset(.5, .5);
 
