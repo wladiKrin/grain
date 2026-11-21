@@ -102,6 +102,8 @@ void main() {
             expect(numeral, tight ? 36 : greaterThanOrEqualTo(44));
           } else {
             expect(numeral, greaterThanOrEqualTo(28));
+            // Only as far as needed: the roomy phone keeps the biggest.
+            if (size.height == 872) expect(numeral, 92);
           }
         });
       }
@@ -199,7 +201,7 @@ void main() {
         expect(find.text('Delta 3200 · 3200 → 12800'), findsOneWidget);
         expect(
           t.getSize(find.byType(Viewfinder)).height,
-          greaterThanOrEqualTo(size.width == 392 ? 150 : 80),
+          greaterThanOrEqualTo(size.width == 392 ? 150 : 110),
         );
       },
     );

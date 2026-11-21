@@ -110,10 +110,13 @@ class _MeterScreenState extends State<MeterScreen> {
       undo = () async => _rolls.deleteReading((await reading).id);
     }
     unawaited(
-      done.catchError((Object error) {
-        messenger.clearSnackBars();
-        messenger.showSnackBar(const SnackBar(content: Text('Not saved')));
-      }),
+      done.then<void>(
+        (_) {},
+        onError: (Object error) {
+          messenger.clearSnackBars();
+          messenger.showSnackBar(const SnackBar(content: Text('Not saved')));
+        },
+      ),
     );
     messenger.clearSnackBars();
     messenger.showSnackBar(
@@ -125,7 +128,10 @@ class _MeterScreenState extends State<MeterScreen> {
         margin: EdgeInsets.fromLTRB(24, 0, 24, _aboveLogButton()),
         action: SnackBarAction(
           label: 'Undo',
-          onPressed: () => unawaited(undo()),
+          // A write that failed has nothing to undo; its error is already
+          // reported by "Not saved".
+          onPressed: () =>
+              unawaited(undo().then<void>((_) {}, onError: (Object _) {})),
         ),
       ),
     );

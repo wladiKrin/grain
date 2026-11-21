@@ -8,6 +8,8 @@ import 'package:grain/meter/widgets/iso_stepper.dart';
 import 'package:grain/meter/widgets/log_button.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
+import 'package:grain/rolls/roll_repository.dart';
+import 'package:grain/settings/settings.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -91,7 +93,7 @@ void main() {
     // Free mode: the reading is for no body, 35 mm.
     expect(rolls.readings.single.bodyId, isNull);
     expect(rolls.readings.single.format, FilmFormat.f135);
-    // Nothing is attached without a camera snapshot path.
+    // The snapshot is requested once; the fake answers null, so none attaches.
     expect(src.calls.where((c) => c.startsWith('snapshot(')), hasLength(1));
   });
 
@@ -262,4 +264,93 @@ void main() {
     expect(find.text('Roll 1 · frame 2/1 +1'), findsOneWidget);
     await settle(t);
   });
+
+  group('a write that fails', () {
+    late RollController failing;
+    late _FailingRepository repo;
+
+    setUp(() {
+      repo = _FailingRepository();
+      failing = RollController(
+        repository: repo,
+        snapshots: rolls.snapshots,
+        settings: Settings.inMemory(),
+      );
+    });
+    tearDown(() => failing.dispose());
+
+    Future<void> pumpFailing(WidgetTester t) async {
+      t.view.physicalSize = const Size(1080, 2400);
+      t.view.devicePixelRatio = 2.75;
+      addTearDown(t.view.reset);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await t.pumpWidget(
+        GrainApp(source: src, haptics: haptics, gear: gear, rolls: failing),
+      );
+      await t.pump();
+    }
+
+    testWidgets('reading: Not saved, no uncaught error', (t) async {
+      await pumpFailing(t);
+      await t.tap(find.text('Save reading'));
+      await settle(t);
+      await t.pump(const Duration(milliseconds: 400));
+      expect(find.text('Not saved'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('reading: Undo while the write is pending, then it fails', (
+      t,
+    ) async {
+      await pumpFailing(t);
+      repo.gate = Completer<void>();
+      await t.tap(find.text('Save reading'));
+      await t.pump(const Duration(milliseconds: 400));
+      await t.tap(find.text('Undo'));
+      repo.gate!.complete();
+      await settle(t);
+      await t.pump(const Duration(milliseconds: 400));
+      // Nothing to undo, no error escapes, the failure is still reported.
+      expect(find.text('Not saved'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+
+    testWidgets('frame: Not saved, no uncaught error', (t) async {
+      await t.runAsync(() => gear.selectBody(a1));
+      await pumpFailing(t);
+      await t.runAsync(
+        () => failing.startRoll(
+          filmStock: 'Ilford HP5 Plus',
+          filmType: FilmType.bwNeg,
+          boxIso: 400,
+          pushThirds: 0,
+          body: a1,
+          size: 36,
+          startFrame: StartFrame.one,
+        ),
+      );
+      await t.pump();
+      await t.tap(find.text('Log frame 1'));
+      await settle(t);
+      await t.pump(const Duration(milliseconds: 400));
+      expect(find.text('Not saved'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    });
+  });
+}
+
+/// Fails the writes the meter makes while logging.
+class _FailingRepository extends MemoryRollRepository {
+  /// When set, a reading write waits for it before failing.
+  Completer<void>? gate;
+
+  @override
+  Future<void> saveReading(SavedReading r) async {
+    await gate?.future;
+    throw StateError('disk full');
+  }
+
+  @override
+  Future<void> saveFrames(List<Frame> frames) async =>
+      throw StateError('disk full');
 }

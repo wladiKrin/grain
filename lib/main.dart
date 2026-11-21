@@ -109,12 +109,17 @@ class _GrainAppState extends State<GrainApp> {
     viewfinderOn: _settings.viewfinderOn,
   );
   late final bool _ownsRolls = widget.rolls == null;
+
+  /// Snapshot directory of the default (test) controller; removed on dispose.
+  Directory? _tempSnapshots;
   late final RollController _rolls =
       widget.rolls ??
       RollController.inMemory(
         settings: _settings,
         snapshots: SnapshotStore(
-          Directory.systemTemp.createTempSync('grain-snapshots'),
+          _tempSnapshots = Directory.systemTemp.createTempSync(
+            'grain-snapshots',
+          ),
         ),
         takeSnapshot: widget.source.snapshot,
         location: widget.location,
@@ -191,7 +196,14 @@ class _GrainAppState extends State<GrainApp> {
     _controller.removeListener(_onController);
     _gear.removeListener(_onGear);
     _rolls.removeListener(_onRolls);
-    if (_ownsRolls) _rolls.dispose();
+    if (_ownsRolls) {
+      _rolls.dispose();
+      try {
+        _tempSnapshots?.deleteSync(recursive: true);
+      } on FileSystemException {
+        // best effort
+      }
+    }
     _lifecycle.dispose();
     _controller.pause();
     _controller.dispose();
