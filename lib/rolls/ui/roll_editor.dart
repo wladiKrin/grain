@@ -351,10 +351,9 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                         index: _underHalves - latitudeUnderHalvesMin,
                         valueFontSize: 32,
                         haptics: widget.haptics,
-                        onChanged: (i) => setState(() {
-                          _latOver ??= _overHalves;
-                          _latUnder = i + latitudeUnderHalvesMin;
-                        }),
+                        onChanged: (i) => setState(
+                          () => _latUnder = i + latitudeUnderHalvesMin,
+                        ),
                       ),
                     ],
                   ),
@@ -369,10 +368,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                         index: _overHalves,
                         valueFontSize: 32,
                         haptics: widget.haptics,
-                        onChanged: (i) => setState(() {
-                          _latUnder ??= _underHalves;
-                          _latOver = i;
-                        }),
+                        onChanged: (i) => setState(() => _latOver = i),
                       ),
                     ],
                   ),

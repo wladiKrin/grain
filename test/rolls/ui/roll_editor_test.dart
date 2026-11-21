@@ -245,7 +245,30 @@ void main() {
     await save(t);
     final r = rolls.active!;
     expect(r.latitudeOverHalves, 7);
-    expect(r.latitudeUnderHalves, -4);
+    expect(r.latitudeUnderHalves, isNull);
+  });
+
+  testWidgets('an untouched latitude dial follows a film-type change', (
+    t,
+  ) async {
+    await pumpEditor(t, body: a1);
+    final under = find.byType(SwipeDial).at(1);
+    final over = find.byType(SwipeDial).at(2);
+    await t.ensureVisible(under);
+    expect(find.descendant(of: under, matching: find.text('−2')), findsWidgets);
+    await dragDial(t, 1, -40); // Under one detent right: −1½
+    expect(find.descendant(of: under, matching: find.text('−1½')), findsWidgets);
+    await t.ensureVisible(find.text('Slide'));
+    await t.tap(find.text('Slide'));
+    await t.pump();
+    await t.ensureVisible(under);
+    expect(find.descendant(of: under, matching: find.text('−1½')), findsWidgets);
+    expect(find.descendant(of: over, matching: find.text('+½')), findsWidgets);
+    await typeFilm(t, 'Mystery 100');
+    await save(t);
+    final r = rolls.active!;
+    expect(r.latitudeUnderHalves, -3);
+    expect(r.latitudeOverHalves, isNull);
   });
 
   testWidgets('Use film default clears both overrides', (t) async {
