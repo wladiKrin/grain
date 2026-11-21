@@ -16,10 +16,11 @@ enum _RowAction { before, after, renumber, deleteSnapshot, delete }
 
 enum _RollAction { edit, export, finish, delete }
 
-String _num(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v';
+/// Whole numbers without ".0".
+String formatNum(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v';
 
 /// "FD 50mm f/1.8" becomes "FD 50/1.8" (as [Lens.shortName]).
-String _shortLens(String name) =>
+String shortLensName(String name) =>
     name.replaceAllMapped(RegExp(r'(\d)mm f/'), (m) => '${m[1]}/');
 
 /// One roll: its header and every frame, newest last.
@@ -263,12 +264,12 @@ class _RollScreenState extends State<RollScreen> {
     final e = f.exposure;
     final over = overrun(roll, f.number);
     final settings = [
-      if (e.aperture != null) 'f/${_num(e.aperture!)}',
+      if (e.aperture != null) 'f/${formatNum(e.aperture!)}',
       if (e.shutter != null) e.shutter!,
     ].join(' · ');
     final lens = [
-      if (e.lensName != null) _shortLens(e.lensName!),
-      if (e.focal != null) '${_num(e.focal!)} mm',
+      if (e.lensName != null) shortLensName(e.lensName!),
+      if (e.focal != null) '${formatNum(e.focal!)} mm',
     ].join(' · ');
     String? time;
     if (f.takenAt != null) {

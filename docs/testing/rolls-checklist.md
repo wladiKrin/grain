@@ -30,3 +30,14 @@ Device: Pixel 10, release build
 | 360 x 800 phone, Manual mode, viewfinder on, no roll | Nothing overflows; the numerals step down to their smallest and the viewfinder is small but usable (about 90 px) | |
 | Tap Log frame twice quickly | The Undo snack bar floats above the button and never covers it; both frames log | |
 | Cold start with an active roll of 72 frames | The meter is up in 1.5 s or less | |
+
+## Roll editor, frame editor, rolls lists (Tasks 8-10)
+
+| check | expected | result |
+| --- | --- | --- |
+| Roll editor: type in the film stock field with the keyboard up | The autocomplete suggestion overlay is not hidden by the keyboard and stays tappable | |
+| Frame editor: open the date and the time pickers | The real system date and time pickers open, accept a choice, and the frame shows the chosen wall-clock date and time | |
+| Roll with 40 frames, each with a snapshot: scroll the roll view quickly | Thumbnails appear without stutter; no visible jank | |
+| Rolls screen with several rolls and 40+ saved readings with snapshots: scroll both tabs | Smooth scrolling; Active tag and frame counts (e.g. 12/36) are right | |
+| Meter: tap the Rolls button | The Rolls screen opens; no camera indicator while it is open; the meter preview returns on going back | |
+| Saved reading: edit the note, press back; reopen | The note is kept; "Remove location" and "Delete snapshot" work and the thumbnail disappears from the list | |

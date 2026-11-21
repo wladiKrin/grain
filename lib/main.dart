@@ -25,6 +25,7 @@ import 'rolls/roll_repository.dart';
 import 'rolls/snapshot_store.dart';
 import 'rolls/ui/body_change_dialog.dart';
 import 'rolls/ui/roll_editor.dart';
+import 'rolls/ui/rolls_screen.dart';
 import 'settings/settings.dart';
 import 'settings/settings_screen.dart';
 import 'ui/haptics.dart';
@@ -290,6 +291,12 @@ class _GrainAppState extends State<GrainApp> {
     );
   }
 
+  void _openRolls() => unawaited(
+    _pushLent<void>(
+      (_) => RollsScreen(rolls: _rolls, gear: _gear, haptics: _haptics),
+    ),
+  );
+
   void _openSettings() => unawaited(
     _pushLent<void>(
       (_) => SettingsScreen(
@@ -320,6 +327,7 @@ class _GrainAppState extends State<GrainApp> {
         onOpenLibrary: _openLibrary,
         onOpenLensPicker: _openLensPicker,
         onOpenSettings: _openSettings,
+        onOpenRolls: _openRolls,
         onStartRoll: () => unawaited(_startRoll()),
       ),
     );
