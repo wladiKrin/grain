@@ -33,7 +33,11 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var closing = false
     private val afterClose = mutableListOf<() -> Unit>()
 
-    /** Counts deliberate teardowns (stop, mode change, detach); a reopen only falls back without one. */
+    /**
+     * Counts deliberate teardowns (stop, mode change, detach). Work deferred across a close
+     * (a queued start, a wide-switch reopen, its fallback) captures it first and is dropped,
+     * answering "Camera stopped", when it changed meanwhile.
+     */
     private var stops = 0
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -85,13 +89,14 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             return
         }
         if (closing) {
-            afterClose.add { start(mode, wide, result) }
+            val gen = stops
+            afterClose.add { unlessStopped(gen, result) { start(mode, wide, result) } }
             return
         }
         val running = session
         if (running != null && running.mode != mode) {
-            stops++
-            teardown("Camera mode changed") { start(mode, wide, result) }
+            val gen = ++stops
+            teardown("Camera mode changed") { unlessStopped(gen, result) { start(mode, wide, result) } }
             return
         }
         ready?.let {
@@ -169,18 +174,23 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     result.success(it)
                 }
             } else {
-                teardown("Switching camera") { reopen(s.mode, want, result) }
+                val gen = stops
+                teardown("Switching camera") { unlessStopped(gen, result) { reopen(s.mode, want, gen, result) } }
             }
         }
     }
 
-    private fun reopen(mode: CameraSession.Mode, wide: Boolean, result: MethodChannel.Result) {
-        val generation = stops
+    /** Runs [action] unless a deliberate teardown happened since [gen] was read. */
+    private fun unlessStopped(gen: Int, result: MethodChannel.Result, action: () -> Unit) {
+        if (stops == gen) action() else result.error("camera_error", "Camera stopped", null)
+    }
+
+    private fun reopen(mode: CameraSession.Mode, wide: Boolean, gen: Int, result: MethodChannel.Result) {
         start(mode, wide, object : MethodChannel.Result {
             override fun success(value: Any?) = result.success(value)
 
             override fun error(code: String, message: String?, details: Any?) {
-                val failedToOpen = wide && code == "camera_error" && stops == generation
+                val failedToOpen = wide && code == "camera_error" && stops == gen
                 if (failedToOpen) start(mode, false, result) else result.error(code, message, details)
             }
 

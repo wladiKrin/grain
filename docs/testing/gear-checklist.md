@@ -26,6 +26,7 @@ Path that ran: ______  Main eq. focal: ______ mm  Ultra-wide eq. focal: ______ m
 | Ultra-wide releases | Turning back above the main camera's eq. focal returns to the main camera | |
 | No stall at the threshold | Crossing the threshold back and forth on the focal dial: no visible stall or black frame (separate-camera path: a short reopen is acceptable, no hang) | |
 | Resume | Background and foreground with a wide focal set: the ultra-wide is in use again | |
+| Stop while switching | Leave the meter screen or background the app right while the ultra-wide is switching (separate-camera path): the camera indicator goes off and stays off | |
 
 EV agreement on the same scene (main vs. ultra-wide, same spot or average
 mode, read within a minute). Acceptable: difference <= 1/3 stop.
@@ -43,3 +44,4 @@ mode, read within a minute). Acceptable: difference <= 1/3 stop.
 | Single body | A single-body QR shown on a second phone is read in <= 2 s | |
 | Largest kit QR | The largest kit QR the app will show (error correction L, ~2953 bytes) is read | |
 | Dim light | Scanning in a dim interior still reads a single-body QR | |
+| Leaving scan is instant | Leaving the scan screen (or backgrounding) while a code is in view: the camera indicator goes off without a noticeable delay from a running decode | |
