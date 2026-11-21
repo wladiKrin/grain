@@ -5,6 +5,8 @@ import 'db/database.dart';
 import 'gear/gear_controller.dart';
 import 'gear/gear_repository.dart';
 import 'gear/library.dart';
+import 'gear/ui/body_picker.dart';
+import 'gear/ui/lens_picker.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
@@ -119,12 +121,20 @@ class _GrainAppState extends State<GrainApp> {
     super.dispose();
   }
 
-  /// Placeholder routes until the gear screens arrive.
-  void _push(String title) => _navigator.currentState?.push(
-    MaterialPageRoute<void>(
-      builder: (_) => Scaffold(appBar: AppBar(title: Text(title))),
-    ),
+  void _openLibrary() => _navigator.currentState?.push(
+    MaterialPageRoute<void>(builder: (_) => BodyPickerScreen(gear: _gear)),
   );
+
+  /// Lenses of the selected body's mount; without a body, the library.
+  void _openLensPicker() {
+    final body = _gear.body;
+    if (body == null) return _openLibrary();
+    _navigator.currentState?.push(
+      MaterialPageRoute<void>(
+        builder: (_) => LensPickerScreen(gear: _gear, mount: body.mount),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,8 +152,8 @@ class _GrainAppState extends State<GrainApp> {
         controller: _controller,
         haptics: _haptics,
         gear: _gear,
-        onOpenLibrary: () => _push('Library'),
-        onOpenLensPicker: () => _push('Lenses'),
+        onOpenLibrary: _openLibrary,
+        onOpenLensPicker: _openLensPicker,
         onOpenSettings: () => _navigator.currentState?.push(
           MaterialPageRoute<void>(
             builder: (_) =>

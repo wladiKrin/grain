@@ -36,7 +36,11 @@ double _halfStep(List<ScaleValue> scale, {required bool first}) {
 /// scale's first element: true means values beyond the first element are too
 /// bright ([RangeFlag.over]) and beyond the last too dark; false is the
 /// reverse (aperture scales, where a large f-number is too bright).
-Solved _snap(List<ScaleValue> scale, double exact, {required bool firstIsOver}) {
+Solved _snap(
+  List<ScaleValue> scale,
+  double exact, {
+  required bool firstIsOver,
+}) {
   final first = scale.first.value;
   final last = scale.last.value;
   final ascending = last >= first;
@@ -45,15 +49,15 @@ Solved _snap(List<ScaleValue> scale, double exact, {required bool firstIsOver}) 
   final lo = scale[lowEnd].value;
   final hi = scale[highEnd].value;
 
-  RangeFlag low() => firstIsOver == ascending ? RangeFlag.over : RangeFlag.under;
-  RangeFlag high() => low() == RangeFlag.over ? RangeFlag.under : RangeFlag.over;
+  RangeFlag low() =>
+      firstIsOver == ascending ? RangeFlag.over : RangeFlag.under;
+  RangeFlag high() =>
+      low() == RangeFlag.over ? RangeFlag.under : RangeFlag.over;
 
-  if (exact < lo &&
-      _log2(lo / exact) > _halfStep(scale, first: lowEnd == 0)) {
+  if (exact < lo && _log2(lo / exact) > _halfStep(scale, first: lowEnd == 0)) {
     return Solved(lowEnd, low());
   }
-  if (exact > hi &&
-      _log2(exact / hi) > _halfStep(scale, first: highEnd == 0)) {
+  if (exact > hi && _log2(exact / hi) > _halfStep(scale, first: highEnd == 0)) {
     return Solved(highEnd, high());
   }
   return Solved(nearestIndex(scale, exact), RangeFlag.ok);
@@ -100,8 +104,7 @@ double? manualOffset({
   double step = 1 / 3,
 }) {
   if (!ev100.isFinite) return null;
-  final raw =
-      _log2(shutter / (aperture * aperture)) + evAtIso(ev100, iso);
+  final raw = _log2(shutter / (aperture * aperture)) + evAtIso(ev100, iso);
   if (!raw.isFinite) return null;
   final v = (raw / step).round() * step;
   return v == 0 ? 0.0 : v; // normalise -0.0

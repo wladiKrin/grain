@@ -46,7 +46,8 @@ class MeterStats {
       cropLuma: d('cropLuma'),
       spotLuma: d('spotLuma'),
       histogram: List<int>.unmodifiable(
-          (req('histogram') as List<Object?>).map((e) => (e as num).toInt())),
+        (req('histogram') as List<Object?>).map((e) => (e as num).toInt()),
+      ),
     );
   }
 
@@ -80,8 +81,11 @@ class Reading {
 
 /// Null for a frame whose AE metadata or lumas cannot give a finite EV
 /// (non-positive aperture, exposure or ISO; non-finite values).
-Reading? readingFrom(MeterStats s,
-    {required MeterArea area, double calibration = 0}) {
+Reading? readingFrom(
+  MeterStats s, {
+  required MeterArea area,
+  double calibration = 0,
+}) {
   if (!(s.aperture.isFinite && s.aperture > 0) ||
       s.exposureNs <= 0 ||
       s.sensitivity <= 0 ||
@@ -93,10 +97,12 @@ Reading? readingFrom(MeterStats s,
     return null;
   }
   final phoneIso = s.sensitivity * s.boost / 100;
-  final evAE = _log2(s.aperture * s.aperture / (s.exposureNs / 1e9)) -
+  final evAE =
+      _log2(s.aperture * s.aperture / (s.exposureNs / 1e9)) -
       _log2(phoneIso / 100);
   final region = area == MeterArea.spot ? s.spotLuma : s.cropLuma;
-  final ev100 = evAE +
+  final ev100 =
+      evAE +
       _log2(math.max(region, _lumaFloor) / math.max(s.frameLuma, _lumaFloor)) +
       calibration;
 
