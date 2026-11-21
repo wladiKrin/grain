@@ -1,7 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../backup/ui.dart';
 import '../exposure/scales.dart';
 import '../exposure/stops.dart';
+import '../gear/gear_controller.dart';
+import '../gear/platform.dart';
+import '../rolls/roll_controller.dart';
 import '../rolls/location.dart';
 import '../ui/dial/swipe_dial.dart';
 import '../ui/haptics.dart';
@@ -23,7 +27,11 @@ class SettingsScreen extends StatelessWidget {
     super.key,
     required this.settings,
     required this.haptics,
+    required this.gear,
+    required this.rolls,
+    required this.platform,
     this.location,
+    this.now = DateTime.now,
   });
 
   final Settings settings;
@@ -34,6 +42,14 @@ class SettingsScreen extends StatelessWidget {
   /// Asked for the permission when location is turned on. Without one the
   /// switch cannot be turned on.
   final LocationSource? location;
+
+  /// What a backup holds, and how it is shared or picked.
+  final GearController gear;
+  final RollController rolls;
+  final GearPlatform platform;
+
+  /// The backup's date (file name, share subject).
+  final DateTime Function() now;
 
   /// The permission is requested only here, on turning the switch on.
   Future<void> _setLocation(BuildContext context, bool on) async {
@@ -130,6 +146,14 @@ class SettingsScreen extends StatelessWidget {
               subtitle: 'Off: no location is stored anywhere.',
               value: settings.location,
               onChanged: (v) => _setLocation(context, v),
+            ),
+            const _Divider(),
+            BackupSection(
+              gear: gear,
+              rolls: rolls,
+              settings: settings,
+              platform: platform,
+              now: now,
             ),
             const _Divider(),
             const Padding(

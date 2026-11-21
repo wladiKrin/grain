@@ -1,21 +1,65 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/backup/backup.dart';
+import 'package:grain/gear/gear_controller.dart';
+import 'package:grain/rolls/model.dart';
+import 'package:grain/rolls/roll_controller.dart';
 import 'package:grain/settings/settings.dart';
 import 'package:grain/settings/settings_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../support/rolls_fixtures.dart';
 import '../support/fake_location.dart';
+import '../support/fake_platform.dart';
 
 class _Haptics implements Haptics {
   @override
   void tick({required bool strong}) {}
 }
 
-Widget _app(Settings s, [FakeLocation? location]) => MaterialApp(
+Widget _app(
+  Settings s, [
+  FakeLocation? location,
+  RollController? rolls,
+  FakeGearPlatform? platform,
+  GearController? gear,
+]) => MaterialApp(
   theme: grainTheme(),
-  home: SettingsScreen(settings: s, haptics: _Haptics(), location: location),
+  home: SettingsScreen(
+    settings: s,
+    haptics: _Haptics(),
+    location: location,
+    gear: gear ?? GearController.inMemory(),
+    rolls: rolls ?? inMemoryRolls(settings: s),
+    platform: platform ?? FakeGearPlatform(),
+    now: () => DateTime(2026, 11, 21, 9, 30),
+  ),
 );
+
+/// Lets real async work (isolates, files) run until [done].
+Future<void> _until(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 100 && !done(); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 30)),
+    );
+    await tester.pump();
+  }
+  expect(done(), isTrue, reason: 'timed out');
+}
+
+/// Scrolls the settings list until [f] is fully on screen.
+Future<void> _reveal(WidgetTester tester, Finder f) async {
+  await tester.scrollUntilVisible(f, 200);
+  await tester.ensureVisible(f);
+  await tester.pumpAndSettle();
+}
+
+bool _shows(String text) => find.text(text).evaluate().isNotEmpty;
+
+bool _showsPart(String text) => find.textContaining(text).evaluate().isNotEmpty;
 
 void main() {
   testWidgets('shows calibration, helper text and footer', (tester) async {
@@ -28,6 +72,7 @@ void main() {
     );
     expect(find.text('Haptic feedback'), findsOneWidget);
     expect(find.text('Open with viewfinder on'), findsOneWidget);
+    await _reveal(tester, find.textContaining('Grain · GPLv3 · '));
     expect(find.textContaining('Grain · GPLv3 · '), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
   });
@@ -123,8 +168,13 @@ void main() {
           builder: (context) => TextButton(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) =>
-                    SettingsScreen(settings: s, haptics: _Haptics()),
+                builder: (_) => SettingsScreen(
+                  settings: s,
+                  haptics: _Haptics(),
+                  gear: GearController.inMemory(),
+                  rolls: inMemoryRolls(settings: s),
+                  platform: FakeGearPlatform(),
+                ),
               ),
             ),
             child: const Text('open'),
@@ -138,5 +188,75 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
     expect(find.text('CALIBRATION'), findsNothing);
+  });
+
+  testWidgets('export everything shares the zip', (tester) async {
+    final s = Settings.inMemory();
+    final platform = FakeGearPlatform();
+    addTearDown(() => platform.exportDir?.deleteSync(recursive: true));
+    await tester.pumpWidget(_app(s, null, null, platform));
+    await _reveal(tester, find.text('Export everything'));
+    expect(find.text('BACKUP'), findsOneWidget);
+    await tester.tap(find.text('Export everything'));
+    await _until(tester, () => platform.sharedPaths.isNotEmpty);
+    expect(platform.sharedPaths.single.map((p) => p.split('/').last), [
+      'grain-backup-2026-11-21.zip',
+    ]);
+    expect(platform.sharedSubjects.single, 'Grain backup 21 Nov 2026');
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('import everything confirms and reports', (tester) async {
+    final s = Settings.inMemory();
+    final source = inMemoryRolls();
+    final here = inMemoryRolls(settings: s);
+    final dir = Directory.systemTemp.createTempSync('grain-backup');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final zip = await tester.runAsync(() async {
+      await source.startRoll(
+        filmStock: 'Kodak Tri-X 400',
+        filmType: FilmType.bwNeg,
+        boxIso: 400,
+        pushThirds: 0,
+        body: null,
+        size: 36,
+        startFrame: StartFrame.one,
+      );
+      return writeBackup(
+        out: dir,
+        gear: GearController.inMemory(),
+        rolls: source,
+        settings: Settings.inMemory(),
+        now: DateTime(2026, 11, 21),
+      );
+    });
+    final platform = FakeGearPlatform()..pickedPath = zip!.path;
+    await tester.pumpWidget(_app(s, null, here, platform));
+    await _reveal(tester, find.text('Import everything'));
+    await tester.tap(find.text('Import everything'));
+    await _until(
+      tester,
+      () => _shows('Import 1 roll, 0 saved readings and 0 profiles?'),
+    );
+    expect(find.text('Use the settings from the file'), findsOneWidget);
+    await tester.tap(find.text('Import'));
+    await _until(tester, () => _showsPart('Added 1 roll,'));
+    expect(here.rolls.single.filmStock, 'Kodak Tri-X 400');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Added 1 roll,'), findsNothing);
+  });
+
+  testWidgets('a file that is not a backup cannot be imported', (tester) async {
+    final s = Settings.inMemory();
+    final dir = Directory.systemTemp.createTempSync('grain-backup');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final bad = File('${dir.path}/notes.txt')..writeAsStringSync('hello');
+    final platform = FakeGearPlatform()..pickedPath = bad.path;
+    await tester.pumpWidget(_app(s, null, null, platform));
+    await _reveal(tester, find.text('Import everything'));
+    await tester.tap(find.text('Import everything'));
+    await _until(tester, () => _shows("Can't import"));
+    expect(find.text('Not a Grain backup'), findsOneWidget);
   });
 }

@@ -50,3 +50,15 @@ Device: Pixel 10, release build
 | Open the CSV in LibreOffice and in Excel | Umlauts intact; a note with commas, quotes or line breaks stays in one cell; date_time shows the time the frame was logged | |
 | Open the snapshots zip | One JPEG per frame that has a snapshot, named frame-<number>.jpg | |
 | Export a roll of 200+ frames with snapshots | The sheet stays responsive while the zip is built | |
+
+## Backup (Task 12)
+
+| check | expected | result |
+| --- | --- | --- |
+| Settings → Export everything with ≥ 100 snapshots on the phone | Share sheet offers grain-backup-<date>.zip; note the time taken; no jank while it is built; memory stays stable (Android Studio profiler) | |
+| Import that zip on a second phone (or after "Clear storage") | Same rolls, frames, saved readings, own gear and favorites; every thumbnail shows | |
+| Import the same zip again | Report says "Added 0 rolls, 0 saved readings, 0 profiles. Skipped N already on this phone." and nothing is duplicated | |
+| Import with a roll active on this phone | The imported active roll is listed as finished; the roll here stays active | |
+| Pick a file that is not a zip (e.g. a photo or a text file) | "Can't import" with "Not a Grain backup"; nothing changes | |
+| Import with "Use the settings from the file" ticked | Haptics, viewfinder default and snapshots follow the file; calibration and location stay as they were | |
+| Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |

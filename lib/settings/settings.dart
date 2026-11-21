@@ -93,4 +93,20 @@ class Settings extends ChangeNotifier {
     notifyListeners();
     await _prefs?.setBool(_kLocation, v);
   }
+
+  /// The settings a backup carries. Calibration belongs to this phone's
+  /// sensor and location to its owner's choice: neither travels.
+  Map<String, Object?> backupMap() => {
+    _kHaptics: _haptics,
+    _kViewfinder: _viewfinderOn,
+    _kSnapshots: _snapshots,
+  };
+
+  /// Applies [m] from a backup: only the keys of [backupMap]; a value of the
+  /// wrong type is ignored.
+  Future<void> applyBackupMap(Map<String, Object?> m) async {
+    if (m[_kHaptics] case final bool v) await setHaptics(v);
+    if (m[_kViewfinder] case final bool v) await setViewfinderOn(v);
+    if (m[_kSnapshots] case final bool v) await setSnapshots(v);
+  }
 }

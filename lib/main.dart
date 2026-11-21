@@ -316,6 +316,9 @@ class _GrainAppState extends State<GrainApp> {
         settings: _settings,
         haptics: _haptics,
         location: widget.location,
+        gear: _gear,
+        rolls: _rolls,
+        platform: widget.platform,
       ),
     ),
   );

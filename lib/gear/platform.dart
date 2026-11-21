@@ -73,7 +73,13 @@ class SystemGearPlatform implements GearPlatform {
     final copy = File(
       '${dir.path}/picked-${DateTime.now().microsecondsSinceEpoch}',
     );
-    await copy.writeAsBytes(await file.readAsBytes());
+    // Streamed: a backup can be large.
+    final sink = copy.openWrite();
+    try {
+      await sink.addStream(file.openRead());
+    } finally {
+      await sink.close();
+    }
     return copy.path;
   }
 

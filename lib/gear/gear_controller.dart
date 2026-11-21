@@ -142,6 +142,12 @@ class GearController extends ChangeNotifier {
     Lens() => _userLenses.any((l) => l.id == p.id),
   };
 
+  /// The user's own bodies and lenses (not the bundled library).
+  List<GearProfile> get userProfiles => [..._userBodies, ..._userLenses];
+
+  Set<String> favoriteIds(ProfileKind kind) =>
+      Set.unmodifiable(kind == ProfileKind.body ? _favBodies : _favLenses);
+
   Body? get body => _setup.body;
   Lens? get lens => _setup.lens;
   double get focal => _setup.focal;
@@ -388,6 +394,63 @@ class GearController extends ChangeNotifier {
     }
     return result as T;
   }
+
+  /// Merges profiles from a backup by (kind, id) against bundled and user
+  /// profiles: identical → skipped; a different one under a taken id →
+  /// stored as `<id>-N` (or matched to an identical `<id>-N` stored by an
+  /// earlier import) and listed in `renames` as `'body:<id>'` / `'lens:<id>'`
+  /// → new id; a new id → stored. [favorites] (with renames applied) are
+  /// added to the favorites; nothing is unstarred.
+  Future<({Map<String, String> renames, int added, int copied, int skipped})>
+  mergeProfiles(
+    List<GearProfile> profiles,
+    Map<ProfileKind, Set<String>> favorites,
+  ) async {
+    final renames = <String, String>{};
+    var added = 0, copied = 0, skipped = 0;
+    for (final p in profiles) {
+      final all = _all(p.kind);
+      final existing = all.where((e) => e.id == p.id).firstOrNull;
+      if (existing == null) {
+        await _store(p, forceNew: true);
+        added++;
+        continue;
+      }
+      if (existing == p) {
+        skipped++;
+        continue;
+      }
+      final copyId = RegExp('^${RegExp.escape(p.id)}-[0-9]+\$');
+      final earlier = all
+          .where((e) => copyId.hasMatch(e.id) && _withId(p, e.id) == e)
+          .firstOrNull;
+      if (earlier != null) {
+        renames['${p.kind.name}:${p.id}'] = earlier.id;
+        skipped++;
+        continue;
+      }
+      final stored = await _store(p, forceNew: true);
+      renames['${p.kind.name}:${p.id}'] = stored.id;
+      copied++;
+    }
+    for (final MapEntry(key: kind, value: idSet) in favorites.entries) {
+      final set = kind == ProfileKind.body ? _favBodies : _favLenses;
+      final known = _takenIds(kind);
+      for (final id in idSet) {
+        final target = renames['${kind.name}:$id'] ?? id;
+        if (known.contains(target) && set.add(target)) {
+          await _repo.setFavorite(kind, target, true);
+        }
+      }
+    }
+    notifyListeners();
+    return (renames: renames, added: added, copied: copied, skipped: skipped);
+  }
+
+  static GearProfile _withId(GearProfile p, String id) => switch (p) {
+    Body() => p.copyWith(id: id),
+    Lens() => p.copyWith(id: id),
+  };
 
   @override
   void dispose() {

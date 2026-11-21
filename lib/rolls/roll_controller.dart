@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../backup/merge.dart';
 import '../gear/model.dart';
 import '../settings/settings.dart';
 import 'ids.dart' as ids;
@@ -261,6 +262,47 @@ class RollController extends ChangeNotifier {
     final list = _frames.putIfAbsent(rollId, () => loaded);
     notifyListeners();
     return List.unmodifiable(list);
+  }
+
+  /// Every roll with its frames (cached ones as they are in memory).
+  Future<List<(Roll, List<Frame>)>> allFrames() async => [
+    for (final r in [..._rolls])
+      (r, List<Frame>.unmodifiable(_frames[r.id] ?? await _loadFrames(r.id))),
+  ];
+
+  Future<List<Frame>> _loadFrames(String rollId) =>
+      _enqueue(() => _repo.frames(rollId));
+
+  /// Stores the records of an import in one transaction and reloads. The
+  /// plan only holds new records; an imported active roll is stored finished
+  /// if a roll became active here since the plan was made.
+  Future<void> importRecords(MergePlan plan) async {
+    final now = _now();
+    var activeId = active?.id;
+    final rolls = <(Roll, List<Frame>)>[];
+    for (final (r, frames) in plan.rolls) {
+      if (r.isActive && activeId != null && activeId != r.id) {
+        rolls.add((
+          r.copyWith(status: RollStatus.finished, finishedAt: () => now),
+          frames,
+        ));
+      } else {
+        if (r.isActive) activeId = r.id;
+        rolls.add((r, frames));
+      }
+    }
+    await _enqueue(
+      () => _repo.transaction(() async {
+        for (final (r, frames) in rolls) {
+          await _repo.saveRoll(r);
+          if (frames.isNotEmpty) await _repo.saveFrames(frames);
+        }
+        for (final s in plan.readings) {
+          await _repo.saveReading(s);
+        }
+      }),
+    );
+    await load();
   }
 
   // ---- logging -----------------------------------------------------------
