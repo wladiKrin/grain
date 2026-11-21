@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 
 import '../../exposure/mode.dart';
@@ -40,6 +42,11 @@ class ReadingScreen extends StatefulWidget {
 
 class _ReadingScreenState extends State<ReadingScreen> {
   late final TextEditingController _note;
+  late final AppLifecycleListener _lifecycle;
+  Timer? _debounce;
+
+  /// The note as last handed to the controller (or loaded).
+  String _lastSaved = '';
 
   SavedReading? get _reading =>
       widget.rolls.readings.where((r) => r.id == widget.readingId).firstOrNull;
@@ -47,16 +54,31 @@ class _ReadingScreenState extends State<ReadingScreen> {
   @override
   void initState() {
     super.initState();
-    _note = TextEditingController(text: _reading?.note ?? '');
+    _lastSaved = _reading?.note ?? '';
+    _note = TextEditingController(text: _lastSaved)..addListener(_typed);
     widget.rolls.addListener(_changed);
+    // A note typed just before the app is backgrounded must survive the
+    // process being killed.
+    _lifecycle = AppLifecycleListener(
+      onInactive: _flush,
+      onHide: _flush,
+      onPause: _flush,
+    );
   }
 
   void _changed() {
     if (mounted) setState(() {});
   }
 
+  void _typed() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 800), _flush);
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
+    _lifecycle.dispose();
     widget.rolls.removeListener(_changed);
     // Leaving by any route saves the note; deferred so listeners are not
     // notified while the tree is being torn down.
@@ -66,16 +88,20 @@ class _ReadingScreenState extends State<ReadingScreen> {
     super.dispose();
   }
 
-  bool _saved = false;
+  void _flush() {
+    _debounce?.cancel();
+    unawaited(_save(_note.text));
+  }
 
   Future<void> _save(String text) async {
-    if (_saved) return;
     final r = _reading;
     if (r == null) return;
-    final note = text.trim().isEmpty ? null : text.trim();
-    if (note == r.note) return;
-    _saved = true;
-    await widget.rolls.updateReading(r.copyWith(note: () => note));
+    final trimmed = text.trim();
+    if (trimmed == _lastSaved.trim()) return;
+    _lastSaved = text;
+    await widget.rolls.updateReading(
+      r.copyWith(note: () => trimmed.isEmpty ? null : trimmed),
+    );
   }
 
   Future<bool> _confirm(String text, String action) async {
@@ -106,8 +132,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
   Future<void> _delete() async {
     if (!await _confirm('Delete this reading?', 'Delete')) return;
-    // Nothing left to save.
-    _saved = true;
+    _debounce?.cancel();
     await widget.rolls.deleteReading(widget.readingId);
     if (mounted) Navigator.pop(context);
   }
@@ -150,7 +175,12 @@ class _ReadingScreenState extends State<ReadingScreen> {
   @override
   Widget build(BuildContext context) {
     final r = _reading;
-    if (r == null) return const Scaffold();
+    if (r == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Saved reading')),
+        body: const Center(child: Text('Reading deleted')),
+      );
+    }
     final loc = MaterialLocalizations.of(context);
     final e = r.exposure;
     final fix = r.location;
@@ -159,7 +189,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
       if (e.focal != null) '${formatNum(e.focal!)} mm',
     ].join(' · ');
     return PopScope<void>(
-      onPopInvokedWithResult: (_, _) => _save(_note.text),
+      onPopInvokedWithResult: (_, _) => _flush(),
       child: Scaffold(
         appBar: AppBar(title: const Text('Saved reading')),
         body: SingleChildScrollView(

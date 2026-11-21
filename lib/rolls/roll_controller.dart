@@ -250,6 +250,9 @@ class RollController extends ChangeNotifier {
     }
   }
 
+  /// Frames logged in a roll, once its frames are loaded (see [framesOf]).
+  int? frameCount(String rollId) => _frames[rollId]?.length;
+
   Future<List<Frame>> framesOf(String rollId) async {
     final cached = _frames[rollId];
     if (cached != null) return List.unmodifiable(cached);

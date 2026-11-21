@@ -132,6 +132,7 @@ void main() {
     expect(find.text('Push +1 · Canon A-1 · 12/36'), findsOneWidget);
     // The older, finished roll is listed second.
     expect(find.text('Canon A-1 · 5/36'), findsOneWidget);
+    expect(find.textContaining('—/'), findsNothing);
   });
 
   testWidgets('tapping a roll opens the roll view', (t) async {
@@ -181,6 +182,27 @@ void main() {
     await t.tap(find.byIcon(Icons.arrow_back));
     await settle(t);
     expect(rolls.readings.single.note, 'backlit window');
+  });
+
+  testWidgets('a note typed is saved when the app is backgrounded and '
+      'later edits save too', (t) async {
+    await reading(t, note: 'old');
+    await pumpScreen(t);
+    await t.tap(inTabs('Saved readings'));
+    await settle(t);
+    await t.tap(find.text('f/5.6 · 1/125 · ISO 400'));
+    await settle(t);
+    await t.enterText(find.byType(TextField), 'first');
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await t.pump();
+    expect(rolls.readings.single.note, 'first');
+    await t.enterText(find.byType(TextField), 'second');
+    await t.pump(const Duration(milliseconds: 900));
+    expect(rolls.readings.single.note, 'second');
+    await t.enterText(find.byType(TextField), 'third');
+    await t.tap(find.byIcon(Icons.arrow_back));
+    await settle(t);
+    expect(rolls.readings.single.note, 'third');
   });
 
   testWidgets('a reading can drop its location and its snapshot', (t) async {

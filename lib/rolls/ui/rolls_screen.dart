@@ -31,7 +31,7 @@ class RollsScreen extends StatefulWidget {
 }
 
 class _RollsScreenState extends State<RollsScreen> {
-  final Map<String, int> _counts = {};
+  final Set<String> _requested = {};
 
   @override
   void initState() {
@@ -46,15 +46,16 @@ class _RollsScreenState extends State<RollsScreen> {
     super.dispose();
   }
 
-  /// Frames logged per roll; already-loaded rolls answer from the cache.
+  /// Loads the frames of rolls not cached yet, once each; later counts come
+  /// from the controller's cache.
   void _sync() {
     if (mounted) setState(() {});
     for (final r in widget.rolls.rolls) {
-      widget.rolls.framesOf(r.id).then((f) {
-        if (mounted && _counts[r.id] != f.length) {
-          setState(() => _counts[r.id] = f.length);
-        }
-      });
+      if (widget.rolls.frameCount(r.id) == null && _requested.add(r.id)) {
+        widget.rolls.framesOf(r.id).then((_) {
+          if (mounted) setState(() {});
+        });
+      }
     }
   }
 
@@ -101,11 +102,11 @@ class _RollsScreenState extends State<RollsScreen> {
   );
 
   Widget _rollRow(Roll r, MaterialLocalizations loc) {
-    final count = _counts[r.id];
+    final count = widget.rolls.frameCount(r.id);
     final detail = [
       if (r.pushThirds != 0) pushLabel(r.pushThirds),
       r.bodyName,
-      count == null ? '${r.size}' : '$count/${r.size}',
+      '${count ?? '—'}/${r.size}',
     ].join(' · ');
     return InkWell(
       onTap: () => _openRoll(r),
