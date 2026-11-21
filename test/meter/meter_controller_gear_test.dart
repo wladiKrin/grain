@@ -381,22 +381,58 @@ void main() {
     expect(c.preview!.wide, isTrue);
   });
 
-  test('a failed switch leaves the main camera in use', () async {
+  test('a failed switch in the running session is a camera error', () async {
+    // Separate ultra-wide: the native side has torn the session down and
+    // could reopen neither camera, so the reading must not stay as live.
     await c.resume();
-    final main = c.preview;
-    src.setWideError = PlatformException(code: 'camera_error');
+    src.emit(statsAt(10));
+    await settle();
+    expect(c.reading, isNotNull);
+    var notified = 0;
+    c.addListener(() => notified++);
+    src.setWideError = PlatformException(
+      code: 'camera_error',
+      message: 'Camera failed',
+    );
     c.setFocal(idx(c.focalValues, '20'));
     await settle();
     expect(src.calls, contains('setWide(true)'));
-    expect(c.preview, same(main));
-    expect(c.preview!.wide, isFalse);
-    expect(c.cameraError, isNull);
-    // The lens is then wider than the camera in use: the note shows.
-    expect(c.lensWiderThanCamera, isTrue);
-    // No retry on every detent while this session runs.
+    expect(c.cameraError, 'Camera failed');
+    expect(c.reading, isNull);
+    expect(c.preview, isNull);
+    expect(notified, greaterThanOrEqualTo(2));
+    // Stats arriving afterwards are not taken as live.
+    src.emit(statsAt(10));
+    await settle();
+    expect(c.reading, isNull);
+    // No retry on every detent while the camera is down.
     c.setFocal(idx(c.focalValues, '18'));
     await settle();
     expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+  });
+
+  test('an unexpected setWide error is handled the same way', () async {
+    await c.resume();
+    src.emit(statsAt(10));
+    await settle();
+    src.setWideError = StateError('boom');
+    c.setFocal(idx(c.focalValues, '20'));
+    await settle();
+    expect(c.cameraError, contains('boom'));
+    expect(c.reading, isNull);
+  });
+
+  test('a setWide error from an earlier session is ignored', () async {
+    await c.resume();
+    src.setWideError = PlatformException(code: 'camera_error');
+    src.stopGate = null;
+    c.setFocal(idx(c.focalValues, '20')); // setWide(true) in flight
+    await c.pause();
+    src.setWideError = null;
+    await c.resume();
+    await settle();
+    expect(c.cameraError, isNull);
+    expect(c.preview, isNotNull);
   });
 
   test('a failed switch is retried after the camera restarts', () async {
@@ -506,6 +542,59 @@ void main() {
       expect(calls(), ['start', 'stop', 'start']);
     });
 
+    test('nested lends resume the meter once, after the outermost', () async {
+      await c.resume();
+      await c.lendCamera(() async {
+        expect(calls(), ['start', 'stop']);
+        await c.lendCamera(() async {
+          expect(calls(), ['start', 'stop'], reason: 'already released');
+        });
+        await settle();
+        expect(calls(), ['start', 'stop'], reason: 'outer lend still open');
+        await c.resume(); // e.g. the app coming back to the foreground
+        expect(calls(), ['start', 'stop']);
+      });
+      await settle();
+      expect(calls(), ['start', 'stop', 'start']);
+    });
+
+    test('a route lend opens at once; a scan inside it waits for the '
+        'release', () async {
+      await c.resume();
+      src.stopGate = Completer<void>();
+      final events = <String>[];
+      final outer = c.lendCamera(() async {
+        events.add('route open');
+        await c.lendCamera(() async => events.add('scan open'));
+      }, waitForRelease: false);
+      await settle();
+      // The route is up while the meter's stop is still in flight; the scan
+      // inside it is not, so it cannot race the meter's teardown.
+      expect(events, ['route open']);
+      expect(calls(), ['start', 'stop']);
+      src.stopGate!.complete();
+      await outer;
+      await settle();
+      expect(events, ['route open', 'scan open']);
+      expect(calls(), ['start', 'stop', 'start']);
+    });
+
+    test('a failed release does not escape a route lend', () async {
+      final failing = _FailingStopSource();
+      final m = MeterController(source: failing);
+      addTearDown(m.dispose);
+      await m.resume();
+      var used = false;
+      await m.lendCamera(() async => used = true, waitForRelease: false);
+      await settle();
+      expect(used, isTrue);
+      expect(failing.calls.where((e) => e != 'setRegions'), [
+        'start',
+        'stop',
+        'start',
+      ]);
+    });
+
     test('resumes after use throws, and rethrows', () async {
       await c.resume();
       await expectLater(
@@ -545,5 +634,14 @@ class _StuckWideSource extends FakeMeterSource {
       calls.removeLast();
       return p;
     });
+  }
+}
+
+/// Fails every stop, as a camera that is already gone may.
+class _FailingStopSource extends FakeMeterSource {
+  @override
+  Future<void> stop() async {
+    calls.add('stop');
+    throw PlatformException(code: 'camera_error');
   }
 }

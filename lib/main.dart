@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -153,28 +155,39 @@ class _GrainAppState extends State<GrainApp> {
     }
   }
 
-  void _openLibrary() => _navigator.currentState?.push(
-    MaterialPageRoute<void>(
-      builder: (_) =>
-          BodyPickerScreen(gear: _gear, onShare: _share, onImport: _import),
-    ),
+  /// Pushes a full-screen route with the meter's camera released while it
+  /// (and anything opened from it) is up; the meter resumes on the way back.
+  void _pushLent(WidgetBuilder builder) {
+    final navigator = _navigator.currentState;
+    if (navigator == null) return;
+    unawaited(
+      _controller.lendCamera(
+        () => navigator.push(MaterialPageRoute<void>(builder: builder)),
+        waitForRelease: false,
+      ),
+    );
+  }
+
+  void _openLibrary() => _pushLent(
+    (_) => BodyPickerScreen(gear: _gear, onShare: _share, onImport: _import),
   );
 
   /// Lenses of the selected body's mount; without a body, the library.
   void _openLensPicker() {
     final body = _gear.body;
     if (body == null) return _openLibrary();
-    _navigator.currentState?.push(
-      MaterialPageRoute<void>(
-        builder: (_) => LensPickerScreen(
-          gear: _gear,
-          mount: body.mount,
-          onShare: _share,
-          onImport: _import,
-        ),
+    _pushLent(
+      (_) => LensPickerScreen(
+        gear: _gear,
+        mount: body.mount,
+        onShare: _share,
+        onImport: _import,
       ),
     );
   }
+
+  void _openSettings() =>
+      _pushLent((_) => SettingsScreen(settings: _settings, haptics: _haptics));
 
   @override
   Widget build(BuildContext context) {
@@ -194,12 +207,7 @@ class _GrainAppState extends State<GrainApp> {
         gear: _gear,
         onOpenLibrary: _openLibrary,
         onOpenLensPicker: _openLensPicker,
-        onOpenSettings: () => _navigator.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                SettingsScreen(settings: _settings, haptics: _haptics),
-          ),
-        ),
+        onOpenSettings: _openSettings,
       ),
     );
   }

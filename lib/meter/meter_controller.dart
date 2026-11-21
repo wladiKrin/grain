@@ -152,7 +152,7 @@ class MeterController extends ChangeNotifier {
     if (_disposed) return;
     // Recorded before the guard so a resume during an in-flight start keeps it.
     _wantRunning = true;
-    if (_lent || _running || _starting) return;
+    if (_lends > 0 || _running || _starting) return;
     _starting = true;
     cameraDenied = false;
     cameraError = null;
@@ -187,28 +187,55 @@ class MeterController extends ChangeNotifier {
     await _syncWide();
   }
 
-  bool _lent = false;
+  /// Lends in progress; they nest (a scan started from the library).
+  int _lends = 0;
 
-  /// Runs [use] (e.g. a QR scan) with the camera released: pauses the meter,
-  /// keeps [resume] from reopening it meanwhile, and resumes afterwards.
-  Future<T> lendCamera<T>(Future<T> Function() use) async {
-    _lent = true;
+  /// Runs [use] (a QR scan, a full-screen route) with the camera released:
+  /// pauses the meter, keeps [resume] from reopening it meanwhile, and
+  /// resumes once the outermost lend returns. With [waitForRelease] false,
+  /// [use] starts while the camera is still closing (a route that does not
+  /// need the camera opens without that delay); a nested lend that does
+  /// wait still waits for that release.
+  Future<T> lendCamera<T>(
+    Future<T> Function() use, {
+    bool waitForRelease = true,
+  }) async {
+    _lends++;
+    final released = pause();
+    // Observed now, so an unawaited failure is not reported as unhandled.
+    final settled = released.then<void>((_) {}, onError: (Object _) {});
     try {
-      await pause();
+      if (waitForRelease) await released;
       return await use();
     } finally {
-      _lent = false;
-      await resume();
+      await settled;
+      _lends--;
+      if (_lends == 0) await resume();
     }
   }
 
+  /// The camera release in flight (or the last one), completed even when
+  /// the stop failed.
+  Future<void> _released = Future<void>.value();
+
+  /// Releases the camera; also waits for a release still in flight, so the
+  /// camera is closed when this completes.
   Future<void> pause() async {
     _wantRunning = false;
     final wasRunning = _running;
     _running = false;
-    await _sub?.cancel();
+    final sub = _sub;
     _sub = null;
-    if (wasRunning) await _source.stop();
+    if (!wasRunning) {
+      await sub?.cancel();
+      return _released;
+    }
+    final release = () async {
+      await sub?.cancel();
+      await _source.stop();
+    }();
+    _released = release.then<void>((_) {}, onError: (Object _) {});
+    return release;
   }
 
   bool _loggedFirstStats = false;
@@ -370,9 +397,15 @@ class MeterController extends ChangeNotifier {
         final PreviewInfo next;
         try {
           next = await _source.setWide(want);
-        } on PlatformException catch (e) {
-          if (session == _session) _wideFailed = true;
-          debugPrint('GRAIN setWide($want) failed: ${e.code} ${e.message}');
+        } catch (e) {
+          debugPrint('GRAIN setWide($want) failed: $e');
+          if (session == _session) {
+            _wideFailed = true;
+            // The native side answers an error only after it tore the
+            // session down and could reopen neither camera: like any camera
+            // error, the last reading must not stay as live.
+            _onStatsError(e);
+          }
           continue; // Re-check: a new session may want a switch.
         }
         // Paused, stopped or restarted meanwhile: the answer is stale.
