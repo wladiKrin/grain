@@ -74,8 +74,10 @@ class MeterChannel implements MeterSource {
         'spot': [spot.dx, spot.dy, radius],
       });
 
+  /// One cached broadcast stream; subscribers share the same event channel
+  /// listener.
   @override
-  Stream<MeterStats> get stats => _events.receiveBroadcastStream().map(
-    (e) => MeterStats.fromMap(e as Map<Object?, Object?>),
-  );
+  late final Stream<MeterStats> stats = _events
+      .receiveBroadcastStream()
+      .map((e) => MeterStats.fromMap(e as Map<Object?, Object?>));
 }

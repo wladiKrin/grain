@@ -1,0 +1,206 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/metering/fov.dart';
+import 'package:grain/metering/meter_channel.dart';
+import 'package:grain/metering/reading.dart';
+
+class FakeSource implements MeterSource {
+  final calls = <String>[];
+  final regions = <(Rect, Offset, double)>[];
+  final _stats = StreamController<MeterStats>.broadcast();
+  Object? startError;
+
+  @override
+  Future<PreviewInfo> start() async {
+    calls.add('start');
+    if (startError != null) throw startError!;
+    return const PreviewInfo(
+      textureId: 1,
+      size: Size(4000, 3000),
+      sensorOrientation: 90,
+      phoneEqFocal: 25,
+    );
+  }
+
+  @override
+  Future<void> stop() async => calls.add('stop');
+
+  @override
+  Future<void> setRegions(Rect crop, Offset spot, double radius) async {
+    calls.add('setRegions');
+    regions.add((crop, spot, radius));
+  }
+
+  @override
+  Stream<MeterStats> get stats => _stats.stream;
+
+  bool get hasListener => _stats.hasListener;
+  void emit(MeterStats s) => _stats.add(s);
+}
+
+/// Stats giving EV100 = 15 (f/1, 1/32768 s, ISO 100, region == frame).
+MeterStats stats({double region = .18, int exposureNs = 30518}) =>
+    MeterStats.fromMap({
+      'exposureNs': exposureNs,
+      'sensitivity': 100,
+      'boost': 100,
+      'aperture': 1.0,
+      'minExposureNs': 10000,
+      'maxExposureNs': 1000000000,
+      'minIso': 50,
+      'maxIso': 3200,
+      'frameLuma': .18,
+      'cropLuma': region,
+      'spotLuma': region,
+      'histogram': List<int>.filled(64, 0),
+    });
+
+Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+void main() {
+  late FakeSource src;
+  late MeterController c;
+  setUp(() {
+    src = FakeSource();
+    c = MeterController(source: src);
+  });
+  tearDown(() => c.dispose());
+
+  test('defaults', () {
+    expect(c.mode, MeterMode.aperturePriority);
+    expect(c.apertures[c.apertureIndex].label, '5.6');
+    expect(c.shutters[c.shutterIndex].label, '1/125');
+    expect(c.isos[c.isoIndex].label, '400');
+    expect(focalStops[c.focalIndex], 50);
+    expect(c.area, MeterArea.average);
+    expect(c.viewfinderOn, isTrue);
+    expect(c.solvedShutter, isNull);
+    expect(c.offset, isNull);
+  });
+
+  Future<void> run() async {
+    await c.resume();
+    src.emit(stats());
+    await settle();
+  }
+
+  int ap(String l) => c.apertures.indexWhere((v) => v.label == l);
+  int iso(String l) => c.isos.indexWhere((v) => v.label == l);
+  int sh(String l) => c.shutters.indexWhere((v) => v.label == l);
+
+  test('aperture priority uses latest reading and ISO', () async {
+    await run();
+    c.setIso(iso('100'));
+    c.setAperture(ap('16'));
+    expect(c.reading!.ev100, closeTo(15, 1e-3));
+    expect(c.shutters[c.solvedShutter!.index].label, '1/125');
+    expect(c.solvedAperture, isNull);
+    expect(c.offset, isNull);
+  });
+
+  test('shutter priority solves aperture', () async {
+    await run();
+    c.setMode(MeterMode.shutterPriority);
+    c.setIso(iso('100'));
+    c.setShutter(sh('1/125'));
+    expect(c.apertures[c.solvedAperture!.index].label, '16');
+    expect(c.solvedShutter, isNull);
+  });
+
+  test('manual mode exposes offset', () async {
+    await run();
+    c.setMode(MeterMode.manual);
+    c.setIso(iso('100'));
+    c.setAperture(ap('16'));
+    c.setShutter(sh('1/60'));
+    expect(c.offset, closeTo(1.0, 1e-9));
+    expect(c.solvedShutter, isNull);
+    expect(c.solvedAperture, isNull);
+  });
+
+  test('calibration setter re-derives the reading', () async {
+    await run();
+    c.calibrationEv = 1;
+    expect(c.reading!.ev100, closeTo(16, 1e-3));
+  });
+
+  test('pause stops the source and resume restarts it', () async {
+    await c.resume();
+    await c.resume(); // no-op while running
+    await c.pause();
+    await c.resume();
+    expect(src.calls.where((e) => e != 'setRegions'), [
+      'start',
+      'stop',
+      'start',
+    ]);
+  });
+
+  test('stats received while paused are ignored', () async {
+    await run();
+    final before = c.reading;
+    await c.pause();
+    expect(src.hasListener, isFalse);
+    src.emit(stats(region: .5));
+    await settle();
+    expect(c.reading, same(before));
+  });
+
+  test('sends regions after start and when focal changes', () async {
+    await c.resume();
+    expect(src.regions, hasLength(1));
+    final first = src.regions.last.$1;
+    c.setFocal(focalStops.indexOf(100));
+    expect(src.regions, hasLength(2));
+    expect(src.regions.last.$1.width, lessThan(first.width));
+  });
+
+  test(
+    'tapSpot switches to spot and sends regions; clearSpot reverts',
+    () async {
+      await c.resume();
+      c.tapSpot(const Offset(.2, .7));
+      expect(c.area, MeterArea.spot);
+      expect(c.spot, const Offset(.2, .7));
+      expect(src.regions.last.$2, const Offset(.2, .7));
+      expect(src.regions.last.$3, .04);
+      c.clearSpot();
+      expect(c.area, MeterArea.average);
+      expect(c.spot, const Offset(.5, .5));
+    },
+  );
+
+  test('held reading ignores new stats until released', () async {
+    await run();
+    final frozen = c.reading!.ev100;
+    c.toggleHold();
+    src.emit(stats(exposureNs: 61036)); // one stop darker scene
+    await settle();
+    expect(c.reading!.ev100, frozen);
+    c.toggleHold();
+    expect(c.reading!.ev100, closeTo(frozen - 1, 1e-3));
+  });
+
+  test(
+    'camera permission denied sets cameraDenied and does not throw',
+    () async {
+      src.startError = PlatformException(code: 'denied');
+      await c.resume();
+      expect(c.cameraDenied, isTrue);
+      expect(c.cameraError, isNull);
+      // Dials still work.
+      c.setAperture(0);
+      expect(c.apertureIndex, 0);
+    },
+  );
+
+  test('other camera errors are stored, not thrown', () async {
+    src.startError = PlatformException(code: 'camera_error', message: 'boom');
+    await c.resume();
+    expect(c.cameraDenied, isFalse);
+    expect(c.cameraError, 'boom');
+  });
+}
