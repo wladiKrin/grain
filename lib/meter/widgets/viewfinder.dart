@@ -7,11 +7,29 @@ import '../../metering/reading.dart';
 import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
 
-/// Where [content] lands when scaled to cover [box], centred.
-Rect coverRect(Size box, Size content) {
-  final s = math.max(box.width / content.width, box.height / content.height);
-  final w = content.width * s, h = content.height * s;
-  return Rect.fromLTWH((box.width - w) / 2, (box.height - h) / 2, w, h);
+/// Where the [preview] is drawn in [box]: scaled to cover the box, but no
+/// further than keeps the whole [crop] (normalized in [preview]) inside it,
+/// with the crop centred in the box.
+Rect previewRect(Size box, Size preview, {Rect? crop}) {
+  var s = math.max(box.width / preview.width, box.height / preview.height);
+  var centre = const Offset(.5, .5);
+  if (crop != null && !crop.isEmpty) {
+    s = math.min(
+      s,
+      math.min(
+        box.width / (crop.width * preview.width),
+        box.height / (crop.height * preview.height),
+      ),
+    );
+    centre = crop.center;
+  }
+  final w = preview.width * s, h = preview.height * s;
+  return Rect.fromLTWH(
+    box.width / 2 - centre.dx * w,
+    box.height / 2 - centre.dy * h,
+    w,
+    h,
+  );
 }
 
 /// "EV 12.3 · AVG": one decimal ("EV —" before a reading), ▲/▼ when the
@@ -99,7 +117,7 @@ class Viewfinder extends StatelessWidget {
             final box = constraints.biggest;
             final content = previewSize == null
                 ? Offset.zero & box
-                : coverRect(box, previewSize!);
+                : previewRect(box, previewSize!, crop: crop);
             Offset normalize(Offset p) => Offset(
               ((p.dx - content.left) / content.width).clamp(0.0, 1.0),
               ((p.dy - content.top) / content.height).clamp(0.0, 1.0),
