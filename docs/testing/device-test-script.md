@@ -136,6 +136,7 @@ Click sound; 3.7 turns it off again.
 | 3.8 | Drag the dials with Settings > Developer options > Profile GPU rendering > "On screen as bars" on (or `flutter run --profile` and DevTools Performance) | Bars stay under the 16 ms line; no jank frames while dragging the dials. Result: ______ | |
 | 3.9 | Look at thirds and halves on the calibration dial (Settings), the push dial and the two latitude dials (Start roll), and the manual-mode OFFSET readout | ⅓, ⅔ and ½ are all drawn as small Inter Tight fractions of the same weight and size (digits around a fraction slash, e.g. 2⁄3); the whole stop beside them (the 1 in −1⅓) is a normal-size digit; −, ≈, ▲ ▼, → render | |
 | 3.10 | Compare the fonts | Fonts look unchanged (Light/Regular/Medium/SemiBold); ½ stops render | |
+| 3.11 | Optional, needs a 360 dp-wide phone or `adb shell wm size 1080x2400 && adb shell wm density 480` (undo with `wm size reset` / `wm density reset`): viewfinder off, shutter priority, dial the shutter to 1/1000 | The faded neighbours beside the big shutter value (1/500, 1/2000) are readable, not cut off; note it if they are clipped | |
 
 ## 4. Viewfinder, crops, ultra-wide, spot, hold, histogram
 
