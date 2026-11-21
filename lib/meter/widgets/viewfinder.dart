@@ -1,0 +1,241 @@
+import 'dart:math' as math;
+
+import 'package:material_ui/material_ui.dart';
+
+import '../../metering/reading.dart';
+import '../../ui/round_button.dart';
+import '../../ui/theme.dart';
+
+/// Where [content] lands when scaled to cover [box], centred.
+Rect coverRect(Size box, Size content) {
+  final s = math.max(box.width / content.width, box.height / content.height);
+  final w = content.width * s, h = content.height * s;
+  return Rect.fromLTWH((box.width - w) / 2, (box.height - h) / 2, w, h);
+}
+
+/// Live preview in a rounded box, the lens crop as the clear area, a spot
+/// reticle (or centre crosshair for average), and the EV pill with a hold
+/// button. Tap sets the spot, long-press returns to average.
+class Viewfinder extends StatelessWidget {
+  const Viewfinder({
+    super.key,
+    required this.textureId,
+    required this.previewSize,
+    required this.crop,
+    required this.area,
+    required this.spot,
+    required this.spotRadius,
+    required this.ev,
+    required this.held,
+    required this.widerThanPhone,
+    required this.onSpot,
+    required this.onClearSpot,
+    required this.onToggleHold,
+  });
+
+  /// Null until the camera has started.
+  final int? textureId;
+
+  /// Preview buffer in portrait orientation; null until started.
+  final Size? previewSize;
+
+  /// Lens crop, normalized in [previewSize].
+  final Rect? crop;
+  final MeterArea area;
+
+  /// Normalized in [previewSize].
+  final Offset spot;
+
+  /// Relative to the crop width.
+  final double spotRadius;
+
+  /// Scene EV at ISO 100; null before the first reading.
+  final double? ev;
+  final bool held;
+  final bool widerThanPhone;
+  final ValueChanged<Offset> onSpot;
+  final VoidCallback onClearSpot;
+  final VoidCallback onToggleHold;
+
+  String get _evLine {
+    final value = ev == null
+        ? '—'
+        : ev!.toStringAsFixed(1).replaceFirst('-', '−');
+    final tag = held
+        ? 'HELD'
+        : area == MeterArea.spot
+        ? 'SPOT'
+        : 'AVG';
+    return 'EV $value · $tag';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: ColoredBox(
+        color: GrainColors.ink,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final box = constraints.biggest;
+            final content = previewSize == null
+                ? Offset.zero & box
+                : coverRect(box, previewSize!);
+            Offset normalize(Offset p) => Offset(
+              ((p.dx - content.left) / content.width).clamp(0.0, 1.0),
+              ((p.dy - content.top) / content.height).clamp(0.0, 1.0),
+            );
+            return Stack(
+              children: [
+                if (textureId != null)
+                  Positioned.fromRect(
+                    rect: content,
+                    child: Texture(textureId: textureId!),
+                  ),
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) => onSpot(normalize(d.localPosition)),
+                    onLongPress: onClearSpot,
+                    child: CustomPaint(
+                      painter: _OverlayPainter(
+                        content: content,
+                        crop: crop,
+                        spot: area == MeterArea.spot ? spot : null,
+                        spotRadius: spotRadius,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Row(
+                    spacing: 8,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: GrainColors.ground,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _evLine,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: GrainColors.ink,
+                          ),
+                        ),
+                      ),
+                      RoundButton(
+                        filled: held,
+                        toggled: held,
+                        background: GrainColors.ground,
+                        semanticLabel: held
+                            ? 'Release held reading'
+                            : 'Hold reading',
+                        onPressed: onToggleHold,
+                        child: Icon(held ? Icons.lock : Icons.lock_open),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widerThanPhone)
+                  const Positioned(
+                    left: 12,
+                    bottom: 10,
+                    child: Text(
+                      'Wider than this camera',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 12 * .04,
+                        color: GrainColors.ground,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _OverlayPainter extends CustomPainter {
+  _OverlayPainter({
+    required this.content,
+    required this.crop,
+    required this.spot,
+    required this.spotRadius,
+  });
+
+  /// Where the preview is drawn, in box coordinates.
+  final Rect content;
+  final Rect? crop;
+
+  /// Null for average metering.
+  final Offset? spot;
+  final double spotRadius;
+
+  Offset _map(Offset n) => Offset(
+    content.left + n.dx * content.width,
+    content.top + n.dy * content.height,
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = crop;
+    var cropPx = Offset.zero & size;
+    if (c != null) {
+      cropPx = Rect.fromPoints(_map(c.topLeft), _map(c.bottomRight));
+      final dim = Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(Offset.zero & size)
+        ..addRect(cropPx);
+      canvas.drawPath(
+        dim,
+        Paint()..color = GrainColors.ink.withValues(alpha: .6),
+      );
+    }
+
+    final stroke = Paint()
+      ..color = GrainColors.ground
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    final s = spot;
+    if (s != null) {
+      final centre = _map(s);
+      final r = math.max(12.0, spotRadius * cropPx.width);
+      canvas.drawCircle(centre, r, stroke);
+      _ticks(canvas, centre, r + 4, 8, stroke);
+    } else {
+      _ticks(canvas, cropPx.center, 6, 10, stroke);
+    }
+  }
+
+  /// Four ticks pointing at [centre], starting [gap] px from it.
+  void _ticks(Canvas canvas, Offset centre, double gap, double len, Paint p) {
+    for (final d in const [
+      Offset(0, -1),
+      Offset(0, 1),
+      Offset(-1, 0),
+      Offset(1, 0),
+    ]) {
+      canvas.drawLine(centre + d * gap, centre + d * (gap + len), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OverlayPainter old) =>
+      old.content != content ||
+      old.crop != crop ||
+      old.spot != spot ||
+      old.spotRadius != spotRadius;
+}

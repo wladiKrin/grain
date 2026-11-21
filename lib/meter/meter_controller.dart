@@ -158,18 +158,31 @@ class MeterController extends ChangeNotifier {
     reading = readingFrom(s, area: area, calibration: _calibrationEv);
   }
 
-  void _sendRegions() {
-    final p = preview;
-    if (p == null) return;
+  /// Preview buffer size in portrait display orientation, once started.
+  Size? get previewSize {
+    final s = preview?.size;
+    if (s == null) return null;
     // The preview buffer is landscape; crops are in portrait display space.
-    final size = p.size.width > p.size.height
-        ? Size(p.size.height, p.size.width)
-        : p.size;
-    final crop = lensCrop(
+    return s.width > s.height ? Size(s.height, s.width) : s;
+  }
+
+  /// The current lens's field of view, normalized in [previewSize].
+  Rect? get cropRect {
+    final p = preview, size = previewSize;
+    if (p == null || size == null) return null;
+    return lensCrop(
       preview: size,
       lensFocal: focalStops[focalIndex].toDouble(),
       phoneEqFocal: p.phoneEqFocal,
     );
+  }
+
+  /// Spot radius relative to the crop width.
+  double get spotRadius => _spotRadius;
+
+  void _sendRegions() {
+    final crop = cropRect;
+    if (crop == null) return;
     unawaited(_source.setRegions(crop, spot, _spotRadius));
   }
 

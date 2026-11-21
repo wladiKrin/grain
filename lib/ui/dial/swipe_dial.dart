@@ -4,13 +4,13 @@ import 'package:flutter/widgets.dart';
 
 import '../../exposure/scales.dart';
 import '../haptics.dart';
+import '../theme.dart';
 
-// Literal colours until lib/ui/theme.dart (GrainColors) exists.
-const _ink = Color(0xFF141414);
-const _faded = Color(0xFF8C877E);
+const _ink = GrainColors.ink;
+const _faded = GrainColors.faded;
 const _minorTick = Color(0xFFB4AEA3);
-const _accent = Color(0xFFB8321A);
-const _fontFamily = 'InterTight';
+const _accent = GrainColors.accent;
+const _fontFamily = grainFont;
 
 const _rulerHeight = 22.0;
 const _minTarget = 44.0;
