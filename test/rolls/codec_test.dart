@@ -188,4 +188,34 @@ void main() {
     expect(isoWithOffset(t, -330), '2026-11-21T07:33:22-05:30');
     expect(isoWithOffset(t, 0), '2026-11-21T13:03:22+00:00');
   });
+
+  test('CSV neutralises formula triggers in free text only', () {
+    final f = frame(note: '=SUM(A1)').copyWith(
+      exposure: const Exposure(lensName: '+cmd', offset: -0.5, shutter: '@x'),
+    );
+    final csv = rollToCsv(roll(number: 4), [f]);
+    final cols = row(csv, 1).split(',');
+    expect(cols[14], "'+cmd");
+    expect(cols[11], "'@x");
+    expect(cols[18], '-0.50');
+    expect(cols[21], "'=SUM(A1)");
+    final tab = rollToCsv(roll(number: 4), [frame(note: '\tx')]);
+    expect(tab, contains(",'\tx,"));
+    final neg = rollToCsv(roll(pushThirds: -2), [frame()]);
+    expect(row(neg, 1).split(',')[4], '-0.67');
+  });
+
+  test('BOM leads the CSV', () {
+    expect(rollToCsv(r4, []).codeUnitAt(0), 0xFEFF);
+  });
+
+  test('null utc offset invents no offset', () {
+    final f = frame().copyWith(utcOffsetMinutes: () => null);
+    final cols = row(rollToCsv(r4, [f]), 1).split(',');
+    expect(cols[8], '2026-11-21T13:03:22');
+    expect(cols[9], '');
+    final j = (rollToJson(r4, [f])['frames'] as List).single as Map;
+    expect(j['takenAt'], '2026-11-21T13:03:22.000Z');
+    expect(rollFromJson(rollToJson(r4, [f])).$2.single, f);
+  });
 }

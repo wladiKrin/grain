@@ -132,7 +132,9 @@ Map<String, Object?> rollToJson(Roll r, List<Frame> frames) => {
         'number': f.label,
         'takenAt': f.takenAt == null
             ? null
-            : isoWithOffset(f.takenAt!, f.utcOffsetMinutes ?? 0),
+            : f.utcOffsetMinutes == null
+            ? _utcIso(f.takenAt!)
+            : isoWithOffset(f.takenAt!, f.utcOffsetMinutes!),
         'utcOffsetMinutes': f.utcOffsetMinutes,
         ..._exposureJson(f.exposure),
         'note': f.note,
@@ -364,6 +366,9 @@ const csvHeader =
     'utc_offset,aperture,shutter,exposure_time_s,iso,lens,focal_mm,mode,'
     'metered_ev,offset_stops,latitude,longitude,note,snapshot';
 
+/// Free text starting with a spreadsheet formula trigger gets a leading `'`.
+String _text(String s) => s.isNotEmpty && '=+-@\t\r'.contains(s[0]) ? "'$s" : s;
+
 String _csvField(String s) =>
     s.contains(RegExp('[,"\r\n]')) ? '"${s.replaceAll('"', '""')}"' : s;
 
@@ -388,35 +393,35 @@ String _exposureSeconds(double? v) =>
     v == null ? '' : _trim(v.toStringAsPrecision(6));
 
 String rollToCsv(Roll r, List<Frame> frames) {
-  final b = StringBuffer('﻿')..write('$csvHeader\r\n');
+  final b = StringBuffer('\uFEFF')..write('$csvHeader\r\n');
   for (final f in frames) {
     final e = f.exposure;
-    final off = f.utcOffsetMinutes ?? 0;
+    final off = f.utcOffsetMinutes;
     final g = f.location;
     final row = [
       '${r.number}',
-      r.filmStock,
+      _text(r.filmStock),
       r.filmType.id,
       '${r.boxIso}',
       _pushStops(r.pushThirds),
       '${r.exposedIso}',
-      r.bodyName,
+      _text(r.bodyName),
       f.label,
-      f.takenAt == null ? '' : _local(f.takenAt!, off),
-      f.takenAt == null ? '' : offsetLabel(off),
+      f.takenAt == null ? '' : _local(f.takenAt!, off ?? 0),
+      f.takenAt == null || off == null ? '' : offsetLabel(off),
       _num(e.aperture),
-      e.shutter ?? '',
+      _text(e.shutter ?? ''),
       _exposureSeconds(e.exposureTime),
       e.iso?.toString() ?? '',
-      e.lensName ?? '',
+      _text(e.lensName ?? ''),
       _num(e.focal),
       e.mode == null ? '' : _modeId(e.mode!),
       e.meteredEv?.toStringAsFixed(1) ?? '',
       e.offset?.toStringAsFixed(2) ?? '',
       g == null ? '' : '${g.latitude}',
       g == null ? '' : '${g.longitude}',
-      f.note ?? '',
-      f.snapshot ?? '',
+      _text(f.note ?? ''),
+      _text(f.snapshot ?? ''),
     ];
     b.write('${row.map(_csvField).join(',')}\r\n');
   }
