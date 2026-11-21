@@ -76,6 +76,45 @@ class _MeterScreenState extends State<MeterScreen> {
     return _apertures;
   }
 
+  /// Value numeral sizes with the viewfinder on, largest first.
+  static const _rowSizes = [64.0, 52.0, 44.0];
+
+  /// Smallest viewfinder height the numerals step down for.
+  static const _viewfinderFloor = 150.0;
+
+  /// Keeps a step down from flipping back on a pixel's difference.
+  static const _hysteresis = 8.0;
+
+  /// Index into [_rowSizes] of the numerals in use.
+  int _rowStep = 0;
+  bool _fitScheduled = false;
+
+  /// Picks the largest numeral size that leaves the viewfinder its floor,
+  /// given that it got [height] at the current size. Both value rows carry
+  /// one numeral line each, so a step frees twice its size difference. The
+  /// new size applies from the next frame.
+  void _fitRows(double height) {
+    final scaler = MediaQuery.textScalerOf(context);
+    double line(int step) => scaler.scale(_rowSizes[step]);
+    double at(int step) => height + 2 * (line(_rowStep) - line(step));
+    var step = _rowSizes.length - 1;
+    for (var i = 0; i < _rowSizes.length; i++) {
+      final need = i < _rowStep
+          ? _viewfinderFloor + _hysteresis
+          : _viewfinderFloor;
+      if (at(i) >= need) {
+        step = i;
+        break;
+      }
+    }
+    if (step == _rowStep || _fitScheduled) return;
+    _fitScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fitScheduled = false;
+      if (mounted && step != _rowStep) setState(() => _rowStep = step);
+    });
+  }
+
   Future<void> _onLensTap() async {
     if (await _gear.cycleLens()) {
       widget.haptics.tick(strong: false);
@@ -122,9 +161,16 @@ class _MeterScreenState extends State<MeterScreen> {
                 ),
               ),
               if (viewfinderOn)
-                // Takes the remaining height; the mockup's 150 px minimum
-                // holds on phones of the Pixel 10's size.
-                Expanded(child: RepaintBoundary(child: _viewfinder()))
+                // Takes the remaining height; the value numerals step down
+                // when that falls below the viewfinder's floor.
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      _fitRows(box.maxHeight);
+                      return RepaintBoundary(child: _viewfinder());
+                    },
+                  ),
+                )
               else ...[
                 const Spacer(),
                 _Select(
@@ -307,7 +353,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.solvedAperture?.flag,
     ),
     builder: (context, _) {
-      final size = viewfinderOn ? 64.0 : 92.0;
+      final size = viewfinderOn ? _rowSizes[_rowStep] : 92.0;
       final apertures = _displayApertures();
       final bulb = _c.bulbSeconds;
       final aperture = ValueRow.input(
