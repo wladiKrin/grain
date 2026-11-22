@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../exposure/scales.dart';
@@ -16,8 +19,16 @@ const _fontFamily = grainFont;
 const _rulerHeight = 22.0;
 const _minTarget = 44.0;
 
+/// Release speed (px/s) below which the dial stops where the finger left it.
+const _minFlingVelocity = 300.0;
+
+/// Friction of a fling: it travels velocity / ln(1 / drag) px, about half a
+/// second's worth of the release speed.
+const _flingDrag = 0.135;
+
 /// Horizontal swipe dial: one value per [detent] px of drag, a haptic tick per
-/// value, no momentum. Dragging left increases the index.
+/// value. A fast release keeps it spinning, slowing to a stop on a value; a
+/// touch stops it. Dragging left increases the index.
 class SwipeDial extends StatefulWidget {
   const SwipeDial({
     super.key,
@@ -40,14 +51,29 @@ class SwipeDial extends StatefulWidget {
   State<SwipeDial> createState() => _SwipeDialState();
 }
 
-class _SwipeDialState extends State<SwipeDial> {
+class _SwipeDialState extends State<SwipeDial>
+    with SingleTickerProviderStateMixin {
   final _rulerOffset = ValueNotifier<double>(0);
+  late final _fling = AnimationController.unbounded(vsync: this)
+    ..addListener(_onFlingTick)
+    ..addStatusListener((s) {
+      if (s == AnimationStatus.completed) _settle(_flingRest);
+    });
   int _startIndex = 0;
   double _startX = 0;
   int _dragIndex = 0;
 
+  /// Position along the scale, in px: index × detent at a value.
+  double _position = 0;
+
+  /// Where the running fling comes to rest.
+  double _flingRest = 0;
+
+  double get _maxPosition => (widget.values.length - 1) * widget.detent;
+
   @override
   void dispose() {
+    _fling.dispose();
     _rulerOffset.dispose();
     super.dispose();
   }
@@ -59,15 +85,25 @@ class _SwipeDialState extends State<SwipeDial> {
     widget.onChanged(idx);
   }
 
+  void _stopFling(PointerDownEvent _) {
+    if (!_fling.isAnimating) return;
+    _fling.stop();
+    _rulerOffset.value = 0;
+  }
+
   void _onStart(DragStartDetails d) {
     _startIndex = widget.index;
     _dragIndex = widget.index;
     _startX = d.globalPosition.dx;
   }
 
-  void _onUpdate(DragUpdateDetails d) {
-    final dx = d.globalPosition.dx - _startX;
-    final idx = (_startIndex + (-dx / widget.detent).round()).clamp(
+  void _onUpdate(DragUpdateDetails d) =>
+      _moveTo(_startIndex * widget.detent - (d.globalPosition.dx - _startX));
+
+  /// Moves to [position], ticking once per value passed.
+  void _moveTo(double position) {
+    _position = position;
+    final idx = (position / widget.detent).round().clamp(
       0,
       widget.values.length - 1,
     );
@@ -79,13 +115,51 @@ class _SwipeDialState extends State<SwipeDial> {
       _dragIndex = idx;
       widget.onChanged(idx);
     }
-    _rulerOffset.value = (dx + (idx - _startIndex) * widget.detent).clamp(
+    _rulerOffset.value = (idx * widget.detent - position).clamp(
       -widget.detent,
       widget.detent,
     );
   }
 
-  void _onEnd([Object? _]) => _rulerOffset.value = 0;
+  void _onEnd(DragEndDetails d) {
+    final v = -d.velocity.pixelsPerSecond.dx;
+    final atEnd =
+        (v < 0 && _position <= 0) || (v > 0 && _position >= _maxPosition);
+    if (v.abs() < _minFlingVelocity || atEnd) {
+      _rulerOffset.value = 0;
+      return;
+    }
+    // Aim the fling at the value nearest where it would coast to, so it
+    // never comes to rest between two.
+    final coast = _position + v / math.log(1 / _flingDrag);
+    final rest = (coast / widget.detent).round() * widget.detent;
+    _flingRest = rest.clamp(0, _maxPosition);
+    _fling.animateWith(
+      FrictionSimulation(
+        _flingDrag,
+        _position,
+        (rest - _position) * math.log(1 / _flingDrag),
+        tolerance: const Tolerance(velocity: 5),
+      ),
+    );
+  }
+
+  void _onCancel() => _rulerOffset.value = 0;
+
+  void _onFlingTick() {
+    final p = _fling.value;
+    if (p <= 0 || p >= _maxPosition) {
+      _fling.stop();
+      _settle(p.clamp(0, _maxPosition));
+      return;
+    }
+    _moveTo(p);
+  }
+
+  void _settle(double position) {
+    _moveTo(position);
+    _rulerOffset.value = 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,49 +174,52 @@ class _SwipeDialState extends State<SwipeDial> {
       decreasedValue: prev,
       onIncrease: next == null ? null : () => _step(1),
       onDecrease: prev == null ? null : () => _step(-1),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        dragStartBehavior: DragStartBehavior.down,
-        onHorizontalDragStart: _onStart,
-        onHorizontalDragUpdate: _onUpdate,
-        onHorizontalDragEnd: _onEnd,
-        onHorizontalDragCancel: _onEnd,
-        child: ExcludeSemantics(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(child: _neighbour(prev, -1, Alignment.centerLeft)),
-                  StopsText(
-                    values[i].label,
-                    softWrap: false,
-                    style: TextStyle(
-                      fontFamily: _fontFamily,
-                      fontSize: widget.valueFontSize,
-                      fontWeight: FontWeight.w300,
-                      color: _ink,
-                      height: 1,
+      child: Listener(
+        onPointerDown: _stopFling,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: _onStart,
+          onHorizontalDragUpdate: _onUpdate,
+          onHorizontalDragEnd: _onEnd,
+          onHorizontalDragCancel: _onCancel,
+          child: ExcludeSemantics(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: _neighbour(prev, -1, Alignment.centerLeft)),
+                    StopsText(
+                      values[i].label,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontFamily: _fontFamily,
+                        fontSize: widget.valueFontSize,
+                        fontWeight: FontWeight.w300,
+                        color: _ink,
+                        height: 1,
+                      ),
+                    ),
+                    Expanded(child: _neighbour(next, 1, Alignment.centerRight)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: _rulerHeight,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _RulerPainter(
+                      count: values.length,
+                      index: i,
+                      detent: widget.detent,
+                      offset: _rulerOffset,
                     ),
                   ),
-                  Expanded(child: _neighbour(next, 1, Alignment.centerRight)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: _rulerHeight,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _RulerPainter(
-                    count: values.length,
-                    index: i,
-                    detent: widget.detent,
-                    offset: _rulerOffset,
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

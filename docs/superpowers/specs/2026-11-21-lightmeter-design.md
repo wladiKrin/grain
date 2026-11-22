@@ -77,7 +77,7 @@ Top to bottom:
 7. **Log frame** button.
 
 **Swipe dial behavior (decided):**
-- Horizontal drag; **one value per detent**, no flinging/momentum.
+- Horizontal drag; **one value per detent**. A fast release keeps the dial spinning with friction until it stops on a value; a touch stops it (changed 2026-11-22 after first use).
 - Haptic tick at every detent; **stronger tick on full stops** when the dial moves in thirds/halves.
 - Tapping a faded neighbor moves one step.
 - The ruler follows the finger 1:1 between detents.

@@ -150,4 +150,60 @@ void main() {
     expect(idxOf(t), 4);
     handle.dispose();
   });
+
+  testWidgets('a fast release keeps spinning and stops on a value', (t) async {
+    final h = FakeHaptics();
+    await pump(t, 0, h);
+    await t.fling(find.byType(SwipeDial), const Offset(-80, 0), 1000);
+    await t.pumpAndSettle();
+    final idx = idxOf(t);
+    expect(idx, greaterThan(2));
+    expect(h.ticks.length, idx);
+  });
+
+  testWidgets('a fling right spins backwards and clamps at the start', (
+    t,
+  ) async {
+    final h = FakeHaptics();
+    await pump(t, 3, h);
+    await t.fling(find.byType(SwipeDial), const Offset(80, 0), 3000);
+    await t.pumpAndSettle();
+    expect(idxOf(t), 0);
+    expect(h.ticks.length, 3);
+  });
+
+  testWidgets('a touch stops a fling', (t) async {
+    final h = FakeHaptics();
+    final many = List.generate(
+      200,
+      (i) => ScaleValue('w$i', i.toDouble(), i % 3 == 0),
+    );
+    var index = 0;
+    await t.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 360,
+            child: StatefulBuilder(
+              builder: (context, setState) => SwipeDial(
+                values: many,
+                index: index,
+                haptics: h,
+                onChanged: (i) => setState(() => index = i),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await t.fling(find.byType(SwipeDial), const Offset(-80, 0), 4000);
+    await t.pump(const Duration(milliseconds: 100));
+    final g = await t.startGesture(t.getCenter(find.byType(SwipeDial)));
+    final stopped = index;
+    await t.pump(const Duration(seconds: 2));
+    await g.up();
+    await t.pumpAndSettle();
+    expect(index, stopped);
+  });
 }
