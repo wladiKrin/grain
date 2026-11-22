@@ -16,6 +16,7 @@ class OffsetScale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     final o = offset;
     return Semantics(
       label: 'Exposure offset',
@@ -28,18 +29,21 @@ class OffsetScale extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('OFFSET', style: grainLabelStyle),
+              Text('OFFSET', style: g.label),
               StopsText(
                 o == null ? '—' : formatStops(o),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w500,
-                  color: GrainColors.accent,
+                  color: g.accent,
                 ),
               ),
             ],
           ),
-          SizedBox(height: 22, child: CustomPaint(painter: _OffsetPainter(o))),
+          SizedBox(
+            height: 22,
+            child: CustomPaint(painter: _OffsetPainter(o, g)),
+          ),
         ],
       ),
     );
@@ -47,9 +51,10 @@ class OffsetScale extends StatelessWidget {
 }
 
 class _OffsetPainter extends CustomPainter {
-  _OffsetPainter(this.offset);
+  _OffsetPainter(this.offset, this.g);
 
   final double? offset;
+  final GrainPalette g;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -57,10 +62,10 @@ class _OffsetPainter extends CustomPainter {
     final w = size.width - 2 * inset;
     double x(double stops) => inset + (stops + _range) / (2 * _range) * w;
     final major = Paint()
-      ..color = GrainColors.ink
+      ..color = g.ink
       ..strokeWidth = 1;
     final minor = Paint()
-      ..color = GrainColors.border
+      ..color = g.border
       ..strokeWidth = 1;
     for (var k = -9; k <= 9; k++) {
       final full = k % 3 == 0;
@@ -79,11 +84,11 @@ class _OffsetPainter extends CustomPainter {
           Rect.fromLTWH(px - 1.5, 0, 3, size.height),
           const Radius.circular(2),
         ),
-        Paint()..color = GrainColors.accent,
+        Paint()..color = g.accent,
       );
     }
   }
 
   @override
-  bool shouldRepaint(_OffsetPainter old) => old.offset != offset;
+  bool shouldRepaint(_OffsetPainter old) => old.offset != offset || old.g != g;
 }

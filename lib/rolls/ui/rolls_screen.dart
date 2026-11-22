@@ -32,6 +32,8 @@ class RollsScreen extends StatefulWidget {
 }
 
 class _RollsScreenState extends State<RollsScreen> {
+  GrainPalette get g => context.grain;
+
   final Set<String> _requested = {};
 
   @override
@@ -97,7 +99,7 @@ class _RollsScreenState extends State<RollsScreen> {
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: GrainColors.secondary, fontSize: 16),
+        style: TextStyle(color: g.secondary, fontSize: 16),
       ),
     ),
   );
@@ -130,26 +132,20 @@ class _RollsScreenState extends State<RollsScreen> {
                     ),
                     StopsText(
                       detail,
-                      style: const TextStyle(
-                        color: GrainColors.secondary,
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: g.secondary, fontSize: 14),
                     ),
                     Text(
                       loc.formatMediumDate(r.startedAt.toLocal()),
-                      style: const TextStyle(
-                        color: GrainColors.secondary,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: g.secondary, fontSize: 13),
                     ),
                   ],
                 ),
               ),
               if (r.isActive)
-                const Text(
+                Text(
                   'Active',
                   style: TextStyle(
-                    color: GrainColors.accent,
+                    color: g.accent,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -187,17 +183,11 @@ class _RollsScreenState extends State<RollsScreen> {
                     ),
                     Text(
                       sub,
-                      style: const TextStyle(
-                        color: GrainColors.secondary,
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: g.secondary, fontSize: 14),
                     ),
                     Text(
                       readingWhen(loc, r),
-                      style: const TextStyle(
-                        color: GrainColors.secondary,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: g.secondary, fontSize: 13),
                     ),
                   ],
                 ),

@@ -19,21 +19,22 @@ class ModeTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: GrainColors.divider)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: g.divider)),
       ),
       child: Row(
         spacing: 24,
         children: [
           for (final m in MeterMode.values)
-            Flexible(child: _tab(m, _labels[m]!, m == mode)),
+            Flexible(child: _tab(g, m, _labels[m]!, m == mode)),
         ],
       ),
     );
   }
 
-  Widget _tab(MeterMode m, String label, bool selected) {
+  Widget _tab(GrainPalette g, MeterMode m, String label, bool selected) {
     return Semantics(
       button: true,
       selected: selected,
@@ -49,7 +50,7 @@ class ModeTabs extends StatelessWidget {
             border: Border(
               bottom: BorderSide(
                 width: 2,
-                color: selected ? GrainColors.ink : Colors.transparent,
+                color: selected ? g.ink : Colors.transparent,
               ),
             ),
           ),
@@ -61,7 +62,7 @@ class ModeTabs extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? GrainColors.ink : GrainColors.secondary,
+                color: selected ? g.ink : g.secondary,
               ),
             ),
           ),

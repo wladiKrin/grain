@@ -46,6 +46,8 @@ class RollScreen extends StatefulWidget {
 }
 
 class _RollScreenState extends State<RollScreen> {
+  GrainPalette get g => context.grain;
+
   List<Frame>? _frames;
 
   Roll? get _roll =>
@@ -75,11 +77,11 @@ class _RollScreenState extends State<RollScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: GrainColors.ground,
+        backgroundColor: g.ground,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: GrainColors.border),
+          side: BorderSide(color: g.border),
         ),
         content: Text(text),
         actions: [
@@ -104,11 +106,11 @@ class _RollScreenState extends State<RollScreen> {
       String? error;
       return StatefulBuilder(
         builder: (c, setState) => AlertDialog(
-          backgroundColor: GrainColors.ground,
+          backgroundColor: g.ground,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: GrainColors.border),
+            side: BorderSide(color: g.border),
           ),
           title: const Text('Renumber from here'),
           content: TextField(
@@ -234,23 +236,20 @@ class _RollScreenState extends State<RollScreen> {
           if (pushed)
             StopsText(
               '${pushLabel(roll.pushThirds)} · exposed at ISO ${roll.exposedIso}',
-              style: const TextStyle(color: GrainColors.accent, fontSize: 17),
+              style: TextStyle(color: g.accent, fontSize: 17),
             )
           else
             Text(
               'Box speed · ISO ${roll.boxIso}',
-              style: const TextStyle(color: GrainColors.ink, fontSize: 17),
+              style: TextStyle(color: g.ink, fontSize: 17),
             ),
           const SizedBox(height: 4),
           Text(
             '${roll.bodyName} · ${roll.size} frames · '
             'first frame ${roll.startFrame.label}',
-            style: const TextStyle(color: GrainColors.secondary, fontSize: 15),
+            style: TextStyle(color: g.secondary, fontSize: 15),
           ),
-          Text(
-            dates,
-            style: const TextStyle(color: GrainColors.secondary, fontSize: 15),
-          ),
+          Text(dates, style: TextStyle(color: g.secondary, fontSize: 15)),
           if (roll.notes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -310,10 +309,7 @@ class _RollScreenState extends State<RollScreen> {
                         padding: const EdgeInsets.only(left: 3),
                         child: Text(
                           '+$over',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: GrainColors.accent,
-                          ),
+                          style: TextStyle(fontSize: 12, color: g.accent),
                         ),
                       ),
                   ],
@@ -324,22 +320,16 @@ class _RollScreenState extends State<RollScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (e.isBlank)
-                      const Text(
+                      Text(
                         'Blank',
-                        style: TextStyle(
-                          color: GrainColors.faded,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: g.faded, fontSize: 16),
                       )
                     else if (settings.isNotEmpty)
                       Text(settings, style: const TextStyle(fontSize: 16)),
                     if (detail.isNotEmpty)
                       Text(
                         detail,
-                        style: const TextStyle(
-                          color: GrainColors.secondary,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: g.secondary, fontSize: 13),
                       ),
                     if (e.iso != null)
                       Semantics(
@@ -354,15 +344,15 @@ class _RollScreenState extends State<RollScreen> {
                                 width: 7,
                                 height: 7,
                                 margin: const EdgeInsets.only(right: 5),
-                                decoration: const BoxDecoration(
-                                  color: GrainColors.accent,
+                                decoration: BoxDecoration(
+                                  color: g.accent,
                                   shape: BoxShape.circle,
                                 ),
                               ),
                             Text(
                               'ISO ${e.iso}',
-                              style: const TextStyle(
-                                color: GrainColors.secondary,
+                              style: TextStyle(
+                                color: g.secondary,
                                 fontSize: 13,
                               ),
                             ),
@@ -381,7 +371,7 @@ class _RollScreenState extends State<RollScreen> {
               ),
               PopupMenuButton<_RowAction>(
                 tooltip: 'Frame ${f.label} actions',
-                color: GrainColors.ground,
+                color: g.ground,
                 elevation: 0,
                 constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
                 onSelected: (a) => _rowAction(a, f, i),
@@ -428,7 +418,7 @@ class _RollScreenState extends State<RollScreen> {
         actions: [
           PopupMenuButton<_RollAction>(
             tooltip: 'Roll actions',
-            color: GrainColors.ground,
+            color: g.ground,
             elevation: 0,
             constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             onSelected: (a) => _rollAction(a, roll),

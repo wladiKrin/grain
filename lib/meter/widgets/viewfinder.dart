@@ -134,10 +134,11 @@ class Viewfinder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: ColoredBox(
-        color: GrainColors.ink,
+        color: _previewInk,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final box = constraints.biggest;
@@ -190,22 +191,22 @@ class Viewfinder extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: GrainColors.ground,
+                          color: g.ground,
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           _evLine,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: GrainColors.ink,
+                            color: g.ink,
                           ),
                         ),
                       ),
                       RoundButton(
                         filled: held,
                         toggled: held,
-                        background: GrainColors.ground,
+                        background: g.ground,
                         semanticLabel: held
                             ? 'Release held reading'
                             : 'Hold reading',
@@ -221,7 +222,7 @@ class Viewfinder extends StatelessWidget {
                     left: 10,
                     child: RoundButton(
                       toggled: histogramOn,
-                      background: GrainColors.ground,
+                      background: g.ground,
                       semanticLabel: histogramOn
                           ? 'Hide histogram'
                           : 'Show histogram',
@@ -236,7 +237,7 @@ class Viewfinder extends StatelessWidget {
                     child: HistogramOverlay(view: histogram!),
                   ),
                 if (widerThanPhone)
-                  const Positioned(
+                  Positioned(
                     left: 12,
                     bottom: 10,
                     child: Text(
@@ -245,7 +246,7 @@ class Viewfinder extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 12 * .04,
-                        color: GrainColors.ground,
+                        color: _previewPaper,
                       ),
                     ),
                   ),
@@ -257,6 +258,11 @@ class Viewfinder extends StatelessWidget {
     );
   }
 }
+
+// The preview is dark in both themes, so what sits directly on it (the box,
+// the crop dimming, the reticle) uses the light palette, not the themed one.
+final _previewInk = GrainPalette.light.ink;
+final _previewPaper = GrainPalette.light.ground;
 
 class _OverlayPainter extends CustomPainter {
   _OverlayPainter({
@@ -289,14 +295,11 @@ class _OverlayPainter extends CustomPainter {
         ..fillType = PathFillType.evenOdd
         ..addRect(Offset.zero & size)
         ..addRect(cropPx);
-      canvas.drawPath(
-        dim,
-        Paint()..color = GrainColors.ink.withValues(alpha: .6),
-      );
+      canvas.drawPath(dim, Paint()..color = _previewInk.withValues(alpha: .6));
     }
 
     final stroke = Paint()
-      ..color = GrainColors.ground
+      ..color = _previewPaper
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round;
@@ -311,7 +314,7 @@ class _OverlayPainter extends CustomPainter {
           centre,
           faint,
           Paint()
-            ..color = GrainColors.ground.withValues(alpha: .5)
+            ..color = _previewPaper.withValues(alpha: .5)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1.2,
         );

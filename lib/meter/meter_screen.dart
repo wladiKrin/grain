@@ -80,6 +80,8 @@ class MeterScreen extends StatefulWidget {
 }
 
 class _MeterScreenState extends State<MeterScreen> {
+  GrainPalette get g => context.grain;
+
   MeterController get _c => widget.controller;
 
   GearController get _gear => widget.gear;
@@ -437,15 +439,15 @@ class _MeterScreenState extends State<MeterScreen> {
         mainAxisSize: MainAxisSize.min,
         spacing: 4,
         children: [
-          const Text(
+          Text(
             'Camera unavailable',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: GrainColors.ink),
+            style: TextStyle(fontSize: 15, color: g.ink),
           ),
           Text(
             error,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13, color: GrainColors.secondary),
+            style: TextStyle(fontSize: 13, color: g.secondary),
           ),
         ],
       );
@@ -462,11 +464,11 @@ class _MeterScreenState extends State<MeterScreen> {
       estimated: _c.apertureAssumed,
     ),
     textAlign: TextAlign.center,
-    style: const TextStyle(
+    style: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w500,
       letterSpacing: 12 * .06,
-      color: GrainColors.secondary,
+      color: g.secondary,
     ),
   );
 
@@ -493,7 +495,7 @@ class _MeterScreenState extends State<MeterScreen> {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: GrainColors.divider),
+            border: Border.all(color: g.divider),
           ),
           alignment: Alignment.center,
           child: notice,

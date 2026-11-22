@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Which palette the app wears: the system's, or one fixed.
+enum ThemeChoice { system, light, dark }
+
 /// Persisted preferences: calibration offset, haptics and the viewfinder and
 /// histogram defaults (the app opens the way they were left).
 class Settings extends ChangeNotifier {
@@ -14,6 +17,7 @@ class Settings extends ChangeNotifier {
     required this._histogram,
     required this._shakeWarning,
     required this._clickSound,
+    required this._theme,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -28,6 +32,7 @@ class Settings extends ChangeNotifier {
   static const _kHistogram = 'histogram';
   static const _kShake = 'shakeWarning';
   static const _kClick = 'clickSound';
+  static const _kTheme = 'themeChoice';
 
   /// Calibration range in thirds of a stop (±3 EV).
   static const maxThirds = 9;
@@ -44,6 +49,9 @@ class Settings extends ChangeNotifier {
       histogram: p.getBool(_kHistogram) ?? false,
       shakeWarning: p.getBool(_kShake) ?? false,
       clickSound: p.getBool(_kClick) ?? false,
+      theme:
+          ThemeChoice.values.asNameMap()[p.getString(_kTheme)] ??
+          ThemeChoice.system,
     );
   }
 
@@ -57,6 +65,7 @@ class Settings extends ChangeNotifier {
   bool _histogram = false;
   bool _shakeWarning = false;
   bool _clickSound = false;
+  ThemeChoice _theme = ThemeChoice.system;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
@@ -78,6 +87,9 @@ class Settings extends ChangeNotifier {
 
   /// Play a soft click with every dial detent.
   bool get clickSound => _clickSound;
+
+  /// Light, dark, or follow the system.
+  ThemeChoice get theme => _theme;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -134,6 +146,13 @@ class Settings extends ChangeNotifier {
     _clickSound = v;
     notifyListeners();
     await _prefs?.setBool(_kClick, v);
+  }
+
+  Future<void> setTheme(ThemeChoice v) async {
+    if (v == _theme) return;
+    _theme = v;
+    notifyListeners();
+    await _prefs?.setString(_kTheme, v.name);
   }
 
   /// The settings a backup carries. Calibration belongs to this phone's

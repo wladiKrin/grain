@@ -24,9 +24,9 @@ String importQuestion(BackupContents c) =>
     '${_n(c.readings.length, 'saved reading', 'saved readings')} and '
     '${_n(c.profiles.length, 'profile', 'profiles')}?';
 
-ShapeBorder get _dialogShape => RoundedRectangleBorder(
+ShapeBorder _dialogShape(BuildContext context) => RoundedRectangleBorder(
   borderRadius: BorderRadius.circular(12),
-  side: const BorderSide(color: GrainColors.border),
+  side: BorderSide(color: context.grain.border),
 );
 
 /// Settings section: export everything into one zip, or import one.
@@ -122,9 +122,9 @@ class _BackupSectionState extends State<BackupSection> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          backgroundColor: GrainColors.ground,
+          backgroundColor: ctx.grain.ground,
           elevation: 0,
-          shape: _dialogShape,
+          shape: _dialogShape(ctx),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,9 +160,9 @@ class _BackupSectionState extends State<BackupSection> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: GrainColors.ground,
+        backgroundColor: ctx.grain.ground,
         elevation: 0,
-        shape: _dialogShape,
+        shape: _dialogShape(ctx),
         title: Text(title),
         content: Text(text),
         actions: [
@@ -177,17 +177,18 @@ class _BackupSectionState extends State<BackupSection> {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: 12,
         children: [
-          const Text('BACKUP', style: grainLabelStyle),
-          const Text(
+          Text('BACKUP', style: g.label),
+          Text(
             'Rolls, frames, saved readings, your gear and favorites in one '
             'zip. Importing keeps everything already here.',
-            style: TextStyle(fontSize: 13, color: GrainColors.secondary),
+            style: TextStyle(fontSize: 13, color: g.secondary),
           ),
           Row(
             spacing: 12,
@@ -207,10 +208,7 @@ class _BackupSectionState extends State<BackupSection> {
             ],
           ),
           if (_busy)
-            const LinearProgressIndicator(
-              color: GrainColors.ink,
-              backgroundColor: GrainColors.divider,
-            ),
+            LinearProgressIndicator(color: g.ink, backgroundColor: g.divider),
         ],
       ),
     );

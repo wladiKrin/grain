@@ -34,9 +34,10 @@ class IsoStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Row(
       children: [
-        const Expanded(child: Text('ISO', style: grainLabelStyle)),
+        Expanded(child: Text('ISO', style: g.label)),
         RoundButton(
           semanticLabel: 'Lower ISO',
           onPressed: () => _step(-1),
@@ -54,19 +55,19 @@ class IsoStepper extends StatelessWidget {
               children: [
                 Text(
                   values[index].label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w500,
-                    color: GrainColors.ink,
+                    color: g.ink,
                   ),
                 ),
                 if (marked)
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: GrainColors.accent,
+                      color: g.accent,
                     ),
                   ),
               ],

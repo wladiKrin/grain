@@ -18,6 +18,7 @@ class LensChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Align(
       alignment: Alignment.centerLeft,
       widthFactor: 1,
@@ -44,16 +45,16 @@ class LensChip extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: GrainColors.border),
+                      border: Border.all(color: g.border),
                     ),
                     child: Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
-                        color: GrainColors.ink,
+                        color: g.ink,
                       ),
                     ),
                   ),
@@ -71,9 +72,9 @@ class LensChip extends StatelessWidget {
                 constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   'more…',
-                  style: TextStyle(fontSize: 15, color: GrainColors.secondary),
+                  style: TextStyle(fontSize: 15, color: g.secondary),
                 ),
               ),
             ),

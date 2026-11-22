@@ -70,6 +70,7 @@ class BodyPickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return ListenableBuilder(
       listenable: gear,
       builder: (context, _) {
@@ -134,7 +135,7 @@ class BodyPickerScreen extends StatelessWidget {
               for (final e in byMake.entries) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text(e.key.toUpperCase(), style: grainLabelStyle),
+                  child: Text(e.key.toUpperCase(), style: g.label),
                 ),
                 for (final b in e.value) _tile(context, b),
               ],
@@ -170,7 +171,7 @@ class ProfileNoneTile extends StatelessWidget {
           SizedBox(
             width: 24,
             child: selected
-                ? const Icon(Icons.check, size: 20, color: GrainColors.accent)
+                ? Icon(Icons.check, size: 20, color: context.grain.accent)
                 : null,
           ),
           const SizedBox(width: 8),
@@ -190,10 +191,10 @@ class SectionHeader extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w500,
-        color: GrainColors.ink,
+        color: context.grain.ink,
       ),
     ),
   );

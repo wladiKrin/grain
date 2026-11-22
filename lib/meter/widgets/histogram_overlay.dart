@@ -18,15 +18,22 @@ class HistogramOverlay extends StatelessWidget {
   Widget build(BuildContext context) => RepaintBoundary(
     child: SizedBox.fromSize(
       size: size,
-      child: CustomPaint(painter: _HistogramPainter(view)),
+      child: CustomPaint(
+        painter: _HistogramPainter(view, context.grain.accent),
+      ),
     ),
   );
 }
 
 class _HistogramPainter extends CustomPainter {
-  _HistogramPainter(this.view) : super(repaint: view);
+  _HistogramPainter(this.view, this.accent) : super(repaint: view);
 
   final ValueListenable<HistogramView?> view;
+  final Color accent;
+
+  // Over the preview, which is dark in both themes.
+  static final _ink = GrainPalette.light.ink;
+  static final _ground = GrainPalette.light.ground;
 
   static const _inset = 4.0;
 
@@ -37,14 +44,14 @@ class _HistogramPainter extends CustomPainter {
     final panel = Offset.zero & size;
     canvas.drawRRect(
       RRect.fromRectAndRadius(panel, const Radius.circular(8)),
-      Paint()..color = GrainColors.ink.withValues(alpha: .55),
+      Paint()..color = _ink.withValues(alpha: .55),
     );
     final area = panel.deflate(_inset);
     double x(double t) => area.left + t.clamp(0.0, 1.0) * area.width;
 
     canvas.drawRect(
       Rect.fromLTRB(x(v.bandStart), area.top, x(v.bandEnd), area.bottom),
-      Paint()..color = GrainColors.ground.withValues(alpha: .18),
+      Paint()..color = _ground.withValues(alpha: .18),
     );
 
     final n = v.heights.length;
@@ -56,10 +63,7 @@ class _HistogramPainter extends CustomPainter {
         if (h <= 0) continue;
         bars.addRect(Rect.fromLTWH(area.left + i * w, area.bottom - h, w, h));
       }
-      canvas.drawPath(
-        bars,
-        Paint()..color = GrainColors.ground.withValues(alpha: .85),
-      );
+      canvas.drawPath(bars, Paint()..color = _ground.withValues(alpha: .85));
     }
 
     final mx = x(v.marker);
@@ -67,11 +71,12 @@ class _HistogramPainter extends CustomPainter {
       Offset(mx, area.top),
       Offset(mx, area.bottom),
       Paint()
-        ..color = GrainColors.accent
+        ..color = accent
         ..strokeWidth = 1.5,
     );
   }
 
   @override
-  bool shouldRepaint(_HistogramPainter old) => old.view != view;
+  bool shouldRepaint(_HistogramPainter old) =>
+      old.view != view || old.accent != accent;
 }

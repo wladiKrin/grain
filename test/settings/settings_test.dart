@@ -20,6 +20,21 @@ void main() {
     expect(s.viewfinderOn, isTrue);
   });
 
+  test('theme choice defaults to system, persists and reloads', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.theme, ThemeChoice.system);
+    await s.setTheme(ThemeChoice.dark);
+    expect((await Settings.load()).theme, ThemeChoice.dark);
+    await s.setTheme(ThemeChoice.light);
+    expect((await Settings.load()).theme, ThemeChoice.light);
+  });
+
+  test('an unknown stored theme choice falls back to system', () async {
+    SharedPreferences.setMockInitialValues({'themeChoice': 'sepia'});
+    expect((await Settings.load()).theme, ThemeChoice.system);
+  });
+
   test('snapshots default on, location default off, both persist', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();
@@ -32,35 +47,41 @@ void main() {
     expect(r.location, isTrue);
   });
 
-  test('shake warning defaults off, persists and travels in the backup', () async {
-    SharedPreferences.setMockInitialValues({});
-    final s = await Settings.load();
-    expect(s.shakeWarning, isFalse);
-    expect(s.backupMap()['shakeWarning'], isFalse);
-    await s.setShakeWarning(true);
-    final r = await Settings.load();
-    expect(r.shakeWarning, isTrue);
-    expect(r.backupMap()['shakeWarning'], isTrue);
-    await r.applyBackupMap({'shakeWarning': false});
-    expect(r.shakeWarning, isFalse);
-    await r.applyBackupMap({'shakeWarning': 'yes'});
-    expect(r.shakeWarning, isFalse);
-  });
+  test(
+    'shake warning defaults off, persists and travels in the backup',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = await Settings.load();
+      expect(s.shakeWarning, isFalse);
+      expect(s.backupMap()['shakeWarning'], isFalse);
+      await s.setShakeWarning(true);
+      final r = await Settings.load();
+      expect(r.shakeWarning, isTrue);
+      expect(r.backupMap()['shakeWarning'], isTrue);
+      await r.applyBackupMap({'shakeWarning': false});
+      expect(r.shakeWarning, isFalse);
+      await r.applyBackupMap({'shakeWarning': 'yes'});
+      expect(r.shakeWarning, isFalse);
+    },
+  );
 
-  test('click sound defaults off, persists and travels in the backup', () async {
-    SharedPreferences.setMockInitialValues({});
-    final s = await Settings.load();
-    expect(s.clickSound, isFalse);
-    expect(s.backupMap()['clickSound'], isFalse);
-    await s.setClickSound(true);
-    final r = await Settings.load();
-    expect(r.clickSound, isTrue);
-    expect(r.backupMap()['clickSound'], isTrue);
-    await r.applyBackupMap({'clickSound': false});
-    expect(r.clickSound, isFalse);
-    await r.applyBackupMap({'clickSound': 'yes'});
-    expect(r.clickSound, isFalse);
-  });
+  test(
+    'click sound defaults off, persists and travels in the backup',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = await Settings.load();
+      expect(s.clickSound, isFalse);
+      expect(s.backupMap()['clickSound'], isFalse);
+      await s.setClickSound(true);
+      final r = await Settings.load();
+      expect(r.clickSound, isTrue);
+      expect(r.backupMap()['clickSound'], isTrue);
+      await r.applyBackupMap({'clickSound': false});
+      expect(r.clickSound, isFalse);
+      await r.applyBackupMap({'clickSound': 'yes'});
+      expect(r.clickSound, isFalse);
+    },
+  );
 
   test('histogram defaults off, persists and travels in the backup', () async {
     SharedPreferences.setMockInitialValues({});

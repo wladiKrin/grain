@@ -123,6 +123,25 @@ void main() {
     expect(s.viewfinderOn, isFalse);
   });
 
+  testWidgets('appearance row picks the theme', (tester) async {
+    final s = Settings.inMemory();
+    await tester.pumpWidget(_app(s));
+    await _reveal(tester, find.text('Appearance'));
+    expect(s.theme, ThemeChoice.system);
+    for (final label in ['System', 'Light', 'Dark']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    await tester.tap(find.text('Dark'));
+    await tester.pump();
+    expect(s.theme, ThemeChoice.dark);
+    await tester.tap(find.text('Light'));
+    await tester.pump();
+    expect(s.theme, ThemeChoice.light);
+    await tester.tap(find.text('System'));
+    await tester.pump();
+    expect(s.theme, ThemeChoice.system);
+  });
+
   testWidgets('turning location on asks for permission first', (tester) async {
     final s = Settings.inMemory();
     final loc = FakeLocation();

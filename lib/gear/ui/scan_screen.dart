@@ -19,6 +19,8 @@ class ScanScreen extends StatefulWidget {
 }
 
 class _ScanScreenState extends State<ScanScreen> {
+  GrainPalette get g => context.grain;
+
   PreviewInfo? _preview;
   bool _denied = false;
   String? _error;
@@ -169,7 +171,7 @@ class _ScanScreenState extends State<ScanScreen> {
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 15, color: GrainColors.ink),
+        style: TextStyle(fontSize: 15, color: g.ink),
       ),
     ),
   );

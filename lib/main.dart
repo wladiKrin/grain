@@ -384,14 +384,27 @@ class _GrainAppState extends State<GrainApp> {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _settings,
+      builder: (context, _) => _app(),
+    );
+  }
+
+  Widget _app() {
     return MaterialApp(
       title: 'Grain',
       theme: grainTheme(),
+      darkTheme: grainTheme(Brightness.dark),
+      themeMode: switch (_settings.theme) {
+        ThemeChoice.system => ThemeMode.system,
+        ThemeChoice.light => ThemeMode.light,
+        ThemeChoice.dark => ThemeMode.dark,
+      },
       navigatorKey: _navigator,
-      // Every route sits on the paper ground: dark bar icons, even when the
-      // system is in dark mode.
+      // System bar icons follow the effective brightness, on the palette's
+      // ground: dark icons on light, light icons on dark.
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: grainOverlayStyle,
+        value: grainOverlayStyle(Theme.of(context).brightness),
         child: child!,
       ),
       home: MeterScreen(

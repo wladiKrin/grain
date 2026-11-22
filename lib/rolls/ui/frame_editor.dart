@@ -57,6 +57,8 @@ class FrameEditorScreen extends StatefulWidget {
 }
 
 class _FrameEditorScreenState extends State<FrameEditorScreen> {
+  GrainPalette get g => context.grain;
+
   late Frame _frame;
   late final TextEditingController _aperture;
   late final TextEditingController _shutter;
@@ -275,7 +277,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
       keyboardType: number
           ? TextInputType.numberWithOptions(decimal: !wholeNumber)
           : TextInputType.text,
-      decoration: editorDecoration(label).copyWith(errorText: error),
+      decoration: editorDecoration(context, label).copyWith(errorText: error),
       onChanged: (_) => setState(() {}),
     ),
   );
@@ -297,7 +299,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
     child: TextButton(
       style: TextButton.styleFrom(
         minimumSize: const Size(44, 48),
-        foregroundColor: GrainColors.accent,
+        foregroundColor: g.accent,
       ),
       onPressed: onTap,
       child: Text(label),
@@ -354,11 +356,11 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
                 showSelectedIcon: false,
                 emptySelectionAllowed: true,
                 style: SegmentedButton.styleFrom(
-                  backgroundColor: GrainColors.ground,
-                  foregroundColor: GrainColors.ink,
-                  selectedBackgroundColor: GrainColors.ink,
-                  selectedForegroundColor: GrainColors.ground,
-                  side: const BorderSide(color: GrainColors.border),
+                  backgroundColor: g.ground,
+                  foregroundColor: g.ink,
+                  selectedBackgroundColor: g.ink,
+                  selectedForegroundColor: g.ground,
+                  side: BorderSide(color: g.border),
                   minimumSize: const Size(44, 48),
                 ),
                 segments: const [
@@ -384,8 +386,8 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(44, 48),
-                      foregroundColor: GrainColors.ink,
-                      side: const BorderSide(color: GrainColors.border),
+                      foregroundColor: g.ink,
+                      side: BorderSide(color: g.border),
                     ),
                     onPressed: _pickDate,
                     child: Text(
@@ -398,8 +400,8 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(44, 48),
-                      foregroundColor: GrainColors.ink,
-                      side: const BorderSide(color: GrainColors.border),
+                      foregroundColor: g.ink,
+                      side: BorderSide(color: g.border),
                     ),
                     onPressed: _pickTime,
                     child: Text(
@@ -421,10 +423,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: StopsText(
                   measured,
-                  style: const TextStyle(
-                    color: GrainColors.secondary,
-                    fontSize: 15,
-                  ),
+                  style: TextStyle(color: g.secondary, fontSize: 15),
                 ),
               ),
             if (fix != null) ...[

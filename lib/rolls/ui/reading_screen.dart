@@ -42,6 +42,8 @@ class ReadingScreen extends StatefulWidget {
 }
 
 class _ReadingScreenState extends State<ReadingScreen> {
+  GrainPalette get g => context.grain;
+
   late final TextEditingController _note;
   late final AppLifecycleListener _lifecycle;
   Timer? _debounce;
@@ -109,11 +111,11 @@ class _ReadingScreenState extends State<ReadingScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        backgroundColor: GrainColors.ground,
+        backgroundColor: g.ground,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: GrainColors.border),
+          side: BorderSide(color: g.border),
         ),
         content: Text(text),
         actions: [
@@ -143,7 +145,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
     child: TextButton(
       style: TextButton.styleFrom(
         minimumSize: const Size(44, 48),
-        foregroundColor: GrainColors.accent,
+        foregroundColor: g.accent,
       ),
       onPressed: onTap,
       child: Text(label),
@@ -159,7 +161,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           width: 110,
           child: Text(
             label,
-            style: const TextStyle(color: GrainColors.secondary, fontSize: 15),
+            style: TextStyle(color: g.secondary, fontSize: 15),
           ),
         ),
         Expanded(child: StopsText(value, style: const TextStyle(fontSize: 16))),

@@ -28,6 +28,7 @@ class MeterHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Row(
       children: [
         Expanded(
@@ -42,10 +43,10 @@ class MeterHeader extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: GrainColors.ink,
+                    color: g.ink,
                   ),
                 ),
                 for (final line in [subtitle, ?detail])
@@ -53,10 +54,7 @@ class MeterHeader extends StatelessWidget {
                     line,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: GrainColors.secondary,
-                    ),
+                    style: TextStyle(fontSize: 13, color: g.secondary),
                   ),
               ],
             ),

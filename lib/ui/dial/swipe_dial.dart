@@ -10,10 +10,6 @@ import '../haptics.dart';
 import '../theme.dart';
 import '../stops_text.dart';
 
-const _ink = GrainColors.ink;
-const _faded = GrainColors.faded;
-const _minorTick = Color(0xFFB4AEA3);
-const _accent = GrainColors.accent;
 const _fontFamily = grainFont;
 
 const _rulerHeight = 22.0;
@@ -163,6 +159,7 @@ class _SwipeDialState extends State<SwipeDial>
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     final values = widget.values;
     final i = widget.index;
     final prev = i > 0 ? values[i - 1].label : null;
@@ -190,7 +187,9 @@ class _SwipeDialState extends State<SwipeDial>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(child: _neighbour(prev, -1, Alignment.centerLeft)),
+                    Expanded(
+                      child: _neighbour(g, prev, -1, Alignment.centerLeft),
+                    ),
                     StopsText(
                       values[i].label,
                       softWrap: false,
@@ -198,11 +197,13 @@ class _SwipeDialState extends State<SwipeDial>
                         fontFamily: _fontFamily,
                         fontSize: widget.valueFontSize,
                         fontWeight: FontWeight.w300,
-                        color: _ink,
+                        color: g.ink,
                         height: 1,
                       ),
                     ),
-                    Expanded(child: _neighbour(next, 1, Alignment.centerRight)),
+                    Expanded(
+                      child: _neighbour(g, next, 1, Alignment.centerRight),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -215,6 +216,7 @@ class _SwipeDialState extends State<SwipeDial>
                       index: i,
                       detent: widget.detent,
                       offset: _rulerOffset,
+                      palette: g,
                     ),
                   ),
                 ),
@@ -226,7 +228,7 @@ class _SwipeDialState extends State<SwipeDial>
     );
   }
 
-  Widget _neighbour(String? label, int delta, Alignment align) {
+  Widget _neighbour(GrainPalette g, String? label, int delta, Alignment align) {
     if (label == null) return const SizedBox.shrink();
     return Align(
       alignment: align,
@@ -243,11 +245,11 @@ class _SwipeDialState extends State<SwipeDial>
             child: StopsText(
               label,
               softWrap: false,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: _fontFamily,
                 fontSize: 24,
                 fontWeight: FontWeight.w300,
-                color: _faded,
+                color: g.faded,
               ),
             ),
           ),
@@ -263,21 +265,23 @@ class _RulerPainter extends CustomPainter {
     required this.index,
     required this.detent,
     required this.offset,
+    required this.palette,
   }) : super(repaint: offset);
 
   final int count;
   final int index;
   final double detent;
   final ValueListenable<double> offset;
+  final GrainPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2 + offset.value;
     final minor = Paint()
-      ..color = _minorTick
+      ..color = palette.minorTick
       ..strokeWidth = 1;
     final major = Paint()
-      ..color = _faded
+      ..color = palette.faded
       ..strokeWidth = 1.5;
     for (var i = 0; i < count; i++) {
       final x = cx + (i - index) * detent;
@@ -300,11 +304,14 @@ class _RulerPainter extends CustomPainter {
     }
     canvas.drawRect(
       Rect.fromLTWH(size.width / 2 - 1.5, 0, 3, size.height),
-      Paint()..color = _accent,
+      Paint()..color = palette.accent,
     );
   }
 
   @override
   bool shouldRepaint(_RulerPainter old) =>
-      old.count != count || old.index != index || old.detent != detent;
+      old.count != count ||
+      old.index != index ||
+      old.detent != detent ||
+      old.palette != palette;
 }

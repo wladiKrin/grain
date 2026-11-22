@@ -195,7 +195,10 @@ void main() {
     await pumpScreen(t, stats: evMinus2());
     expect(c.bulbSeconds, closeTo(64, 1));
     expect(find.text('B'), findsOneWidget);
-    expect(t.widget<Text>(find.text('B')).style?.color, GrainColors.accent);
+    expect(
+      t.widget<Text>(find.text('B')).style?.color,
+      GrainPalette.light.accent,
+    );
     expect(find.text('1m 04s'), findsOneWidget);
   });
 

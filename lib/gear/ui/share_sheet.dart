@@ -53,6 +53,7 @@ class _ShareSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     final payload = qrPayloadFor(doc);
     return SafeArea(
       child: SingleChildScrollView(
@@ -77,10 +78,10 @@ class _ShareSheet extends StatelessWidget {
                 backgroundColor: Colors.white,
               )
             else
-              const Text(
+              Text(
                 'Too large for one QR code — share it as a file.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: GrainColors.secondary),
+                style: TextStyle(fontSize: 15, color: g.secondary),
               ),
             FilledButton(
               onPressed: () => platform.shareFile(

@@ -52,6 +52,7 @@ class _CameraPermissionPromptState extends State<CameraPermissionPrompt> {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: 12,
@@ -61,7 +62,7 @@ class _CameraPermissionPromptState extends State<CameraPermissionPrompt> {
               ? 'Camera access is off for Grain. Turn it on in the system settings.'
               : 'Grain needs the camera to measure light.',
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 15, color: GrainColors.ink),
+          style: TextStyle(fontSize: 15, color: g.ink),
         ),
         Semantics(
           button: true,
@@ -73,15 +74,15 @@ class _CameraPermissionPromptState extends State<CameraPermissionPrompt> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: GrainColors.ink,
+                color: g.ink,
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Text(
                 _blocked ? 'Open settings' : 'Allow camera',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: GrainColors.ground,
+                  color: g.ground,
                 ),
               ),
             ),

@@ -33,33 +33,44 @@ void main() {
     expect(call.arguments, ['DeviceOrientation.portraitUp']);
   });
 
-  test('overlay style: dark icons on the paper ground', () {
-    expect(grainOverlayStyle.statusBarIconBrightness, Brightness.dark);
-    expect(grainOverlayStyle.statusBarBrightness, Brightness.light);
-    expect(grainOverlayStyle.systemNavigationBarColor, GrainColors.ground);
-    expect(
-      grainOverlayStyle.systemNavigationBarIconBrightness,
-      Brightness.dark,
-    );
+  test('overlay style: dark icons on the light ground', () {
+    final s = grainOverlayStyle(Brightness.light);
+    expect(s.statusBarIconBrightness, Brightness.dark);
+    expect(s.statusBarBrightness, Brightness.light);
+    expect(s.systemNavigationBarColor, GrainPalette.light.ground);
+    expect(s.systemNavigationBarIconBrightness, Brightness.dark);
   });
 
-  testWidgets('meter and settings screens apply the light overlay style, '
-      'also in system dark mode', (tester) async {
+  test('overlay style: light icons on the dark ground', () {
+    final s = grainOverlayStyle(Brightness.dark);
+    expect(s.statusBarIconBrightness, Brightness.light);
+    expect(s.statusBarBrightness, Brightness.dark);
+    expect(s.systemNavigationBarColor, GrainPalette.dark.ground);
+    expect(s.systemNavigationBarIconBrightness, Brightness.light);
+  });
+
+  testWidgets('meter and settings screens apply the overlay style of the '
+      'effective brightness', (tester) async {
     tester.view.physicalSize = const Size(1700, 2400);
     tester.view.devicePixelRatio = 2.75;
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.view.reset);
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    final dark = grainOverlayStyle(Brightness.dark);
     await tester.pumpWidget(
       GrainApp(source: FakeMeterSource(), haptics: _Haptics()),
     );
     await tester.pump();
-    expect(SystemChrome.latestStyle, grainOverlayStyle);
+    expect(SystemChrome.latestStyle, dark);
 
     await tester.tap(find.byIcon(Icons.tune));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsScreen), findsOneWidget);
-    expect(SystemChrome.latestStyle, grainOverlayStyle);
+    expect(SystemChrome.latestStyle, dark);
+
+    await tester.tap(find.text('Light'));
+    await tester.pumpAndSettle();
+    expect(SystemChrome.latestStyle, grainOverlayStyle(Brightness.light));
   });
 }

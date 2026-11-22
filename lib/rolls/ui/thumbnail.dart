@@ -17,22 +17,22 @@ class SnapshotThumb extends StatelessWidget {
   final String? name;
   final double size;
 
-  Widget _placeholder() => Container(
+  Widget _placeholder(BuildContext context) => Container(
     width: size,
     height: size,
-    color: GrainColors.divider,
+    color: context.grain.divider,
     alignment: Alignment.center,
     child: Icon(
       Icons.image_not_supported_outlined,
       size: size * .45,
-      color: GrainColors.faded,
+      color: context.grain.faded,
     ),
   );
 
   @override
   Widget build(BuildContext context) {
     final n = name;
-    if (n == null) return _placeholder();
+    if (n == null) return _placeholder(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return Image.file(
       store.file(n),
@@ -40,7 +40,7 @@ class SnapshotThumb extends StatelessWidget {
       height: size,
       fit: BoxFit.cover,
       cacheWidth: (size * dpr).round(),
-      errorBuilder: (_, _, _) => _placeholder(),
+      errorBuilder: (_, _, _) => _placeholder(context),
     );
   }
 }

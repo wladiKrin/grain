@@ -14,11 +14,11 @@ Future<BodyChangeChoice?> showBodyChangeDialog(
   context: context,
   barrierDismissible: false,
   builder: (c) => AlertDialog(
-    backgroundColor: GrainColors.ground,
+    backgroundColor: c.grain.ground,
     elevation: 0,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
-      side: const BorderSide(color: GrainColors.border),
+      side: BorderSide(color: c.grain.border),
     ),
     title: Text('Roll ${roll.number} is in the ${roll.bodyName}'),
     actionsOverflowDirection: VerticalDirection.down,

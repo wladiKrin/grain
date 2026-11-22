@@ -89,6 +89,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     final inset = MediaQuery.paddingOf(context);
     return Scaffold(
       body: ListenableBuilder(
@@ -109,12 +110,12 @@ class SettingsScreen extends StatelessWidget {
                   onPressed: () => Navigator.of(context).maybePop(),
                   child: const Icon(Icons.arrow_back),
                 ),
-                const Text(
+                Text(
                   'Settings',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: GrainColors.ink,
+                    color: g.ink,
                   ),
                 ),
               ],
@@ -127,7 +128,7 @@ class SettingsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 spacing: 12,
                 children: [
-                  const Text('CALIBRATION', style: grainLabelStyle),
+                  Text('CALIBRATION', style: g.label),
                   SwipeDial(
                     values: _calibrationValues,
                     index: settings.calibrationThirds + Settings.maxThirds,
@@ -136,12 +137,9 @@ class SettingsScreen extends StatelessWidget {
                     haptics: haptics,
                     valueFontSize: 44,
                   ),
-                  const Text(
+                  Text(
                     'Compare with a camera you trust and nudge until they agree.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: GrainColors.secondary,
-                    ),
+                    style: TextStyle(fontSize: 13, color: g.secondary),
                   ),
                 ],
               ),
@@ -187,6 +185,8 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (v) => _setLocation(context, v),
             ),
             const _Divider(),
+            _ThemeRow(value: settings.theme, onChanged: settings.setTheme),
+            const _Divider(),
             BackupSection(
               gear: gear,
               rolls: rolls,
@@ -201,12 +201,12 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => showLicences(context),
             ),
             const _Divider(),
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 24),
               child: Text(
                 'Grain · GPLv3 · $appVersion',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: GrainColors.faded),
+                style: TextStyle(fontSize: 12, color: g.faded),
               ),
             ),
           ],
@@ -221,7 +221,7 @@ class _Divider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const SizedBox(height: 1, child: ColoredBox(color: GrainColors.divider));
+      SizedBox(height: 1, child: ColoredBox(color: context.grain.divider));
 }
 
 /// A row that opens another page.
@@ -234,6 +234,7 @@ class _LinkRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return MergeSemantics(
       child: Semantics(
         button: true,
@@ -249,25 +250,16 @@ class _LinkRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     spacing: 2,
                     children: [
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: GrainColors.ink,
-                        ),
-                      ),
+                      Text(label, style: TextStyle(fontSize: 15, color: g.ink)),
                       if (subtitle != null)
                         Text(
                           subtitle!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: GrainColors.secondary,
-                          ),
+                          style: TextStyle(fontSize: 13, color: g.secondary),
                         ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: GrainColors.secondary),
+                Icon(Icons.chevron_right, color: g.secondary),
               ],
             ),
           ),
@@ -292,6 +284,7 @@ class _SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return MergeSemantics(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -305,20 +298,11 @@ class _SwitchRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   spacing: 2,
                   children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: GrainColors.ink,
-                      ),
-                    ),
+                    Text(label, style: TextStyle(fontSize: 15, color: g.ink)),
                     if (subtitle != null)
                       Text(
                         subtitle!,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: GrainColors.secondary,
-                        ),
+                        style: TextStyle(fontSize: 13, color: g.secondary),
                       ),
                   ],
                 ),
@@ -326,17 +310,61 @@ class _SwitchRow extends StatelessWidget {
               Switch(
                 value: value,
                 onChanged: onChanged,
-                activeThumbColor: GrainColors.ground,
-                activeTrackColor: GrainColors.ink,
-                inactiveThumbColor: GrainColors.faded,
-                inactiveTrackColor: GrainColors.ground,
-                trackOutlineColor: const WidgetStatePropertyAll(
-                  GrainColors.border,
-                ),
+                activeThumbColor: g.ground,
+                activeTrackColor: g.ink,
+                inactiveThumbColor: g.faded,
+                inactiveTrackColor: g.ground,
+                trackOutlineColor: WidgetStatePropertyAll(g.border),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Appearance: follow the system, or fix light or dark.
+class _ThemeRow extends StatelessWidget {
+  const _ThemeRow({required this.value, required this.onChanged});
+
+  final ThemeChoice value;
+  final ValueChanged<ThemeChoice> onChanged;
+
+  static const _labels = {
+    ThemeChoice.system: 'System',
+    ThemeChoice.light: 'Light',
+    ThemeChoice.dark: 'Dark',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final g = context.grain;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 10,
+        children: [
+          Text('Appearance', style: TextStyle(fontSize: 15, color: g.ink)),
+          SegmentedButton<ThemeChoice>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              backgroundColor: g.ground,
+              foregroundColor: g.ink,
+              selectedBackgroundColor: g.ink,
+              selectedForegroundColor: g.ground,
+              side: BorderSide(color: g.border),
+              minimumSize: const Size(44, 44),
+            ),
+            segments: [
+              for (final e in _labels.entries)
+                ButtonSegment(value: e.key, label: Text(e.value)),
+            ],
+            selected: {value},
+            onSelectionChanged: (s) => onChanged(s.first),
+          ),
+        ],
       ),
     );
   }

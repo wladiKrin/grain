@@ -58,10 +58,11 @@ class ValueRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: GrainColors.divider)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: g.divider)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -74,36 +75,36 @@ class ValueRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 spacing: 6,
                 children: [
-                  Text(label, style: grainLabelStyle),
+                  Text(label, style: g.label),
                   if (warning)
                     Semantics(
                       label: 'Camera shake risk',
                       child: Icon(
                         Icons.back_hand_outlined,
                         size: 14,
-                        color: GrainColors.secondary,
+                        color: g.secondary,
                       ),
                     ),
                 ],
               ),
               if (_isInput)
-                const Text(
+                Text(
                   '← swipe →',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 12 * .04,
-                    color: GrainColors.secondary,
+                    color: g.secondary,
                   ),
                 )
               else
-                const Text(
+                Text(
                   '● METERED',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     letterSpacing: 12 * .06,
-                    color: GrainColors.accent,
+                    color: g.accent,
                   ),
                 ),
             ],
@@ -117,13 +118,13 @@ class ValueRow extends StatelessWidget {
               valueFontSize: fontSize,
             )
           else
-            _solvedValue(),
+            _solvedValue(g),
         ],
       ),
     );
   }
 
-  Widget _solvedValue() {
+  Widget _solvedValue(GrainPalette g) {
     final flagText = switch (flag) {
       RangeFlag.over => '▲ over',
       RangeFlag.under => '▼ under',
@@ -145,7 +146,7 @@ class ValueRow extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 letterSpacing: -.05 * fontSize,
                 height: 1.05,
-                color: GrainColors.accent,
+                color: g.accent,
               ),
             ),
           ),
@@ -153,19 +154,19 @@ class ValueRow extends StatelessWidget {
         if (note != null)
           Text(
             note!,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w500,
-              color: GrainColors.secondary,
+              color: g.secondary,
             ),
           )
         else if (flagText != null)
           Text(
             flagText,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w500,
-              color: GrainColors.accent,
+              color: g.accent,
             ),
           ),
       ],

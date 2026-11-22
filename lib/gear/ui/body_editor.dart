@@ -142,6 +142,7 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isNew ? 'New body' : 'Edit body'),
@@ -181,13 +182,11 @@ class _BodyEditorScreenState extends State<BodyEditorScreen> {
                         label: Text(m),
                         selected: _shutter.contains(m),
                         showCheckmark: false,
-                        selectedColor: GrainColors.ink,
-                        backgroundColor: GrainColors.ground,
-                        side: const BorderSide(color: GrainColors.border),
+                        selectedColor: g.ink,
+                        backgroundColor: g.ground,
+                        side: BorderSide(color: g.border),
                         labelStyle: TextStyle(
-                          color: _shutter.contains(m)
-                              ? GrainColors.ground
-                              : GrainColors.ink,
+                          color: _shutter.contains(m) ? g.ground : g.ink,
                         ),
                         onSelected: (on) => setState(
                           () => on ? _shutter.add(m) : _shutter.remove(m),

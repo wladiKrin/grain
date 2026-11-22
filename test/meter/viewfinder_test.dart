@@ -3,6 +3,7 @@ import 'package:grain/exposure/solver.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
 import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/reading.dart';
+import 'package:grain/ui/theme.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Portrait preview buffer, as the controller reports it.
@@ -45,6 +46,44 @@ Future<Rect> _pump(WidgetTester t, Size box, Rect crop) async {
 }
 
 void main() {
+  testWidgets('the box stays near-black under the dark theme', (t) async {
+    await t.pumpWidget(
+      MaterialApp(
+        theme: grainTheme(Brightness.dark),
+        home: Center(
+          child: SizedBox(
+            width: 364,
+            height: 335,
+            child: Viewfinder(
+              textureId: 1,
+              previewSize: _preview,
+              crop: null,
+              area: MeterArea.average,
+              spot: const Offset(.5, .5),
+              spotRadius: .02,
+              ev: null,
+              flag: RangeFlag.ok,
+              held: false,
+              widerThanPhone: false,
+              onSpot: (_) {},
+              onClearSpot: () {},
+              onToggleHold: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final box = t.widget<ColoredBox>(
+      find
+          .descendant(
+            of: find.byType(Viewfinder),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+    expect(box.color, const Color(0xFF141414));
+  });
+
   for (final box in const [Size(364, 335), Size(364, 239)]) {
     for (final focal in const [28.0, 50.0]) {
       testWidgets('${focal.toInt()} mm crop fits inside a '

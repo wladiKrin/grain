@@ -59,6 +59,8 @@ class RollEditorScreen extends StatefulWidget {
 }
 
 class _RollEditorScreenState extends State<RollEditorScreen> {
+  GrainPalette get g => context.grain;
+
   late final TextEditingController _film;
   final _filmFocus = FocusNode();
   late final TextEditingController _notes;
@@ -184,11 +186,11 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
   }
 
   ButtonStyle get _segStyle => SegmentedButton.styleFrom(
-    backgroundColor: GrainColors.ground,
-    foregroundColor: GrainColors.ink,
-    selectedBackgroundColor: GrainColors.ink,
-    selectedForegroundColor: GrainColors.ground,
-    side: const BorderSide(color: GrainColors.border),
+    backgroundColor: g.ground,
+    foregroundColor: g.ink,
+    selectedBackgroundColor: g.ink,
+    selectedForegroundColor: g.ground,
+    side: BorderSide(color: g.border),
     minimumSize: const Size(44, 48),
     padding: const EdgeInsets.symmetric(horizontal: 6),
   );
@@ -222,17 +224,17 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
         controller: controller,
         focusNode: focus,
         textCapitalization: TextCapitalization.words,
-        decoration: editorDecoration('Film'),
+        decoration: editorDecoration(context, 'Film'),
         onChanged: (_) => setState(() {}),
       ),
       optionsViewBuilder: (context, onSelected, options) => Align(
         alignment: Alignment.topLeft,
         child: Material(
-          color: GrainColors.ground,
+          color: g.ground,
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: GrainColors.border),
+            side: BorderSide(color: g.border),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 240, maxWidth: 360),
@@ -266,12 +268,10 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
     label: Text(label),
     selected: selected,
     showCheckmark: false,
-    selectedColor: GrainColors.ink,
-    backgroundColor: GrainColors.ground,
-    side: const BorderSide(color: GrainColors.border),
-    labelStyle: TextStyle(
-      color: selected ? GrainColors.ground : GrainColors.ink,
-    ),
+    selectedColor: g.ink,
+    backgroundColor: g.ground,
+    side: BorderSide(color: g.border),
+    labelStyle: TextStyle(color: selected ? g.ground : g.ink),
     onSelected: (_) => onTap(),
   );
 
@@ -336,7 +336,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                 exposed == null
                     ? 'Out of range (ISO 6–12800)'
                     : 'Exposed at ISO $exposed',
-                style: const TextStyle(color: GrainColors.accent, fontSize: 16),
+                style: TextStyle(color: g.accent, fontSize: 16),
               ),
             ),
             const EditorSection('Latitude'),
@@ -383,7 +383,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                       'Default for ${_type.label}: '
                       '${formatHalfStops(_underHalves)} to '
                       '${formatHalfStops(_overHalves)}',
-                      style: const TextStyle(color: GrainColors.secondary),
+                      style: TextStyle(color: g.secondary),
                     )
                   : Align(
                       alignment: Alignment.centerLeft,
@@ -457,7 +457,7 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
             if (finishes)
               Text(
                 'Saving finishes Roll ${active.number}.',
-                style: const TextStyle(color: GrainColors.secondary),
+                style: TextStyle(color: g.secondary),
               ),
             EditorError(_error),
           ],

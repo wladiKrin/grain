@@ -22,6 +22,7 @@ class FocalChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Align(
       alignment: Alignment.centerLeft,
       child: Semantics(
@@ -37,14 +38,14 @@ class FocalChip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: GrainColors.border),
+                border: Border.all(color: g.border),
               ),
               child: Text(
                 '${values[index].label} mm',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: GrainColors.ink,
+                  color: g.ink,
                 ),
               ),
             ),
@@ -89,6 +90,7 @@ class _FocalSheetState extends State<_FocalSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
@@ -100,13 +102,13 @@ class _FocalSheetState extends State<_FocalSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('FOCAL LENGTH', style: grainLabelStyle),
+                Text('FOCAL LENGTH', style: g.label),
                 Text(
                   '${widget.values[_index].label} mm',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
-                    color: GrainColors.ink,
+                    color: g.ink,
                   ),
                 ),
               ],

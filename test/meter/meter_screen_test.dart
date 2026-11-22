@@ -121,7 +121,7 @@ void main() {
     await pumpScreen(t, stats: ev15());
 
     expect(find.text('1/125'), findsOneWidget);
-    expect(colorOf(t, '1/125'), GrainColors.accent);
+    expect(colorOf(t, '1/125'), GrainPalette.light.accent);
     expect(find.text('● METERED'), findsOneWidget);
     expect(find.text('← swipe →'), findsOneWidget);
     expect(
@@ -158,7 +158,7 @@ void main() {
       '1/8000',
     );
     // EV15, ISO 100, 1/125 → f/16.
-    expect(colorOf(t, 'f/16'), GrainColors.accent);
+    expect(colorOf(t, 'f/16'), GrainPalette.light.accent);
   });
 
   testWidgets('manual shows both dials and offset text', (t) async {
@@ -341,7 +341,7 @@ void main() {
     await pumpScreen(t, stats: ev15());
     expect(find.text('1/8000'), findsOneWidget);
     expect(find.text('▲ over'), findsOneWidget);
-    expect(colorOf(t, '▲ over'), GrainColors.accent);
+    expect(colorOf(t, '▲ over'), GrainPalette.light.accent);
   });
 
   testWidgets('under-range shows ▼ under', (t) async {

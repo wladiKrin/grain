@@ -2,18 +2,15 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../ui/theme.dart';
 
-InputDecoration editorDecoration(String label) => InputDecoration(
-  labelText: label,
-  border: const OutlineInputBorder(
-    borderSide: BorderSide(color: GrainColors.border),
-  ),
-  enabledBorder: const OutlineInputBorder(
-    borderSide: BorderSide(color: GrainColors.border),
-  ),
-  focusedBorder: const OutlineInputBorder(
-    borderSide: BorderSide(color: GrainColors.ink),
-  ),
-);
+InputDecoration editorDecoration(BuildContext context, String label) {
+  final g = context.grain;
+  return InputDecoration(
+    labelText: label,
+    border: OutlineInputBorder(borderSide: BorderSide(color: g.border)),
+    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: g.border)),
+    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: g.ink)),
+  );
+}
 
 class EditorTextField extends StatelessWidget {
   const EditorTextField({
@@ -38,7 +35,7 @@ class EditorTextField extends StatelessWidget {
       keyboardType: number
           ? const TextInputType.numberWithOptions(decimal: true)
           : TextInputType.text,
-      decoration: editorDecoration(label),
+      decoration: editorDecoration(context, label),
     ),
   );
 }
@@ -61,13 +58,13 @@ class EditorDropdown<T> extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: InputDecorator(
-      decoration: editorDecoration(label),
+      decoration: editorDecoration(context, label),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           value: value,
           isExpanded: true,
           elevation: 0,
-          dropdownColor: GrainColors.ground,
+          dropdownColor: context.grain.ground,
           items: [
             for (final e in items.entries)
               DropdownMenuItem(value: e.key, child: Text(e.value)),
@@ -88,7 +85,7 @@ class EditorSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8, bottom: 8),
-    child: Text(text.toUpperCase(), style: grainLabelStyle),
+    child: Text(text.toUpperCase(), style: context.grain.label),
   );
 }
 
@@ -128,7 +125,7 @@ class EditorError extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Text(
             text!,
-            style: const TextStyle(color: GrainColors.accent, fontSize: 14),
+            style: TextStyle(color: context.grain.accent, fontSize: 14),
           ),
         );
 }
@@ -137,11 +134,11 @@ Future<bool> confirmDelete(BuildContext context, String name) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
-      backgroundColor: GrainColors.ground,
+      backgroundColor: context.grain.ground,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: GrainColors.border),
+        side: BorderSide(color: context.grain.border),
       ),
       title: Text('Delete $name?'),
       actions: [

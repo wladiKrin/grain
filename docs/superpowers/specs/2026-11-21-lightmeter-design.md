@@ -65,6 +65,8 @@ It also knows the photographer's actual gear (camera bodies, lenses) and keeps a
 
 Visual language: "Paper" — warm off-white ground (#F4F2EE), near-black text (#141414), one accent red (#B8321A) for the metered value, large light-weight numerals (Inter Tight), thin dividers, no shadows or gradients. Fully accessible contrast and ≥44 px touch targets.
 
+Dark mode follows the system by default and can be set to Light or Dark in Settings; the viewfinder stays dark in both.
+
 Top to bottom:
 1. **Header:** current body (e.g. "Canon A-1") and roll status ("Roll 4 · frame 12/36"), plus film and push/pull when they change the ISO ("HP5 · 400 → 800"); buttons for viewfinder on/off and the library.
 2. **Lens chip** (not in mockup yet): current lens, e.g. "FD 50/1.8". Tap → choose among favorite lenses for this body's mount. For zooms, a focal-length dial appears with the same swipe behavior.

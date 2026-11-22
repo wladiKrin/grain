@@ -23,6 +23,7 @@ class LogButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -42,17 +43,17 @@ class LogButton extends StatelessWidget {
                     height: 52,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: GrainColors.ink,
+                      color: g.ink,
                       borderRadius: BorderRadius.circular(26),
                     ),
                     child: Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w500,
-                        color: GrainColors.ground,
+                        color: g.ground,
                       ),
                     ),
                   ),
@@ -77,9 +78,9 @@ class LogButton extends StatelessWidget {
               child: Container(
                 height: 44,
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   'Start roll',
-                  style: TextStyle(fontSize: 13, color: GrainColors.secondary),
+                  style: TextStyle(fontSize: 13, color: g.secondary),
                 ),
               ),
             ),

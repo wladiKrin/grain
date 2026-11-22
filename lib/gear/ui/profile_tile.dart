@@ -34,6 +34,7 @@ class ProfileTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final g = context.grain;
     return InkWell(
       onTap: onTap,
       child: ConstrainedBox(
@@ -44,7 +45,7 @@ class ProfileTile extends StatelessWidget {
             SizedBox(
               width: 24,
               child: selected
-                  ? const Icon(Icons.check, size: 20, color: GrainColors.accent)
+                  ? Icon(Icons.check, size: 20, color: g.accent)
                   : null,
             ),
             const SizedBox(width: 8),
@@ -54,31 +55,22 @@ class ProfileTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: GrainColors.ink,
-                      ),
-                    ),
+                    Text(title, style: TextStyle(fontSize: 16, color: g.ink)),
                     if (subtitle != null)
                       Text(
                         subtitle!,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: GrainColors.secondary,
-                        ),
+                        style: TextStyle(fontSize: 13, color: g.secondary),
                       ),
                   ],
                 ),
               ),
             ),
             if (user)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(left: 8),
                 child: Text(
                   'Yours',
-                  style: TextStyle(fontSize: 12, color: GrainColors.accent),
+                  style: TextStyle(fontSize: 12, color: g.accent),
                 ),
               ),
             Semantics(
@@ -94,7 +86,7 @@ class ProfileTile extends StatelessWidget {
                 onPressed: onToggleFavorite,
                 icon: Icon(
                   favorite ? Icons.star : Icons.star_border,
-                  color: favorite ? GrainColors.accent : GrainColors.faded,
+                  color: favorite ? g.accent : g.faded,
                 ),
               ),
             ),
@@ -103,12 +95,12 @@ class ProfileTile extends StatelessWidget {
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 tooltip: 'More',
                 elevation: 0,
-                color: GrainColors.ground,
+                color: g.ground,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
-                  side: const BorderSide(color: GrainColors.border),
+                  side: BorderSide(color: g.border),
                 ),
-                icon: const Icon(Icons.more_vert, color: GrainColors.secondary),
+                icon: Icon(Icons.more_vert, color: g.secondary),
                 onSelected: (a) => a.onSelected(),
                 itemBuilder: (_) => [
                   for (final a in actions)

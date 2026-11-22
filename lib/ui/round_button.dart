@@ -29,7 +29,8 @@ class RoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = filled ? GrainColors.ground : GrainColors.ink;
+    final g = context.grain;
+    final fg = filled ? g.ground : g.ink;
     return Semantics(
       button: true,
       toggled: toggled,
@@ -43,10 +44,8 @@ class RoundButton extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: filled ? GrainColors.ink : background,
-            border: Border.all(
-              color: filled ? GrainColors.ink : GrainColors.border,
-            ),
+            color: filled ? g.ink : background,
+            border: Border.all(color: filled ? g.ink : g.border),
           ),
           alignment: Alignment.center,
           child: IconTheme.merge(

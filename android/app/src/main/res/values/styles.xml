@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Grain is always light ("Paper"); this file is the same with the OS's
-         Dark Mode setting off, so there is no dark flash at launch. -->
+    <!-- The OS's Dark Mode setting off: the Paper ground, dark bar icons.
+         values-night has the dark counterpart. -->
     <!-- Theme applied to the Android Window while the process is starting. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
