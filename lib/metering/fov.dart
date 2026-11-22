@@ -8,23 +8,45 @@ const focalStops = [
   100, 105, 120, 135, 150, 180, 200, 250, 300, 400, 500, 600,
 ];
 
-/// Whether [lensFocal] sees a wider field than the phone's main camera.
-bool widerThanPhone(double lensFocal, double phoneEqFocal) =>
-    lensFocal < phoneEqFocal;
+/// Size in [preview] px of a frame of [aspect] (width / height) whose
+/// diagonal is `phoneEqFocal / lensFocal` of the preview diagonal.
+Size _frame(
+  Size preview,
+  double lensFocal,
+  double phoneEqFocal,
+  double aspect,
+) {
+  final fraction = phoneEqFocal / lensFocal;
+  final diag = preview.width * preview.width + preview.height * preview.height;
+  final w =
+      fraction * math.sqrt(diag) * aspect / math.sqrt(aspect * aspect + 1);
+  return Size(w, w / aspect);
+}
+
+/// Whether the whole field of [lensFocal], framed at [aspect], is inside the
+/// [preview] of a camera that frames like [phoneEqFocal].
+bool lensFits({
+  required Size preview,
+  required double lensFocal,
+  required double phoneEqFocal,
+  double aspect = 2 / 3,
+}) {
+  final f = _frame(preview, lensFocal, phoneEqFocal, aspect);
+  const slack = 1 + 1e-9;
+  return f.width <= preview.width * slack && f.height <= preview.height * slack;
+}
 
 /// Normalized, centred rect of [aspect] (width / height) in the [preview]
 /// whose diagonal is `phoneEqFocal / lensFocal` of the preview diagonal. If
-/// that fraction is at least 1, the largest such rect that fits.
+/// it does not fit ([lensFits] is false), the largest such rect that does.
 Rect lensCrop({
   required Size preview,
   required double lensFocal,
   required double phoneEqFocal,
   double aspect = 2 / 3,
 }) {
-  final fraction = phoneEqFocal / lensFocal;
-  final diag = preview.width * preview.width + preview.height * preview.height;
-  var w = fraction * math.sqrt(diag) * aspect / math.sqrt(aspect * aspect + 1);
-  var h = w / aspect;
+  final f = _frame(preview, lensFocal, phoneEqFocal, aspect);
+  var w = f.width, h = f.height;
   final fit = math.min(1.0, math.min(preview.width / w, preview.height / h));
   w *= fit;
   h *= fit;

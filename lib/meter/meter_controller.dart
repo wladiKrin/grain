@@ -30,6 +30,7 @@ class MeterController extends ChangeNotifier {
     this._calibrationEv = 0,
     this.viewfinderOn = true,
     this.histogramOn = false,
+    this.frameLandscape = false,
     GearSetup gear = const GearSetup(),
   }) : _gear = gear {
     _scales = _scalesAt(gear);
@@ -66,6 +67,9 @@ class MeterController extends ChangeNotifier {
 
   /// Whether the viewfinder shows the histogram overlay.
   bool histogramOn;
+
+  /// The lens frame is drawn sideways (landscape) rather than upright.
+  bool frameLandscape;
 
   bool _shakeWarning = false;
 
@@ -456,6 +460,24 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Turns the lens frame between sideways and upright; a spot outside the
+  /// new frame moves to its nearest edge.
+  void toggleFrameOrientation() {
+    frameLandscape = !frameLandscape;
+    final c = cropRect;
+    if (c != null && area == MeterArea.spot) {
+      spot = Offset(
+        spot.dx.clamp(c.left, c.right).toDouble(),
+        spot.dy.clamp(c.top, c.bottom).toDouble(),
+      );
+      _derive();
+    }
+    _sendRegions();
+    unawaited(_syncWide());
+    _updateHistogram();
+    notifyListeners();
+  }
+
   void toggleHistogram() {
     histogramOn = !histogramOn;
     _updateHistogram();
@@ -478,16 +500,26 @@ class MeterController extends ChangeNotifier {
       preview: size,
       lensFocal: equivalentFocal(focal, format),
       phoneEqFocal: p.phoneEqFocal,
-      aspect: format.portraitAspect,
+      aspect: _frameAspect,
     );
   }
+
+  double get _frameAspect => format.aspect(landscape: frameLandscape);
+
+  /// Whether the whole lens frame fits in the camera that frames like
+  /// [phoneEqFocal].
+  bool _fits(double phoneEqFocal) => lensFits(
+    preview: previewSize!,
+    lensFocal: equivalentFocal(focal, format),
+    phoneEqFocal: phoneEqFocal,
+    aspect: _frameAspect,
+  );
 
   /// Whether the lens sees more than the camera in use (the crop cannot
   /// show all of its field).
   bool get lensWiderThanCamera {
     final p = preview;
-    return p != null &&
-        widerThanPhone(equivalentFocal(focal, format), p.phoneEqFocal);
+    return p != null && !_fits(p.phoneEqFocal);
   }
 
   /// Spot radius relative to the crop width.
@@ -577,8 +609,7 @@ class MeterController extends ChangeNotifier {
         final p = preview;
         if (!_running || _disposed || _wideFailed || p == null) return;
         final wideEq = p.wideEqFocal;
-        final want =
-            wideEq != null && equivalentFocal(focal, format) < p.mainEqFocal;
+        final want = wideEq != null && !_fits(p.mainEqFocal);
         if (want == p.wide) return;
         final session = _session;
         final PreviewInfo next;

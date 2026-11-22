@@ -30,6 +30,10 @@ enum FilmFormat {
   double get portraitAspect =>
       widthMm < heightMm ? widthMm / heightMm : heightMm / widthMm;
 
+  /// Width over height of the frame held sideways ([landscape]) or upright.
+  double aspect({required bool landscape}) =>
+      landscape ? 1 / portraitAspect : portraitAspect;
+
   static FilmFormat? byId(String id) {
     for (final f in values) {
       if (f.id == id) return f;

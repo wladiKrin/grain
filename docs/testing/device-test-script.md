@@ -137,6 +137,7 @@ Click sound; 3.7 turns it off again.
 | 3.9 | Look at thirds and halves on the calibration dial (Settings), the push dial and the two latitude dials (Start roll), and the manual-mode OFFSET readout | ⅓, ⅔ and ½ are all drawn as small Inter Tight fractions of the same weight and size (digits around a fraction slash, e.g. 2⁄3); the whole stop beside them (the 1 in −1⅓) is a normal-size digit; −, ≈, ▲ ▼, → render | |
 | 3.10 | Compare the fonts | Fonts look unchanged (Light/Regular/Medium/SemiBold); ½ stops render | |
 | 3.11 | Optional, needs a 360 dp-wide phone or `adb shell wm size 1080x2400 && adb shell wm density 480` (undo with `wm size reset` / `wm density reset`): viewfinder off, shutter priority, dial the shutter to 1/1000 | The faded neighbours beside the big shutter value (1/500, 1/2000) are readable, not cut off; note it if they are clipped | |
+| 3.12 | Swipe a dial fast and let go; then fling it and touch it mid-spin | It keeps spinning, slows down and stops exactly on a value, ticking per value; a touch stops it at once. A slow drag still moves one value per detent | |
 
 ## 4. Viewfinder, crops, ultra-wide, spot, hold, histogram
 
@@ -158,8 +159,8 @@ Path that ran: ______  Main eq. focal: ______ mm  Ultra-wide eq. focal: ______ m
 | # | Action | Expected | Result |
 |---|---|---|---|
 | 4.1 | Set the focal dial to 50 mm and compare the crop to the real view | The crop matches a 50 mm framing | |
-| 4.2 | Turn the focal dial below the main camera's eq. focal | The ultra-wide engages; the preview visibly widens | |
-| 4.3 | Turn back above the main camera's eq. focal | The main camera returns | |
+| 4.2 | Turn the focal dial down until the frame no longer fits the main camera's picture (sideways frame: about 1.4 × the main eq. focal, ~34 mm on a 25 mm camera; upright: about the main eq. focal) | The ultra-wide engages; the preview visibly widens | |
+| 4.3 | Turn back up past that point | The main camera returns | |
 | 4.4 | Cross the threshold back and forth on the focal dial | No visible stall or black frame (separate-camera path: a short reopen is acceptable, no hang) | |
 | 4.5 | Separate-camera path only (no hysteresis yet): dial the focal back and forth across the main camera's eq. focal (e.g. 24 ↔ 28 mm on a 25 mm main camera) about ten times | Each crossing reopens the camera; the black gap and delay are tolerable and nothing hangs or ends on the wrong camera. Gap length ____ ms; if annoying, hysteresis goes into a later plan | |
 | 4.6 | Set a wide focal, press Home, return | The ultra-wide is in use again | |
@@ -172,6 +173,9 @@ Path that ran: ______  Main eq. focal: ______ mm  Ultra-wide eq. focal: ______ m
 | 4.13 | Same slide roll, histogram on, tap Hold, pan away | The histogram freezes with the held reading | |
 | 4.14 | `adb shell top -H -p $(adb shell pidof io.github.wladikrin.grain)` with the histogram on, then off | GrainCamera thread CPU is the same | |
 | 4.15 | Optional, with the plan-2 build as in 2.8: same `top -H` while metering, this build vs the plan-2 build | GrainCamera CPU about the same (preview-size YUV reader + `samplingStep`) | |
+| 4.16 | Open the app fresh | The lens frame is sideways (wider than tall); the dimmed bars are above and below it | |
+| 4.17 | Tap the frame button (top left of the viewfinder), then again; kill and reopen the app | The frame turns upright and back; the choice survives the restart. Near the threshold (e.g. 28–35 mm on 35 mm film) turning it may switch between main and ultra-wide | |
+| 4.18 | Sideways frame, log a frame on a roll | The snapshot is landscape and matches the frame | |
 
 ## 5. Shake warning
 
@@ -283,6 +287,9 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 9.1 | Deny the camera twice, then tap "Open settings"; grant the camera there and come back | The preview starts with no restart | |
 | 9.2 | Block the location permission, then in Settings turn Save location on | The snackbar offers "Open settings"; grant there, return, and the Save location switch can be turned on | |
 | 9.3 | Settings > Licences | A licence page headed Grain, 1.0.0, GPLv3; the list has ZXing core, Inter Tight, SQLite and Grain gear library besides the Flutter packages; ZXing core opens the full Apache License 2.0 text | |
+| 9.4 | Settings > Appearance: Dark, then Light, then System; with System, switch the phone's dark theme in quick settings | The whole app follows at once: near-black ground with off-white text in dark, paper in light; status and navigation bar icons stay readable; the viewfinder box stays black in both | |
+| 9.5 | Dark: open every screen (meter, rolls, a roll, frame editor, gear pickers and editors, share sheet, scan, export sheet, Settings, Licences) and every dialog and snackbar | No light-mode leftovers, nothing unreadable (e.g. dark text on dark) | |
+| 9.6 | Phone in dark theme, cold-start the app | No white flash before the meter appears | |
 
 ## 10. Lifecycle and the camera indicator
 

@@ -448,6 +448,38 @@ void main() {
     expect(c.preview!.wide, isTrue);
   });
 
+  test('a sideways frame is wide and needs the ultra-wide sooner', () async {
+    await c.resume();
+    c.setFocal(idx(c.focalValues, '28'));
+    await settle();
+    // Upright, 28 mm fits the 25 mm main camera's 3 × 4 picture.
+    expect(c.preview!.wide, isFalse);
+    expect(c.lensWiderThanCamera, isFalse);
+
+    c.toggleFrameOrientation();
+    await settle();
+    final r = c.cropRect!;
+    expect((r.width * 3000) / (r.height * 4000), closeTo(3 / 2, 1e-6));
+    // Sideways, its 36 mm side no longer fits the picture's width.
+    expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+    expect(c.preview!.wide, isTrue);
+    expect(src.regions.last.$1, c.cropRect);
+
+    c.toggleFrameOrientation();
+    await settle();
+    expect(c.preview!.wide, isFalse);
+  });
+
+  test('turning the frame keeps the spot inside it', () async {
+    c.setGear(GearSetup(body: a1, lens: fd50, focal: 50));
+    await c.resume();
+    c.tapSpot(const Offset(.5, .25));
+    c.toggleFrameOrientation();
+    final r = c.cropRect!;
+    expect(c.spot.dy, closeTo(r.top, 1e-9));
+    expect(c.spot.dx, .5);
+  });
+
   test('a switch answered with the unchanged preview is not retried', () async {
     final stuck = _StuckWideSource();
     final m = MeterController(source: stuck);

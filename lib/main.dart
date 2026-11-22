@@ -156,6 +156,7 @@ class _GrainAppState extends State<GrainApp> {
     calibrationEv: _settings.calibrationEv,
     viewfinderOn: _settings.viewfinderOn,
     histogramOn: _settings.histogram,
+    frameLandscape: _settings.frameLandscape,
   );
   late final bool _ownsRolls = widget.rolls == null;
 
@@ -214,6 +215,9 @@ class _GrainAppState extends State<GrainApp> {
     if (_controller.histogramOn != _settings.histogram) {
       _controller.toggleHistogram();
     }
+    if (_controller.frameLandscape != _settings.frameLandscape) {
+      _controller.toggleFrameOrientation();
+    }
   }
 
   /// Equal setups are a no-op on the controller, so the two-way sync below
@@ -241,7 +245,7 @@ class _GrainAppState extends State<GrainApp> {
     _controller.setLatitude(logs ? roll!.latitude : FilmLatitude.negative);
   }
 
-  /// The eye and histogram toggles are the same preferences as the
+  /// The eye, histogram and frame toggles are the same preferences as the
   /// settings; a zoom change goes back to the gear selection.
   void _onController() {
     if (_controller.focal != _gear.focal) _gear.setFocal(_controller.focal);
@@ -250,6 +254,9 @@ class _GrainAppState extends State<GrainApp> {
     }
     if (_settings.histogram != _controller.histogramOn) {
       _settings.setHistogram(_controller.histogramOn);
+    }
+    if (_settings.frameLandscape != _controller.frameLandscape) {
+      _settings.setFrameLandscape(_controller.frameLandscape);
     }
   }
 

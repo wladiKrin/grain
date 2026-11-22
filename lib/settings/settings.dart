@@ -15,6 +15,7 @@ class Settings extends ChangeNotifier {
     required this._snapshots,
     required this._location,
     required this._histogram,
+    required this._frameLandscape,
     required this._shakeWarning,
     required this._clickSound,
     required this._theme,
@@ -30,6 +31,7 @@ class Settings extends ChangeNotifier {
   static const _kSnapshots = 'snapshots';
   static const _kLocation = 'location';
   static const _kHistogram = 'histogram';
+  static const _kFrameLandscape = 'frameLandscape';
   static const _kShake = 'shakeWarning';
   static const _kClick = 'clickSound';
   static const _kTheme = 'themeChoice';
@@ -47,6 +49,7 @@ class Settings extends ChangeNotifier {
       snapshots: p.getBool(_kSnapshots) ?? true,
       location: p.getBool(_kLocation) ?? false,
       histogram: p.getBool(_kHistogram) ?? false,
+      frameLandscape: p.getBool(_kFrameLandscape) ?? true,
       shakeWarning: p.getBool(_kShake) ?? false,
       clickSound: p.getBool(_kClick) ?? false,
       theme:
@@ -63,6 +66,7 @@ class Settings extends ChangeNotifier {
   bool _snapshots = true;
   bool _location = false;
   bool _histogram = false;
+  bool _frameLandscape = true;
   bool _shakeWarning = false;
   bool _clickSound = false;
   ThemeChoice _theme = ThemeChoice.system;
@@ -81,6 +85,9 @@ class Settings extends ChangeNotifier {
 
   /// Show the histogram over the viewfinder.
   bool get histogram => _histogram;
+
+  /// Draw the lens frame sideways (landscape) in the viewfinder.
+  bool get frameLandscape => _frameLandscape;
 
   /// Mark shutter speeds slower than 1/focal length (35 mm equivalent).
   bool get shakeWarning => _shakeWarning;
@@ -134,6 +141,13 @@ class Settings extends ChangeNotifier {
     await _prefs?.setBool(_kHistogram, v);
   }
 
+  Future<void> setFrameLandscape(bool v) async {
+    if (v == _frameLandscape) return;
+    _frameLandscape = v;
+    notifyListeners();
+    await _prefs?.setBool(_kFrameLandscape, v);
+  }
+
   Future<void> setShakeWarning(bool v) async {
     if (v == _shakeWarning) return;
     _shakeWarning = v;
@@ -162,6 +176,7 @@ class Settings extends ChangeNotifier {
     _kViewfinder: _viewfinderOn,
     _kSnapshots: _snapshots,
     _kHistogram: _histogram,
+    _kFrameLandscape: _frameLandscape,
     _kShake: _shakeWarning,
     _kClick: _clickSound,
   };
@@ -173,6 +188,7 @@ class Settings extends ChangeNotifier {
     if (m[_kViewfinder] case final bool v) await setViewfinderOn(v);
     if (m[_kSnapshots] case final bool v) await setSnapshots(v);
     if (m[_kHistogram] case final bool v) await setHistogram(v);
+    if (m[_kFrameLandscape] case final bool v) await setFrameLandscape(v);
     if (m[_kShake] case final bool v) await setShakeWarning(v);
     if (m[_kClick] case final bool v) await setClickSound(v);
   }

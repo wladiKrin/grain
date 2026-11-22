@@ -7,9 +7,10 @@ import 'package:grain/version.dart';
 void main() {
   test('version is 1.0.0 build 1 everywhere', () {
     expect(
-      RegExp(r'^version: (.+)$', multiLine: true)
-          .firstMatch(File('pubspec.yaml').readAsStringSync())!
-          .group(1),
+      RegExp(
+        r'^version: (.+)$',
+        multiLine: true,
+      ).firstMatch(File('pubspec.yaml').readAsStringSync())!.group(1),
       '$appVersion+1',
     );
     expect(appVersion, '1.0.0');
@@ -37,11 +38,15 @@ void main() {
   });
 
   test('adaptive icon with a monochrome layer, no Flutter logo left', () {
-    final xml = File('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml')
-        .readAsStringSync();
+    final xml = File(
+      'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
+    ).readAsStringSync();
     expect(
       xml,
-      allOf(contains('<monochrome'), contains('@drawable/ic_launcher_foreground')),
+      allOf(
+        contains('<monochrome'),
+        contains('@drawable/ic_launcher_foreground'),
+      ),
     );
     final pngs = Directory('android/app/src/main/res')
         .listSync(recursive: true)

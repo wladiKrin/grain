@@ -92,6 +92,8 @@ class Viewfinder extends StatelessWidget {
     this.histogramOn = false,
     this.onToggleHistogram,
     this.histogram,
+    this.frameLandscape = false,
+    this.onToggleFrame,
   });
 
   /// Null until the camera has started.
@@ -128,6 +130,11 @@ class Viewfinder extends StatelessWidget {
   /// Null hides the histogram toggle.
   final VoidCallback? onToggleHistogram;
   final ValueListenable<HistogramView?>? histogram;
+
+  /// The lens frame is drawn sideways; [onToggleFrame] turns it (null hides
+  /// the button).
+  final bool frameLandscape;
+  final VoidCallback? onToggleFrame;
 
   String get _evLine =>
       evLine(ev: ev, flag: flag, area: area, held: held, estimated: estimated);
@@ -216,20 +223,38 @@ class Viewfinder extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (onToggleHistogram != null)
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: RoundButton(
-                      toggled: histogramOn,
-                      background: g.ground,
-                      semanticLabel: histogramOn
-                          ? 'Hide histogram'
-                          : 'Show histogram',
-                      onPressed: onToggleHistogram!,
-                      child: const Icon(Icons.bar_chart),
-                    ),
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Row(
+                    spacing: 8,
+                    children: [
+                      if (onToggleHistogram != null)
+                        RoundButton(
+                          toggled: histogramOn,
+                          background: g.ground,
+                          semanticLabel: histogramOn
+                              ? 'Hide histogram'
+                              : 'Show histogram',
+                          onPressed: onToggleHistogram!,
+                          child: const Icon(Icons.bar_chart),
+                        ),
+                      if (onToggleFrame != null)
+                        RoundButton(
+                          background: g.ground,
+                          semanticLabel: frameLandscape
+                              ? 'Turn frame upright'
+                              : 'Turn frame sideways',
+                          onPressed: onToggleFrame!,
+                          child: Icon(
+                            frameLandscape
+                                ? Icons.crop_landscape
+                                : Icons.crop_portrait,
+                          ),
+                        ),
+                    ],
                   ),
+                ),
                 if (histogramOn && histogram != null)
                   Positioned(
                     right: 10,

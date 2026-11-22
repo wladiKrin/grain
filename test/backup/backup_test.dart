@@ -284,11 +284,13 @@ void main() {
       await a.settings.setCalibrationThirds(4);
       await a.settings.setLocation(true);
       await a.settings.setHistogram(true);
+      await a.settings.setFrameLandscape(false);
       expect(a.settings.backupMap(), {
         'haptics': false,
         'viewfinderOn': false,
         'snapshots': false,
         'histogram': true,
+        'frameLandscape': false,
         'shakeWarning': false,
         'clickSound': false,
       });
@@ -300,6 +302,7 @@ void main() {
       expect(b.settings.viewfinderOn, isTrue);
       expect(b.settings.snapshots, isTrue);
       expect(b.settings.histogram, isFalse);
+      expect(b.settings.frameLandscape, isTrue);
 
       final d = Phone();
       await importInto(d, c, applySettings: true);
@@ -307,6 +310,7 @@ void main() {
       expect(d.settings.viewfinderOn, isFalse);
       expect(d.settings.snapshots, isFalse);
       expect(d.settings.histogram, isTrue);
+      expect(d.settings.frameLandscape, isFalse);
       expect(d.settings.calibrationThirds, 0);
       expect(d.settings.location, isFalse);
 
@@ -484,6 +488,7 @@ void main() {
       'viewfinderOn': true,
       'snapshots': true,
       'histogram': false,
+      'frameLandscape': true,
       'shakeWarning': false,
       'clickSound': false,
     });

@@ -83,6 +83,21 @@ void main() {
     },
   );
 
+  test(
+    'the frame defaults sideways, persists and travels in the backup',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final s = await Settings.load();
+      expect(s.frameLandscape, isTrue);
+      expect(s.backupMap()['frameLandscape'], isTrue);
+      await s.setFrameLandscape(false);
+      final r = await Settings.load();
+      expect(r.frameLandscape, isFalse);
+      await r.applyBackupMap({'frameLandscape': true});
+      expect(r.frameLandscape, isTrue);
+    },
+  );
+
   test('histogram defaults off, persists and travels in the backup', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();

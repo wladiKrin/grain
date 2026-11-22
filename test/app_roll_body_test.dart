@@ -218,6 +218,20 @@ void main() {
     },
   );
 
+  testWidgets('the frame orientation is remembered', (t) async {
+    final settings = Settings.inMemory();
+    await pumpApp(t, settings: settings);
+    expect(meter(t).frameLandscape, isTrue);
+    final handle = t.ensureSemantics();
+    await t.tap(find.bySemanticsLabel('Turn frame upright'));
+    await settle(t);
+    expect(settings.frameLandscape, isFalse);
+    await t.runAsync(() => settings.setFrameLandscape(true));
+    await settle(t);
+    expect(meter(t).frameLandscape, isTrue);
+    handle.dispose();
+  });
+
   testWidgets('the histogram choice is remembered', (t) async {
     final settings = Settings.inMemory();
     await pumpApp(t, settings: settings);
