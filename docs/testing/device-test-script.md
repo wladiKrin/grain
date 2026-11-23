@@ -173,8 +173,8 @@ Path that ran: ______  Main eq. focal: ______ mm  Ultra-wide eq. focal: ______ m
 | 4.13 | Same slide roll, histogram on, tap Hold, pan away | The histogram freezes with the held reading | |
 | 4.14 | `adb shell top -H -p $(adb shell pidof io.github.wladikrin.grain)` with the histogram on, then off | GrainCamera thread CPU is the same | |
 | 4.15 | Optional, with the plan-2 build as in 2.8: same `top -H` while metering, this build vs the plan-2 build | GrainCamera CPU about the same (preview-size YUV reader + `samplingStep`) | |
-| 4.16 | Open the app fresh | The lens frame is sideways (wider than tall); the dimmed bars are above and below it | |
-| 4.17 | Tap the frame button (top left of the viewfinder), then again; kill and reopen the app | The frame turns upright and back; the choice survives the restart. Near the threshold (e.g. 28–35 mm on 35 mm film) turning it may switch between main and ultra-wide | |
+| 4.16 | Open the app fresh, then dial a long lens (200 mm or more) | The viewfinder is the frame's shape (wider than tall) and the frame fills it, no dimmed bars; a long lens fills it too (the picture gets softer, as it is a zoomed crop of the phone's preview) | |
+| 4.17 | Tap the frame button (top left of the viewfinder): upright, the frame is zoomed to touch the box with dimmed surroundings. Then tap again; kill and reopen the app | The frame turns upright and back; the choice survives the restart. Near the threshold (e.g. 28–35 mm on 35 mm film) turning it may switch between main and ultra-wide | |
 | 4.18 | Sideways frame, log a frame on a roll | The snapshot is landscape and matches the frame | |
 
 ## 5. Shake warning
@@ -201,6 +201,7 @@ largest kit) for the scan rows.
 | # | Action | Expected | Result |
 |---|---|---|---|
 | 6.1 | Tap the lens chip repeatedly | It cycles favorite lenses and feels instant | |
+| 6.1b | Favorite two or three bodies, then tap the camera chip repeatedly; with a roll loaded, tap it once more; then tap each chip's ▾ | Bodies cycle like lenses; the roll question appears when the roll's body is left; the ▾ opens the camera list and the lens list | |
 | 6.2 | At 360 px width (display size set small), look at the header and chips with the longest bundled names (e.g. "Zoom-Nikkor 35-105/3.5-4.5 AI-S") | They fit without overflow | |
 | 6.3 | 360 x 800 phone, Manual mode, viewfinder on, no roll | Nothing overflows; the numerals step down to their smallest and the viewfinder is small but usable (about 90 px) | |
 | 6.3a | Repeat 6.3 with the histogram on | Record whether the histogram panel (bottom right of the viewfinder) overlaps the EV pill or Hold (top right): overlap yes / no ____. An overlap that hides the EV value fails | |
@@ -229,6 +230,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 |---|---|---|---|
 | 7.1 | Start a roll; log a frame | The new frame number shows with no visible delay (at most one frame); the snapshot and location arrive later without blocking | |
 | 7.2 | Log a frame at 35 mm, then at 50 mm (portrait) | A snapshot appears within ~1 s, upright, matching the viewfinder crop of that lens | |
+| 7.2b | Log a frame and wait | The "Frame N logged" message with Undo disappears by itself after about 3 s | |
 | 7.3 | Hide the viewfinder and log a frame | A snapshot is still saved | |
 | 7.4 | `adb shell run-as io.github.wladikrin.grain ls -l files/snapshots` | Each file 60–120 KB, long edge ≤ 1000 px | |
 | 7.5 | Log 10 frames rapidly | 10 snapshot files; the dial stays smooth | |

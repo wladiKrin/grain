@@ -10,19 +10,16 @@ import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
 import 'histogram_overlay.dart';
 
-/// Where the [preview] is drawn in [box]: scaled to cover the box, but no
-/// further than keeps the whole [crop] (normalized in [preview]) inside it,
-/// with the crop centred in the box.
+/// Where the [preview] is drawn in [box]: zoomed until the [crop]
+/// (normalized in [preview]) touches the box on one axis, centred in it; with
+/// no crop, scaled to cover the box.
 Rect previewRect(Size box, Size preview, {Rect? crop}) {
   var s = math.max(box.width / preview.width, box.height / preview.height);
   var centre = const Offset(.5, .5);
   if (crop != null && !crop.isEmpty) {
     s = math.min(
-      s,
-      math.min(
-        box.width / (crop.width * preview.width),
-        box.height / (crop.height * preview.height),
-      ),
+      box.width / (crop.width * preview.width),
+      box.height / (crop.height * preview.height),
     );
     centre = crop.center;
   }
@@ -67,6 +64,15 @@ double? faintRingRadius(double r) => r < 8 ? 8 : null;
 /// Distance from the spot's centre to the start of its ticks.
 double spotTickGap(double r) => math.max(r, 8) + 4;
 
+/// The largest size of the [crop]'s shape (normalized in [preview]) that
+/// fits in [box].
+Size cropFrameSize(Size box, Size preview, Rect crop) {
+  final aspect = crop.width * preview.width / (crop.height * preview.height);
+  return box.width / box.height > aspect
+      ? Size(box.height * aspect, box.height)
+      : Size(box.width, box.width / aspect);
+}
+
 /// Live preview in a rounded box, the lens crop as the clear area, a spot
 /// reticle (or centre crosshair for average), the EV pill with a hold
 /// button and, with [onToggleHistogram], a histogram toggle at the top left
@@ -94,6 +100,7 @@ class Viewfinder extends StatelessWidget {
     this.histogram,
     this.frameLandscape = false,
     this.onToggleFrame,
+    this.fitToCrop = false,
   });
 
   /// Null until the camera has started.
@@ -136,12 +143,29 @@ class Viewfinder extends StatelessWidget {
   final bool frameLandscape;
   final VoidCallback? onToggleFrame;
 
+  /// The box shrinks to the crop's shape, so the crop fills it with no
+  /// dimmed band.
+  final bool fitToCrop;
+
   String get _evLine =>
       evLine(ev: ev, flag: flag, area: area, held: held, estimated: estimated);
 
   @override
   Widget build(BuildContext context) {
     final g = context.grain;
+    final p = previewSize, c = crop;
+    if (!fitToCrop || p == null || c == null || c.isEmpty) return _box(g);
+    return LayoutBuilder(
+      builder: (context, constraints) => Center(
+        child: SizedBox.fromSize(
+          size: cropFrameSize(constraints.biggest, p, c),
+          child: _box(g),
+        ),
+      ),
+    );
+  }
+
+  Widget _box(GrainPalette g) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: ColoredBox(

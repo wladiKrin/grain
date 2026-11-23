@@ -9,7 +9,12 @@ import 'package:material_ui/material_ui.dart';
 /// Portrait preview buffer, as the controller reports it.
 const _preview = Size(1080, 1440);
 
-Future<Rect> _pump(WidgetTester t, Size box, Rect crop) async {
+Future<Rect> _pump(
+  WidgetTester t,
+  Size box,
+  Rect crop, {
+  bool fitToCrop = false,
+}) async {
   await t.pumpWidget(
     Directionality(
       textDirection: TextDirection.ltr,
@@ -30,6 +35,7 @@ Future<Rect> _pump(WidgetTester t, Size box, Rect crop) async {
             onSpot: (_) {},
             onClearSpot: () {},
             onToggleHold: () {},
+            fitToCrop: fitToCrop,
           ),
         ),
       ),
@@ -234,5 +240,50 @@ void main() {
       tapped!.dx,
       closeTo((box.left + 2 - content.left) / content.width, 1e-9),
     );
+  });
+
+  testWidgets('a long lens is zoomed in until its crop meets the box', (
+    t,
+  ) async {
+    const box = Size(364, 335);
+    final crop = lensCrop(preview: _preview, lensFocal: 200, phoneEqFocal: 25);
+    final cropPx = await _pump(t, box, crop);
+    expect(
+      (cropPx.width - box.width).abs() < .5 ||
+          (cropPx.height - box.height).abs() < .5,
+      isTrue,
+    );
+  });
+
+  testWidgets('fitted to a sideways crop, the box takes its shape', (t) async {
+    const box = Size(364, 335);
+    final crop = lensCrop(
+      preview: _preview,
+      lensFocal: 50,
+      phoneEqFocal: 25,
+      aspect: 3 / 2,
+    );
+    final cropPx = await _pump(t, box, crop, fitToCrop: true);
+    final frame = t.getRect(find.byType(ClipRRect));
+    expect(frame.width, closeTo(364, .5));
+    expect(frame.height, closeTo(364 / 1.5, .5));
+    expect(frame.center, t.getRect(find.byType(Viewfinder)).center);
+    // The crop fills the frame: nothing is dimmed.
+    expect(cropPx.left, closeTo(frame.left, .5));
+    expect(cropPx.right, closeTo(frame.right, .5));
+    expect(cropPx.top, closeTo(frame.top, .5));
+    expect(cropPx.bottom, closeTo(frame.bottom, .5));
+  });
+
+  test('cropFrameSize fits the crop shape in the box', () {
+    // A square 6×6 crop in a wide box is limited by the height.
+    final square = Rect.fromCenter(
+      center: const Offset(.5, .5),
+      width: .4,
+      height: .4 * 1080 / 1440,
+    );
+    final size = cropFrameSize(const Size(364, 200), _preview, square);
+    expect(size.width, closeTo(200, 1e-9));
+    expect(size.height, 200);
   });
 }

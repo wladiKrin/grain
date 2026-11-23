@@ -97,6 +97,17 @@ void main() {
     expect(src.calls.where((c) => c.startsWith('snapshot(')), hasLength(1));
   });
 
+  testWidgets('the Undo message goes away by itself', (t) async {
+    await pumpApp(t);
+    await t.tap(find.text('Save reading'));
+    await t.pump();
+    expect(find.text('Undo'), findsOneWidget);
+    for (var i = 0; i < 6; i++) {
+      await t.pump(const Duration(seconds: 1));
+    }
+    expect(find.text('Undo'), findsNothing);
+  });
+
   testWidgets('undo of a saved reading removes it', (t) async {
     await pumpApp(t);
     await t.tap(find.text('Save reading'));

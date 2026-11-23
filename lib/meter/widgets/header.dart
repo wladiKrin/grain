@@ -3,13 +3,13 @@ import 'package:material_ui/material_ui.dart';
 import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
 
-/// Gear profile and mode on the left; viewfinder toggle and settings right.
+/// Film format or roll status on the left; gear library, viewfinder toggle
+/// and settings right.
 class MeterHeader extends StatelessWidget {
   const MeterHeader({
     super.key,
     required this.title,
-    required this.subtitle,
-    this.detail,
+    this.subtitle,
     required this.viewfinderOn,
     required this.onToggleViewfinder,
     required this.onOpenSettings,
@@ -17,10 +17,9 @@ class MeterHeader extends StatelessWidget {
   });
 
   final String title;
-  final String subtitle;
 
-  /// Optional third line, styled like [subtitle].
-  final String? detail;
+  /// Optional second line in the secondary colour.
+  final String? subtitle;
   final bool viewfinderOn;
   final VoidCallback onToggleViewfinder;
   final VoidCallback onOpenSettings;
@@ -32,32 +31,28 @@ class MeterHeader extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onOpenLibrary,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: 2,
-              children: [
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: 2,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: g.ink,
+                ),
+              ),
+              if (subtitle case final line?)
                 Text(
-                  title,
+                  line,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: g.ink,
-                  ),
+                  style: TextStyle(fontSize: 13, color: g.secondary),
                 ),
-                for (final line in [subtitle, ?detail])
-                  Text(
-                    line,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: g.secondary),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
         RoundButton(

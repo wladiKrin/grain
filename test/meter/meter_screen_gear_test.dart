@@ -7,7 +7,7 @@ import 'package:grain/main.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/meter/widgets/focal_chip.dart';
-import 'package:grain/meter/widgets/lens_chip.dart';
+import 'package:grain/meter/widgets/gear_chip.dart';
 import 'package:grain/metering/reading.dart';
 import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
@@ -57,6 +57,8 @@ void main() {
   late FakeMeterSource src;
   late _Haptics haptics;
   var pickerOpened = 0;
+  var libraryOpened = 0;
+  var bodyCycled = 0;
 
   setUp(() {
     gear = GearController.inMemory(library: fixtureLibrary());
@@ -66,6 +68,8 @@ void main() {
     // The same sync GrainApp does.
     gear.addListener(() => c.setGear(gear.setup));
     pickerOpened = 0;
+    libraryOpened = 0;
+    bodyCycled = 0;
   });
   tearDown(() {
     c.dispose();
@@ -85,6 +89,8 @@ void main() {
           gear: gear,
           haptics: haptics,
           onOpenLensPicker: () => pickerOpened++,
+          onOpenLibrary: () => libraryOpened++,
+          onBodyCycled: () => bodyCycled++,
         ),
       ),
     );
@@ -112,9 +118,10 @@ void main() {
     expect(find.text('No camera'), findsNothing);
   });
 
-  testWidgets('No camera shows only the focal chip', (t) async {
+  testWidgets('No camera shows the camera and focal chips, no lens', (t) async {
     await pumpScreen(t);
-    expect(find.byType(LensChip), findsNothing);
+    expect(find.byType(GearChip), findsOneWidget);
+    expect(find.bySemanticsLabel('Lens'), findsNothing);
     expect(find.byType(FocalChip), findsOneWidget);
     expect(find.text('50 mm'), findsOneWidget);
   });
@@ -146,12 +153,49 @@ void main() {
     expect(haptics.ticks, isEmpty);
   });
 
-  testWidgets('more… opens the lens picker', (t) async {
+  testWidgets('the ▾ on each chip opens its picker', (t) async {
     await select(t, body: 'canon-a1', lens: 'canon-fd-50-1.8');
     await pumpScreen(t);
-    await t.tap(find.text('more…'));
+    await t.tap(find.bySemanticsLabel('More lenses'));
     await t.pump();
     expect(pickerOpened, 1);
+    await t.tap(find.bySemanticsLabel('More cameras'));
+    await t.pump();
+    expect(libraryOpened, 1);
+  });
+
+  testWidgets('camera and lens chips sit side by side', (t) async {
+    await select(t, body: 'canon-a1', lens: 'canon-fd-50-1.8');
+    await pumpScreen(t);
+    final camera = t.getRect(find.text('Canon A-1'));
+    final lens = t.getRect(find.text('FD 50/1.8'));
+    expect(camera.center.dy, closeTo(lens.center.dy, .5));
+    expect(camera.right, lessThan(lens.left));
+  });
+
+  testWidgets('camera chip cycles favorite bodies', (t) async {
+    await t.runAsync(() async {
+      await gear.toggleFavorite(libBody('canon-a1'));
+      await gear.toggleFavorite(libBody('canon-ae1'));
+    });
+    await select(t, body: 'canon-a1');
+    await pumpScreen(t);
+    await t.tap(find.text('Canon A-1'));
+    await t.runAsync(() => Future<void>.delayed(Duration.zero));
+    await t.pump();
+    expect(gear.body!.id, 'canon-ae1');
+    expect(haptics.ticks, [false]);
+    expect(bodyCycled, 1);
+    expect(libraryOpened, 0);
+  });
+
+  testWidgets('camera chip without favorites opens the library', (t) async {
+    await pumpScreen(t);
+    await t.tap(find.text('No camera'));
+    await t.runAsync(() => Future<void>.delayed(Duration.zero));
+    await t.pump();
+    expect(libraryOpened, 1);
+    expect(bodyCycled, 0);
   });
 
   testWidgets('prime hides the focal chip, zoom shows its range', (t) async {

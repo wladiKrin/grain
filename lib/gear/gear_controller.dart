@@ -212,6 +212,16 @@ class GearController extends ChangeNotifier {
     );
   }
 
+  /// Selects the favorite body after the current one; false when there are
+  /// no favorite bodies.
+  Future<bool> cycleBody() async {
+    final favs = favoriteBodies;
+    if (favs.isEmpty) return false;
+    final i = favs.indexWhere((b) => b.id == _setup.body?.id);
+    await selectBody(favs[(i + 1) % favs.length]);
+    return true;
+  }
+
   Future<bool> cycleLens() async {
     final body = _setup.body;
     if (body == null) return false;

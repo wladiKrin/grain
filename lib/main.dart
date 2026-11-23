@@ -421,6 +421,7 @@ class _GrainAppState extends State<GrainApp> {
         rolls: _rolls,
         onOpenLibrary: _openLibrary,
         onOpenLensPicker: _openLensPicker,
+        onBodyCycled: () => unawaited(_askBodyChange()),
         onOpenSettings: _openSettings,
         onOpenRolls: _openRolls,
         onStartRoll: () => unawaited(_startRoll()),

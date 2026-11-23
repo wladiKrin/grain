@@ -18,9 +18,9 @@ const _minTarget = 44.0;
 /// Release speed (px/s) below which the dial stops where the finger left it.
 const _minFlingVelocity = 300.0;
 
-/// Friction of a fling: it travels velocity / ln(1 / drag) px, about half a
-/// second's worth of the release speed.
-const _flingDrag = 0.135;
+/// Friction of a fling: it travels velocity / ln(1 / drag) px, about 0.4 s
+/// worth of the release speed.
+const _flingDrag = 0.09;
 
 /// Horizontal swipe dial: one value per [detent] px of drag, a haptic tick per
 /// value. A fast release keeps it spinning, slowing to a stop on a value; a

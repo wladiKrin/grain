@@ -8,7 +8,7 @@ import 'package:grain/exposure/mode.dart';
 import 'package:grain/meter/meter_screen.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
-import 'package:grain/meter/widgets/lens_chip.dart';
+import 'package:grain/meter/widgets/gear_chip.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
 import 'package:grain/ui/dial/swipe_dial.dart';
 import 'package:grain/ui/haptics.dart';
@@ -84,7 +84,7 @@ void main() {
           await t.pump();
           expect(t.takeException(), isNull);
           expect(find.text(longest.shortName), findsOneWidget);
-          expect(find.byType(LensChip), findsOneWidget);
+          expect(find.byType(GearChip), findsNWidgets(2));
           final numeral = t
               .widget<SwipeDial>(find.byType(SwipeDial).first)
               .valueFontSize;

@@ -17,9 +17,9 @@ import '../ui/theme.dart';
 import 'meter_controller.dart';
 import 'widgets/camera_permission.dart';
 import 'widgets/focal_chip.dart';
+import 'widgets/gear_chip.dart';
 import 'widgets/header.dart';
 import 'widgets/iso_stepper.dart';
-import 'widgets/lens_chip.dart';
 import 'widgets/log_button.dart';
 import 'widgets/mode_tabs.dart';
 import 'widgets/offset_scale.dart';
@@ -40,6 +40,7 @@ class MeterScreen extends StatefulWidget {
     this.onOpenSettings,
     this.onOpenLibrary,
     this.onOpenLensPicker,
+    this.onBodyCycled,
     this.requestCameraPermission,
     this.openSettings,
   });
@@ -62,12 +63,17 @@ class MeterScreen extends StatefulWidget {
   /// Settings button action.
   final VoidCallback? onOpenSettings;
 
-  /// Gear library: the header title and its camera button.
+  /// Gear library (the body list): the camera chip's ▾, the header's camera
+  /// button, and where a tap on the camera chip leads when there is no
+  /// favorite body to cycle.
   final VoidCallback? onOpenLibrary;
 
   /// The lens list; also where a tap on the lens chip leads when there is
   /// no favorite lens to cycle.
   final VoidCallback? onOpenLensPicker;
+
+  /// After a tap on the camera chip moved to another favorite body.
+  final VoidCallback? onBodyCycled;
 
   /// Defaults to the system permission request; tests pass a fake.
   final CameraPermissionRequest? requestCameraPermission;
@@ -132,6 +138,9 @@ class _MeterScreenState extends State<MeterScreen> {
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
+        // An action would otherwise keep it up until dismissed; with a
+        // screen reader it stays, so Undo can be reached.
+        persist: MediaQuery.accessibleNavigationOf(context),
         behavior: SnackBarBehavior.floating,
         // Above the button row, so the next log is never covered.
         margin: EdgeInsets.fromLTRB(24, 0, 24, _aboveLogButton()),
@@ -244,6 +253,16 @@ class _MeterScreenState extends State<MeterScreen> {
         }
       });
     });
+  }
+
+  Future<void> _onBodyTap() async {
+    final before = _gear.body?.id;
+    if (await _gear.cycleBody()) {
+      widget.haptics.tick(strong: false);
+      if (_gear.body?.id != before) widget.onBodyCycled?.call();
+    } else {
+      widget.onOpenLibrary?.call();
+    }
   }
 
   Future<void> _onLensTap() async {
@@ -385,9 +404,8 @@ class _MeterScreenState extends State<MeterScreen> {
     final onLibrary = widget.onOpenLibrary ?? () {};
     final roll = _rolls.active;
     return MeterHeader(
-      title: body?.displayName ?? 'No camera',
-      subtitle: _statusLine(body?.format.label ?? 'Free mode'),
-      detail: roll != null && _rolls.logsFor(body) && roll.pushThirds != 0
+      title: _statusLine(body?.format.label ?? 'Free mode'),
+      subtitle: roll != null && _rolls.logsFor(body) && roll.pushThirds != 0
           ? filmLine(roll)
           : null,
       viewfinderOn: viewfinderOn,
@@ -397,19 +415,31 @@ class _MeterScreenState extends State<MeterScreen> {
     );
   }
 
+  /// Camera, lens and (for a zoom) focal length, side by side.
   Widget _chips() {
     final body = _gear.body;
     final showFocal = _c.focalValues.length > 1;
-    if (body == null && !showFocal) return const SizedBox.shrink();
-    final onMore = widget.onOpenLensPicker ?? () {};
+    final onLibrary = widget.onOpenLibrary ?? () {};
     return Row(
+      spacing: 8,
       children: [
+        Flexible(
+          child: GearChip(
+            label: body?.displayName ?? 'No camera',
+            semanticLabel: 'Camera',
+            moreLabel: 'More cameras',
+            onTap: _onBodyTap,
+            onMore: onLibrary,
+          ),
+        ),
         if (body != null)
           Flexible(
-            child: LensChip(
+            child: GearChip(
               label: _gear.lens?.shortName ?? 'Choose lens',
+              semanticLabel: 'Lens',
+              moreLabel: 'More lenses',
               onTap: _onLensTap,
-              onMore: onMore,
+              onMore: widget.onOpenLensPicker ?? () {},
             ),
           ),
         if (showFocal)
@@ -523,6 +553,9 @@ class _MeterScreenState extends State<MeterScreen> {
         histogram: _c.histogram,
         frameLandscape: _c.frameLandscape,
         onToggleFrame: _c.toggleFrameOrientation,
+        // Sideways, the box takes the frame's shape; upright, it keeps its
+        // height and shows the dimmed surroundings.
+        fitToCrop: _c.frameLandscape,
       );
     },
   );
