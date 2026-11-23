@@ -38,6 +38,7 @@ class MeterController extends ChangeNotifier {
     apertureIndex = nearestIndex(apertures, 5.6);
     shutterIndex = nearestIndex(shutters, 1 / 125);
     isoIndex = nearestIndex(isos, 400);
+    _framing = _target;
   }
 
   final MeterSource _source;
@@ -302,6 +303,7 @@ class MeterController extends ChangeNotifier {
           _session++;
           _wideFailed = false;
           _sub = _source.stats.listen(_onStats, onError: _onStatsError);
+          _reframe();
           _sendRegions();
           break;
         }
@@ -460,18 +462,10 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Turns the lens frame between sideways and upright; a spot outside the
-  /// new frame moves to its nearest edge.
+  /// Turns the lens frame between sideways and upright.
   void toggleFrameOrientation() {
     frameLandscape = !frameLandscape;
-    final c = cropRect;
-    if (c != null && area == MeterArea.spot) {
-      spot = Offset(
-        spot.dx.clamp(c.left, c.right).toDouble(),
-        spot.dy.clamp(c.top, c.bottom).toDouble(),
-      );
-      _derive();
-    }
+    _reframe();
     _sendRegions();
     unawaited(_syncWide());
     _updateHistogram();
@@ -492,34 +486,73 @@ class MeterController extends ChangeNotifier {
     return s.width > s.height ? Size(s.height, s.width) : s;
   }
 
-  /// The current lens's field of view, normalized in [previewSize].
+  /// The lens's field of view as shown, normalized in [previewSize]: see
+  /// [_framing].
   Rect? get cropRect {
     final p = preview, size = previewSize;
     if (p == null || size == null) return null;
+    final f = _framing;
     return lensCrop(
       preview: size,
-      lensFocal: equivalentFocal(focal, format),
+      lensFocal: equivalentFocal(f.focal, f.format),
       phoneEqFocal: p.phoneEqFocal,
-      aspect: _frameAspect,
+      aspect: f.format.aspect(landscape: f.landscape),
     );
   }
 
-  double get _frameAspect => format.aspect(landscape: frameLandscape);
+  /// The focal, format and orientation the viewfinder frames. It follows
+  /// the dials, except while the camera switches to or from the ultra-wide:
+  /// then it keeps the old framing until the new camera's frames arrive, so
+  /// the picture and its frame change together.
+  late _Framing _framing;
 
-  /// Whether the whole lens frame fits in the camera that frames like
+  _Framing get _target =>
+      (focal: focal, format: format, landscape: frameLandscape);
+
+  /// Whether the whole [f] frame fits in the camera that frames like
   /// [phoneEqFocal].
-  bool _fits(double phoneEqFocal) => lensFits(
-    preview: previewSize!,
-    lensFocal: equivalentFocal(focal, format),
-    phoneEqFocal: phoneEqFocal,
-    aspect: _frameAspect,
-  );
+  bool _fits(double phoneEqFocal, [_Framing? f]) {
+    f ??= _target;
+    return lensFits(
+      preview: previewSize!,
+      lensFocal: equivalentFocal(f.focal, f.format),
+      phoneEqFocal: phoneEqFocal,
+      aspect: f.format.aspect(landscape: f.landscape),
+    );
+  }
+
+  /// Whether a move to or from the ultra-wide is due for the dials.
+  bool get _switchDue {
+    final p = preview;
+    if (p == null || !_running || _wideFailed || p.wideEqFocal == null) {
+      return false;
+    }
+    return !_fits(p.mainEqFocal) != p.wide;
+  }
+
+  /// Moves the shown framing to the dials unless a camera switch is due; a
+  /// spot outside the new frame moves to its nearest edge.
+  void _reframe() {
+    if (_switchDue) return;
+    _framing = _target;
+    final c = cropRect;
+    if (c != null && area == MeterArea.spot) {
+      final clamped = Offset(
+        spot.dx.clamp(c.left, c.right).toDouble(),
+        spot.dy.clamp(c.top, c.bottom).toDouble(),
+      );
+      if (clamped != spot) {
+        spot = clamped;
+        _derive();
+      }
+    }
+  }
 
   /// Whether the lens sees more than the camera in use (the crop cannot
   /// show all of its field).
   bool get lensWiderThanCamera {
     final p = preview;
-    return p != null && !_fits(p.phoneEqFocal);
+    return p != null && !_fits(p.phoneEqFocal, _framing);
   }
 
   /// Spot radius relative to the crop width.
@@ -565,6 +598,7 @@ class MeterController extends ChangeNotifier {
       _scales = scalesFor(_gear).withIsos(_scales.isos);
       apertureIndex = nearestIndex(apertures, value);
     }
+    _reframe();
     _sendRegions();
     unawaited(_syncWide());
     _updateHistogram();
@@ -583,6 +617,7 @@ class MeterController extends ChangeNotifier {
     apertureIndex = nearestIndex(apertures, aperture);
     shutterIndex = nearestIndex(shutters, shutter);
     isoIndex = nearestIndex(isos, iso);
+    _reframe();
     _sendRegions();
     unawaited(_syncWide());
     _updateHistogram();
@@ -610,7 +645,15 @@ class MeterController extends ChangeNotifier {
         if (!_running || _disposed || _wideFailed || p == null) return;
         final wideEq = p.wideEqFocal;
         final want = wideEq != null && !_fits(p.mainEqFocal);
-        if (want == p.wide) return;
+        if (want == p.wide) {
+          // Dialled back before the switch started: show the dials again.
+          if (_framing != _target) {
+            _reframe();
+            _sendRegions();
+            notifyListeners();
+          }
+          return;
+        }
         final session = _session;
         final PreviewInfo next;
         try {
@@ -619,6 +662,7 @@ class MeterController extends ChangeNotifier {
           debugPrint('GRAIN setWide($want) failed: $e');
           if (session == _session) {
             _wideFailed = true;
+            _reframe();
             // The native side answers an error only after it tore the
             // session down and could reopen neither camera: like any camera
             // error, the last reading must not stay as live.
@@ -632,6 +676,7 @@ class MeterController extends ChangeNotifier {
         // The camera could not switch (it answered its unchanged preview):
         // asking again would loop.
         if (next.wide != want) _wideFailed = true;
+        _reframe();
         _sendRegions();
         notifyListeners();
       }
@@ -681,3 +726,5 @@ class MeterController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+typedef _Framing = ({double focal, FilmFormat format, bool landscape});

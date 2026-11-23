@@ -128,33 +128,64 @@ class CameraSession(
      */
     fun setWide(want: Boolean, onDone: (PreviewSetup?) -> Unit) {
         val posted = handler.post {
-            val result = setWideOnCameraThread(want)
-            mainHandler.post { onDone(result) }
+            setWideOnCameraThread(want) { result -> mainHandler.post { onDone(result) } }
         }
         if (!posted) onDone(null) // The thread already quit after close().
     }
 
-    private fun setWideOnCameraThread(want: Boolean): PreviewSetup? {
+    /**
+     * Camera thread. On the zoom-ratio path [answer] waits for the first frame at the new
+     * ratio, so the caller reframes when the picture changes, not a few frames before.
+     */
+    private fun setWideOnCameraThread(want: Boolean, answer: (PreviewSetup?) -> Unit) {
         val cur = current
-        if (closed || cur == null) return null
-        if (want == cur.wide) return cur
-        return when (val w = wideSupport) {
-            null -> cur
-            is Wide.Camera -> null
+        if (closed || cur == null) return answer(null)
+        if (want == cur.wide) return answer(cur)
+        when (val w = wideSupport) {
+            null -> answer(cur)
+            is Wide.Camera -> answer(null)
             is Wide.ZoomRatio -> {
-                val s = session ?: return null
-                val b = request ?: return null
+                val s = session ?: return answer(null)
+                val b = request ?: return answer(null)
+                val ratio = if (want) w.ratio else 1f
                 try {
-                    b.set(CaptureRequest.CONTROL_ZOOM_RATIO, if (want) w.ratio else 1f)
+                    b.set(CaptureRequest.CONTROL_ZOOM_RATIO, ratio)
                     s.setRepeatingRequest(b.build(), captureCallback, handler)
-                    cur.copy(wide = want, phoneEqFocal = if (want) w.eqFocal else cur.mainEqFocal)
-                        .also { current = it }
+                    val next = cur.copy(wide = want, phoneEqFocal = if (want) w.eqFocal else cur.mainEqFocal)
+                    current = next
+                    afterFrame(ratio, onClose = true) { answer(next) }
                 } catch (e: Exception) {
                     Log.w(TAG, "zoom ratio switch failed", e)
-                    cur
+                    answer(cur)
                 }
             }
         }
+    }
+
+    /** A wait for the first frame at [zoom] (any frame when null); see [afterFrame]. */
+    private class FrameWait(val zoom: Float?, val onClose: Boolean, val action: () -> Unit) {
+        var done = false
+    }
+
+    private var frameWait: FrameWait? = null
+
+    /**
+     * Camera thread. Runs [action] once a capture result arrives at [zoom], or after
+     * [FRAME_WAIT_MS] at the latest. A newer wait settles the older one first; [onClose] says
+     * whether [close] still runs it (an answer the caller waits for) or drops it.
+     */
+    private fun afterFrame(zoom: Float?, onClose: Boolean, action: () -> Unit) {
+        frameWait?.let(::settle)
+        val w = FrameWait(zoom, onClose, action)
+        frameWait = w
+        handler.postDelayed({ settle(w) }, FRAME_WAIT_MS)
+    }
+
+    private fun settle(w: FrameWait, run: Boolean = true) {
+        if (w.done) return
+        w.done = true
+        if (frameWait === w) frameWait = null
+        if (run) w.action()
     }
 
     /**
@@ -238,6 +269,7 @@ class CameraSession(
     fun close(onClosed: () -> Unit) {
         handler.post {
             closed = true
+            frameWait?.let { settle(it, run = it.onClose) }
             snapshots.forEach { it.finish(null) }
             snapshots.clear()
             try {
@@ -393,11 +425,23 @@ class CameraSession(
                             if (zoomRatio != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                 set(CaptureRequest.CONTROL_ZOOM_RATIO, zoomRatio)
                             }
+                            // Zoom changes apply on the next frame instead of a few frames later.
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                                ch.get(CameraCharacteristics.CONTROL_AVAILABLE_SETTINGS_OVERRIDES)
+                                    ?.contains(CameraMetadata.CONTROL_SETTINGS_OVERRIDE_ZOOM) == true
+                            ) {
+                                set(
+                                    CaptureRequest.CONTROL_SETTINGS_OVERRIDE,
+                                    CameraMetadata.CONTROL_SETTINGS_OVERRIDE_ZOOM,
+                                )
+                            }
                         }
                         s.setRepeatingRequest(builder.build(), captureCallback, handler)
                         request = builder
                         current = setup
-                        mainHandler.post { onReady(setup) }
+                        // Ready with the first frame, so a reopened camera's frame replaces the
+                        // old camera's last one as the caller reframes.
+                        afterFrame(zoomRatio, onClose = false) { mainHandler.post { onReady(setup) } }
                     } catch (e: Exception) {
                         fail(e.message ?: e.javaClass.simpleName)
                     }
@@ -418,6 +462,8 @@ class CameraSession(
     private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(s: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
             latest = result
+            val w = frameWait ?: return
+            if (w.zoom == null || zoomReached(result, w.zoom)) settle(w)
         }
     }
 
@@ -483,12 +529,26 @@ class CameraSession(
     }
 
     private fun fail(message: String) {
+        frameWait?.let { settle(it, run = it.onClose) }
         if (closed) return
         mainHandler.post { onError(message) }
     }
 
     companion object {
         private const val TAG = "GrainCamera"
+
+        /** Longest wait for a frame at a new zoom ratio before answering anyway. */
+        private const val FRAME_WAIT_MS = 500L
+
+        /** Whether [result] was captured at [zoom] (always, where results do not report it). */
+        fun zoomReached(result: CaptureResult, zoom: Float): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
+            val got = result.get(CaptureResult.CONTROL_ZOOM_RATIO) ?: return true
+            return zoomClose(got, zoom)
+        }
+
+        /** Within 1 % of each other. */
+        fun zoomClose(a: Float, b: Float): Boolean = kotlin.math.abs(a - b) <= 0.01f * b
 
         /** Typical phone main-camera aperture, used when the phone reports none. */
         const val FALLBACK_APERTURE = 1.8

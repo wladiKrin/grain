@@ -26,4 +26,12 @@ class CameraSessionTest {
         assertFalse(CameraSession.hasListedAperture(floatArrayOf(0f, -1f)))
         assertTrue(CameraSession.hasListedAperture(floatArrayOf(0f, 1.65f)))
     }
+
+    @Test fun zoomCloseAllowsOnePercent() {
+        assertTrue(CameraSession.zoomClose(0.6f, 0.6f))
+        assertTrue(CameraSession.zoomClose(0.605f, 0.6f))
+        assertFalse(CameraSession.zoomClose(0.7f, 0.6f))
+        assertFalse(CameraSession.zoomClose(1f, 0.6f))
+        assertTrue(CameraSession.zoomClose(0.995f, 1f))
+    }
 }

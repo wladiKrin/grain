@@ -470,6 +470,34 @@ void main() {
     expect(c.preview!.wide, isFalse);
   });
 
+  test('the frame holds until the camera switch answers', () async {
+    await c.resume();
+    c.setFocal(idx(c.focalValues, '28'));
+    await settle();
+    final upright = c.cropRect!;
+    src.wideGate = Completer<void>();
+    c.toggleFrameOrientation();
+    await settle();
+    // Switching to the ultra-wide: the main camera's picture keeps its frame.
+    expect(src.calls.last, 'setWide(true)');
+    expect(c.cropRect, upright);
+    src.wideGate!.complete();
+    await settle();
+    expect(c.preview!.wide, isTrue);
+    final r = c.cropRect!;
+    expect((r.width * 3000) / (r.height * 4000), closeTo(3 / 2, 1e-6));
+    expect(src.regions.last.$1, r);
+  });
+
+  test('a change that needs no switch reframes at once', () async {
+    await c.resume();
+    c.setFocal(idx(c.focalValues, '50'));
+    final before = c.cropRect!;
+    c.toggleFrameOrientation();
+    expect(c.cropRect, isNot(before));
+    expect(src.calls.where((e) => e.startsWith('setWide')), isEmpty);
+  });
+
   test('turning the frame keeps the spot inside it', () async {
     c.setGear(GearSetup(body: a1, lens: fd50, focal: 50));
     await c.resume();

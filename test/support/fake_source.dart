@@ -47,6 +47,9 @@ class FakeMeterSource implements MeterSource {
   /// When set, [snapshot] waits for it before answering.
   Completer<void>? snapshotGate;
 
+  /// When set, [setWide] waits for it before answering.
+  Completer<void>? wideGate;
+
   bool _wide = false;
   final _stats = StreamController<MeterStats>.broadcast();
   final _qr = StreamController<String>.broadcast();
@@ -90,6 +93,7 @@ class FakeMeterSource implements MeterSource {
   @override
   Future<PreviewInfo> setWide(bool wide) async {
     calls.add('setWide($wide)');
+    await wideGate?.future;
     if (setWideError != null) throw setWideError!;
     _wide = wide && wideEqFocal != null;
     return _preview;
