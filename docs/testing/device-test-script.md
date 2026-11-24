@@ -54,7 +54,7 @@ Package name: `io.github.wladikrin.grain`.
 | 1.1 | Upgrade from plan 3 (the only check of the v2→v3 database migration and the switch to vendored SQLite on real data). Build and install the plan-3 app as described below the table, make a roll with a few frames, a saved reading and an own lens, then build and `adb install -r` this build and open it | The roll, its frames, the saved reading and the own lens are all there; no database error | |
 | 1.2 | Open the app for the first time (`adb shell pm clear io.github.wladikrin.grain` after 1.1), allow the camera | An "Allow camera" prompt appears and works; after allowing, the preview starts. This is the R8-minified release build, so a working camera and permission flow also shows R8 stripped nothing needed (denying twice is checked in 9.1) | |
 | 1.3 | Rotate the phone | The meter stays in portrait | |
-| 1.4 | Switch the system to dark mode and launch | No black launch flash; dark status bar icons on the paper ground | |
+| 1.4 | Switch the system to dark mode and launch (Appearance is System by default) | No white launch flash; the app is dark with light status bar icons | |
 | 1.5 | Look at the viewfinder | The preview is upright (not rotated) | |
 | 1.6 | Check which lens is chosen | The ~26 mm main camera | |
 | 1.7 | Cold start, five times: `adb shell am force-stop io.github.wladikrin.grain && adb logcat -c && adb shell am start -W io.github.wladikrin.grain/.MainActivity`; read `TotalTime`, then `adb logcat -d -v time \| grep -E "ActivityTaskManager.*(START\|Displayed)\|GRAIN first EV"`. Time to first EV = `GRAIN first EV` timestamp minus the `START` timestamp. Record the median | Cold start to first EV value <= 1.5 s; the meter is up in 1.5 s or less with the library and database loaded. Runs (TotalTime / first EV, ms): 1 ____ / ____, 2 ____ / ____, 3 ____ / ____, 4 ____ / ____, 5 ____ / ____, median ____ / ____ | |
@@ -108,7 +108,7 @@ Calibration offset used: ______ EV
 | 2.7 | Count stats events over 10 s in the DevTools timeline (`flutter run --profile`), once in bright light and once in a dim room (the camera picks its own frame rate, usually 30 fps in dim light and up to 60 in bright light; note which it was if DevTools shows it) | <= 15 events/s in both, no stalls. Bright ____ /s, dim ____ /s | |
 | 2.8 | Optional (needs a second phone, or an uninstall, because an older build cannot open this build's database): meter the same scene on this build and on the plan-2 build (branch `feat/gear`, built as in 1.1). The METER reader is now at preview size with sparser luma sampling | Stats still ~15/s; EV unchanged within ±⅙ EV | |
 | 2.9 | Tap a spot in Manual mode with the viewfinder on | The spot lands where tapped; the ring and ticks are clearly visible, not a dot | |
-| 2.10 | Tap in the dimmed area outside the crop | The spot lands on the crop edge | |
+| 2.10 | Turn the frame upright (frame button), tap in the dimmed area outside the crop | The spot lands on the crop edge | |
 | 2.11 | On a phone that reports no aperture (if available), read the EV line | It reads "EV ≈..." (f/1.8 assumed) | |
 
 If spot readings look compressed (a bright or dark spot reads closer to the
@@ -162,7 +162,7 @@ Path that ran: ______  Main eq. focal: ______ mm  Ultra-wide eq. focal: ______ m
 | 4.2 | Turn the focal dial down until the frame no longer fits the main camera's picture (sideways frame: about 1.4 × the main eq. focal, ~34 mm on a 25 mm camera; upright: about the main eq. focal) | The ultra-wide engages; the preview visibly widens | |
 | 4.3 | Turn back up past that point | The main camera returns | |
 | 4.4 | Cross the threshold back and forth on the focal dial | No visible stall or black frame (separate-camera path: a short reopen is acceptable, no hang) | |
-| 4.5 | Separate-camera path only (no hysteresis yet): dial the focal back and forth across the main camera's eq. focal (e.g. 24 ↔ 28 mm on a 25 mm main camera) about ten times | Each crossing reopens the camera; the black gap and delay are tolerable and nothing hangs or ends on the wrong camera. Gap length ____ ms; if annoying, hysteresis goes into a later plan | |
+| 4.5 | Separate-camera path only (no hysteresis yet): dial the focal back and forth across the switch point of 4.2 (sideways frame: e.g. 28 ↔ 35 mm on a 25 mm main camera) about ten times | Each crossing reopens the camera; the black gap and delay are tolerable and nothing hangs or ends on the wrong camera. Gap length ____ ms; if annoying, hysteresis goes into a later plan | |
 | 4.6 | Set a wide focal, press Home, return | The ultra-wide is in use again | |
 | 4.7 | Leave the meter screen or background the app right while the ultra-wide is switching (separate-camera path) | The camera indicator goes off and stays off | |
 | 4.8 | Sunny exterior, same spot or average mode, main then ultra-wide within a minute: Main EV ____, Ultra-wide EV ____ | Difference <= 1/3 stop (diff ____) | |
@@ -275,7 +275,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 8.7 | Import the same zip again | "Added 0 rolls, 0 saved readings, 0 profiles. Skipped N already on this phone." and nothing is duplicated | |
 | 8.8 | Import with a roll active on this phone | The imported active roll is listed as finished; the roll here stays active | |
 | 8.9 | Pick a file that is not a zip (e.g. a photo or a text file) | "Can't import" with "Not a Grain backup"; nothing changes | |
-| 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, camera-shake warning and click sound follow the file; calibration and location stay as they were | |
+| 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, frame orientation, camera-shake warning and click sound follow the file; Appearance, calibration and location stay as they were | |
 | 8.11 | Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |
 | 8.12 | Create a roll, log and edit a frame, export the roll (CSV and backup zip) on the current build | All work | |
 | 8.13 | The auto-backup restore uninstalls the app, so it is step 13, at the end | — | |
@@ -322,7 +322,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 12.1 | Look at the launcher icon on the Pixel home screen | Paper ground, ink aperture disc, red dot in the middle | |
 | 12.2 | Switch themed icons on (Settings, Wallpaper & style) | The icon becomes the monochrome aperture, tinted by the wallpaper | |
 | 12.3 | App info | Shows version 1.0.0 | |
-| 12.4 | `ls -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` | About 21,338,033 bytes as in Build facts (accepted above the plan's ~20 MB) | |
+| 12.4 | `ls -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` | About 21.4 MB (21,405,109 bytes at 98d3bf7; accepted above the plan's ~20 MB) | |
 | 12.5 | `$ANDROID_HOME/build-tools/*/aapt2 dump permissions` on the APK | CAMERA, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION and DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION only; no INTERNET | |
 | 12.6 | `unzip -p <apk> 'classes*.dex' \| grep -a -c -e 'com/google/android/gms' -e 'com/google/firebase'` | `0` | |
 | 12.7 | Unsigned F-Droid build. On a fresh clone run `flutter build apk --release` once first (it writes `android/gradlew`, which is not in the repository). Then `cd android && GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease`; sign `build/app/outputs/apk/release/app-release-unsigned.apk` with your own key (`apksigner sign --ks ~/grain-release.jks <apk>`) and install it (uninstall first if the installed app has another key) | It builds and runs like the release APK. It is one universal, unobfuscated APK, so its size and bytes are not comparable with the split release APKs (see `docs/release.md`) | |
