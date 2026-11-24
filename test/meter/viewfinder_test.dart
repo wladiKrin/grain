@@ -54,6 +54,46 @@ Future<Rect> _pump(
 }
 
 void main() {
+  testWidgets('long-press on the EV pill toggles the engine; the hint shows', (
+    t,
+  ) async {
+    var toggles = 0;
+    Widget vf(String? hint) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Center(
+        child: SizedBox(
+          width: 364,
+          height: 335,
+          child: Viewfinder(
+            textureId: 1,
+            previewSize: _preview,
+            crop: null,
+            area: MeterArea.average,
+            spot: const Offset(.5, .5),
+            spotRadius: .02,
+            ev: 12,
+            flag: RangeFlag.ok,
+            held: false,
+            widerThanPhone: false,
+            onSpot: (_) {},
+            onClearSpot: () {},
+            onToggleHold: () {},
+            onToggleEngine: () => toggles++,
+            engineHint: hint,
+          ),
+        ),
+      ),
+    );
+    await t.pumpWidget(vf(null));
+    final pill = find.textContaining('EV');
+    expect(pill, findsOneWidget);
+    await t.longPress(pill);
+    expect(toggles, 1);
+    await t.pumpWidget(vf('M'));
+    expect(find.text('M'), findsOneWidget);
+    expect(find.textContaining('EV'), findsNothing);
+  });
+
   testWidgets('the box stays near-black under the dark theme', (t) async {
     await t.pumpWidget(
       MaterialApp(

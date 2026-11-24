@@ -2,32 +2,40 @@ package io.github.wladikrin.grain.meter
 
 import java.nio.ByteBuffer
 import kotlin.math.max
-import kotlin.math.pow
 
 /** Normalized (0..1) rectangle, left/top inclusive, right/bottom exclusive. */
 data class RectD(val l: Double, val t: Double, val r: Double, val b: Double)
 
-/** Means of linear luma (0..1) plus a 64-bin histogram of gamma Y over the crop. */
-data class Stats(val frame: Double, val crop: Double, val spot: Double, val histogram: IntArray) {
+/**
+ * Means of linear luma (0..1), the shares of crop and spot samples at or above
+ * [LumaStats.CLIP_CODE], plus a 64-bin histogram of gamma Y over the crop.
+ */
+data class Stats(
+    val frame: Double,
+    val crop: Double,
+    val spot: Double,
+    val histogram: IntArray,
+    val cropClip: Double = 0.0,
+    val spotClip: Double = 0.0,
+) {
     override fun equals(other: Any?): Boolean =
         other is Stats && frame == other.frame && crop == other.crop && spot == other.spot &&
-            histogram.contentEquals(other.histogram)
+            cropClip == other.cropClip && spotClip == other.spotClip && histogram.contentEquals(other.histogram)
 
     override fun hashCode(): Int =
-        ((frame.hashCode() * 31 + crop.hashCode()) * 31 + spot.hashCode()) * 31 + histogram.contentHashCode()
+        ((((frame.hashCode() * 31 + crop.hashCode()) * 31 + spot.hashCode()) * 31 + cropClip.hashCode()) * 31 +
+            spotClip.hashCode()) * 31 + histogram.contentHashCode()
 }
 
 /** Pure luma statistics of a camera Y plane; no Android types. */
 object LumaStats {
     const val HISTOGRAM_BINS = 64
 
-    private val linearLut = DoubleArray(256) { i ->
-        val c = i / 255.0
-        if (c <= 0.04045) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
-    }
+    /** 8-bit Y at or above this counts as clipped. */
+    const val CLIP_CODE = 250
 
     /** sRGB-encoded 8-bit Y to linear light 0..1. */
-    fun srgbToLinear(y: Int): Double = linearLut[y.coerceIn(0, 255)]
+    fun srgbToLinear(y: Int): Double = ToneCurve.SRGB.lut[y.coerceIn(0, 255)]
 
     /**
      * Maps a normalized point in display (portrait, upright) coordinates to normalized
@@ -53,6 +61,7 @@ object LumaStats {
      * [crop] and the spot centre are normalized sensor-buffer coordinates; [spotR] is the
      * spot radius as a fraction of the plane [width] (the spot is a circle in pixel space).
      * An empty crop falls back to the frame mean; an empty spot to the nearest pixel.
+     * [curve] is the tone curve the ISP encoded Y with; its inverse linearises.
      */
     fun compute(
         plane: ByteArray,
@@ -64,7 +73,8 @@ object LumaStats {
         spotCy: Double,
         spotR: Double,
         step: Int = 2,
-    ): Stats = computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step) { plane[it] }
+        curve: ToneCurve = ToneCurve.SRGB,
+    ): Stats = computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step, curve.lut) { plane[it] }
 
     /**
      * As [compute], reading only the sampled pixels straight from [plane] (absolute reads from
@@ -80,9 +90,12 @@ object LumaStats {
         spotCy: Double,
         spotR: Double,
         step: Int = 2,
+        curve: ToneCurve = ToneCurve.SRGB,
     ): Stats {
         val base = plane.position()
-        return computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step) { plane.get(base + it) }
+        return computeWith(width, height, rowStride, crop, spotCx, spotCy, spotR, step, curve.lut) {
+            plane.get(base + it)
+        }
     }
 
     private inline fun computeWith(
@@ -94,6 +107,7 @@ object LumaStats {
         spotCy: Double,
         spotR: Double,
         step: Int,
+        linearLut: DoubleArray,
         byteAt: (Int) -> Byte,
     ): Stats {
         require(step >= 1) { "step must be ≥ 1" }
@@ -104,6 +118,8 @@ object LumaStats {
         var cropN = 0
         var spotSum = 0.0
         var spotN = 0
+        var cropClipN = 0
+        var spotClipN = 0
 
         val cx = spotCx * width
         val cy = spotCy * height
@@ -127,6 +143,7 @@ object LumaStats {
                     if (nx >= crop.l && nx < crop.r) {
                         cropSum += lin
                         cropN++
+                        if (g >= CLIP_CODE) cropClipN++
                         histogram[g shr 2]++
                     }
                 }
@@ -134,6 +151,7 @@ object LumaStats {
                 if (dx * dx + dy * dy <= r2) {
                     spotSum += lin
                     spotN++
+                    if (g >= CLIP_CODE) spotClipN++
                 }
                 px += step
             }
@@ -142,13 +160,17 @@ object LumaStats {
 
         val frame = if (frameN > 0) frameSum / frameN else 0.0
         val cropMean = if (cropN > 0) cropSum / cropN else frame
+        val cropClip = if (cropN > 0) cropClipN.toDouble() / cropN else 0.0
+        var spotClip = if (spotN > 0) spotClipN.toDouble() / spotN else 0.0
         val spot = if (spotN > 0) {
             spotSum / spotN
         } else {
             val sx = cx.toInt().coerceIn(0, width - 1)
             val sy = cy.toInt().coerceIn(0, height - 1)
-            linearLut[byteAt(sy * rowStride + sx).toInt() and 0xFF]
+            val g = byteAt(sy * rowStride + sx).toInt() and 0xFF
+            if (g >= CLIP_CODE) spotClip = 1.0
+            linearLut[g]
         }
-        return Stats(frame, cropMean, spot, histogram)
+        return Stats(frame, cropMean, spot, histogram, cropClip, spotClip)
     }
 }

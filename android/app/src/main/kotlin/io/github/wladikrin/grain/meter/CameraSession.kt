@@ -14,6 +14,7 @@ import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.params.OutputConfiguration
 import android.hardware.camera2.params.SessionConfiguration
+import android.hardware.camera2.params.TonemapCurve
 import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
@@ -38,6 +39,10 @@ import kotlin.math.min
  * [LumaStats] in [Mode.METER] or [QrDecoder] in [Mode.SCAN]. All camera work runs on a private
  * HandlerThread; [onReady], [onError], [onStats] and [onQr] are invoked on the main thread.
  * In [Mode.METER] the reader runs at preview size, so [requestSnapshot] can JPEG the next frame.
+ *
+ * METER mode meters with the manual engine where the camera allows it (and [preferManual]):
+ * AE off, exposure time and ISO set by [ExposureLoop], a known tone curve. Elsewhere, and in
+ * [Mode.SCAN], the phone's AE runs and the reading follows its result.
  */
 class CameraSession(
     context: Context,
@@ -45,6 +50,8 @@ class CameraSession(
     val mode: Mode,
     /** Below 1 the ultra-wide, 1 the main camera, above 1 the main camera zoomed in. */
     private val startZoom: Float,
+    /** Whether to meter with the manual engine where the camera supports it. */
+    private var preferManual: Boolean,
     private val onReady: (PreviewSetup) -> Unit,
     private val onError: (String) -> Unit,
     private val onStats: (Map<String, Any>) -> Unit,
@@ -78,7 +85,13 @@ class CameraSession(
     }
 
     /** Regions in sensor-buffer coordinates, ready for [LumaStats.compute]. */
-    private data class SensorRegions(val crop: RectD, val cx: Double, val cy: Double, val r: Double)
+    private data class SensorRegions(
+        val crop: RectD,
+        val cx: Double,
+        val cy: Double,
+        val r: Double,
+        val spotMetering: Boolean = false,
+    )
 
     private val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -118,8 +131,47 @@ class CameraSession(
     private var lastQr: String? = null
     private val snapshots = mutableListOf<SnapshotRequest>()
 
+    /** What the opened camera allows for the manual engine; null when it cannot run it. */
+    private class Manual(
+        val limits: ExposureLoop.Limits,
+        val boostMin: Int?,
+        val tone: ToneCurve.Choice,
+        val curvePoints: Int,
+        val maxFrameNs: Long?,
+    )
+
+    private var manual: Manual? = null
+
+    /** Why [manual] is null, for the log. */
+    private var manualWhy = ""
+
+    /** Non-null while the repeating request runs AE off. */
+    private var loop: ExposureLoop? = null
+
+    /** The inverse [LumaStats] uses; the tone curve of the request in use. */
+    private var curve = ToneCurve.SRGB
+
+    /** The template's own tonemap mode, restored when AE takes over again. */
+    private var templateTonemap: Int? = null
+
+    /** Recent results by SENSOR_TIMESTAMP, so a frame's stats pair with its own result. */
+    private val results = object : LinkedHashMap<Long, TotalCaptureResult>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, TotalCaptureResult>?) =
+            size > RESULTS_KEPT
+    }
+
+    /** A frame's stats waiting for its capture result. */
+    private var pendingFrame: Pair<Long, Stats>? = null
+
     /** Display (portrait) regions as sent by Dart; normalized 0..1, radius relative to crop width. */
-    data class DisplayRegions(val crop: RectD, val cx: Double, val cy: Double, val radius: Double) {
+    data class DisplayRegions(
+        val crop: RectD,
+        val cx: Double,
+        val cy: Double,
+        val radius: Double,
+        /** The spot, not the crop, is metered: the manual engine exposes for it. */
+        val spotMetering: Boolean = false,
+    ) {
         companion object {
             val DEFAULT = DisplayRegions(RectD(0.0, 0.0, 1.0, 1.0), 0.5, 0.5, 0.02)
         }
@@ -296,6 +348,9 @@ class CameraSession(
             reader = null
             previewSurface = null
             latest = null
+            results.clear()
+            pendingFrame = null
+            loop = null
             request = null
             current = null
             val finish: () -> Unit = {
@@ -373,6 +428,7 @@ class CameraSession(
                 maxIso = it.upper
             }
             listedApertures = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+            manual = if (mode == Mode.METER) manualSupport(ch) else null
             val setup = PreviewSetup(
                 preview.width, preview.height, sensorOrientation,
                 phoneEqFocal = activeEq,
@@ -441,6 +497,7 @@ class CameraSession(
                             addTarget(analysis)
                             set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
                             set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON)
+                            templateTonemap = get(CaptureRequest.TONEMAP_MODE)
                             val afModes = ch.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)
                             if (afModes?.contains(CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE) == true) {
                                 set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
@@ -459,6 +516,7 @@ class CameraSession(
                                 )
                             }
                         }
+                        if (mode == Mode.METER) applyEngine(builder, log = true)
                         s.setRepeatingRequest(builder.build(), captureCallback, handler)
                         request = builder
                         current = setup
@@ -485,6 +543,14 @@ class CameraSession(
     private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
         override fun onCaptureCompleted(s: CameraCaptureSession, request: CaptureRequest, result: TotalCaptureResult) {
             latest = result
+            result.get(CaptureResult.SENSOR_TIMESTAMP)?.let { ts ->
+                results[ts] = result
+                val p = pendingFrame
+                if (p != null && p.first == ts) {
+                    pendingFrame = null
+                    if (!closed) emitStats(p.second, result)
+                }
+            }
             val w = frameWait ?: return
             if (w.zoom == null || zoomReached(result, w.zoom)) settle(w)
         }
@@ -520,50 +586,91 @@ class CameraSession(
             }
             if (snapshots.isNotEmpty()) captureSnapshot(img)
             if (now - lastEmitMs < MIN_EVENT_INTERVAL_MS) return
-            val result = latest ?: return
-            val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
-            val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
             lastEmitMs = now
-            val physical = activePhysical(result)
-            // Per frame: on a logical multi-camera the aperture changes with the active lens.
-            val (aperture, assumed) = ZoomSupport.frameAperture(
-                result.get(CaptureResult.LENS_APERTURE), physical?.second, listedApertures,
-            )
-            val reportedZoom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                result.get(CaptureResult.CONTROL_ZOOM_RATIO)
-            } else {
-                null
-            }
-            val zoom = reportedZoom ?: current?.zoom ?: 1f
-            val camera = physical?.first ?: if (current?.wide == true) "wide" else "main"
 
             // Reads only the sampled pixels from the plane; no per-frame copy of the preview-size Y.
             val plane = img.planes[0]
             val reg = regions
             val stats = LumaStats.compute(
                 plane.buffer, img.width, img.height, plane.rowStride, reg.crop, reg.cx, reg.cy, reg.r,
-                step = LumaStats.samplingStep(img.width),
+                step = LumaStats.samplingStep(img.width), curve = curve,
             )
-            val event = mapOf<String, Any>(
-                "exposureNs" to exposure,
-                "sensitivity" to sensitivity,
-                "boost" to (result.get(CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100),
-                "aperture" to aperture,
-                "apertureAssumed" to assumed,
-                "zoom" to zoom.toDouble(),
-                "camera" to camera,
-                "aeState" to ZoomSupport.aeStateName(result.get(CaptureResult.CONTROL_AE_STATE)),
-                "minExposureNs" to minExposureNs,
-                "maxExposureNs" to maxExposureNs,
-                "minIso" to minIso,
-                "maxIso" to maxIso,
-                "frameLuma" to stats.frame,
-                "cropLuma" to stats.crop,
-                "spotLuma" to stats.spot,
-                "histogram" to stats.histogram.toList(),
-            )
-            mainHandler.post { onStats(event) }
+            // The frame's own result: it says which exposure the frame really had. Results come
+            // in order, so one newer than the frame means its own was lost (or this phone stamps
+            // frames differently): the latest stands in, as before frames were paired.
+            val ts = img.timestamp
+            val own = results[ts]
+            val newest = latest
+            when {
+                own != null -> emitStats(stats, own)
+                newest != null && (newest.get(CaptureResult.SENSOR_TIMESTAMP) ?: Long.MAX_VALUE) > ts ->
+                    emitStats(stats, newest)
+                else -> pendingFrame = ts to stats
+            }
         }
+    }
+
+    /** Camera thread: one stats event from [stats] and its frame's [result]; steps the loop. */
+    private fun emitStats(stats: Stats, result: CaptureResult) {
+        val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
+        val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
+        val physical = activePhysical(result)
+        // Per frame: on a logical multi-camera the aperture changes with the active lens.
+        val (aperture, assumed) = ZoomSupport.frameAperture(
+            result.get(CaptureResult.LENS_APERTURE), physical?.second, listedApertures,
+        )
+        val reportedZoom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            result.get(CaptureResult.CONTROL_ZOOM_RATIO)
+        } else {
+            null
+        }
+        val zoom = reportedZoom ?: current?.zoom ?: 1f
+        val camera = physical?.first ?: if (current?.wide == true) "wide" else "main"
+
+        val event = mutableMapOf<String, Any>(
+            "exposureNs" to exposure,
+            "sensitivity" to sensitivity,
+            "boost" to (result.get(CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100),
+            "aperture" to aperture,
+            "apertureAssumed" to assumed,
+            "zoom" to zoom.toDouble(),
+            "camera" to camera,
+            "aeState" to ZoomSupport.aeStateName(result.get(CaptureResult.CONTROL_AE_STATE)),
+            "minExposureNs" to minExposureNs,
+            "maxExposureNs" to maxExposureNs,
+            "minIso" to minIso,
+            "maxIso" to maxIso,
+            "frameLuma" to stats.frame,
+            "cropLuma" to stats.crop,
+            "spotLuma" to stats.spot,
+            "histogram" to stats.histogram.toList(),
+        )
+        val manualFrame = result.get(CaptureResult.CONTROL_AE_MODE)?.let { it == CameraMetadata.CONTROL_AE_MODE_OFF }
+            ?: (loop != null)
+        event["engine"] = if (manualFrame) "manual" else "ae"
+        event["cropClip"] = stats.cropClip
+        event["spotClip"] = stats.spotClip
+        if (manualFrame) {
+            event["tonemap"] = curve.name
+            curve.gamma?.let { event["toneGamma"] = it }
+        }
+        val l = loop
+        if (manualFrame && l != null) {
+            val spot = regions.spotMetering
+            val step = l.onFrame(
+                ExposureLoop.Settings(exposure, sensitivity),
+                if (spot) stats.spot else stats.crop,
+                if (spot) stats.spotClip else stats.cropClip,
+            )
+            step.request?.let(::requestExposure)
+            if (step.state == ExposureLoop.State.STEADY) lastManual = l.requested
+            event["requestedExposureNs"] = l.requested.exposureNs
+            event["requestedSensitivity"] = l.requested.iso
+            event["loop"] = step.state.name.lowercase()
+            event["atMinExposure"] = step.atMin
+            event["atMaxExposure"] = step.atMax
+        }
+        mainHandler.post { onStats(event) }
     }
 
     /**
@@ -585,6 +692,118 @@ class CameraSession(
         }
     }
 
+    /**
+     * Switches the engine: [want] true meters with AE off where the camera allows it, false
+     * with the phone's AE. Updates the repeating request in place; [onDone] gets the engine in
+     * use ("manual" or "ae") on the main thread.
+     */
+    fun setEngine(want: Boolean, onDone: (String) -> Unit) {
+        val posted = handler.post {
+            preferManual = want
+            val s = session
+            val b = request
+            if (!closed && mode == Mode.METER && s != null && b != null) {
+                try {
+                    applyEngine(b, log = true)
+                    s.setRepeatingRequest(b.build(), captureCallback, handler)
+                } catch (e: Exception) {
+                    Log.w(TAG, "engine switch failed", e)
+                }
+            }
+            val engine = if (loop != null) "manual" else "ae"
+            mainHandler.post { onDone(engine) }
+        }
+        if (!posted) onDone(if (want) "manual" else "ae")
+    }
+
+    /** Camera thread: what [ch] allows for the manual engine, or null (with [manualWhy]). */
+    private fun manualSupport(ch: CameraCharacteristics): Manual? {
+        val exposure = ch.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+        val iso = ch.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+        val why = ExposureLoop.unsupportedReason(
+            ch.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES),
+            ch.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_MODES),
+            exposure != null && iso != null && exposure.lower > 0 && iso.lower > 0,
+        )
+        if (why != null || exposure == null || iso == null) {
+            manualWhy = why ?: "no ranges"
+            return null
+        }
+        manualWhy = "MANUAL_SENSOR and AE_MODE_OFF"
+        return Manual(
+            limits = ExposureLoop.Limits.of(exposure.lower, exposure.upper, iso.lower, iso.upper),
+            boostMin = ch.get(CameraCharacteristics.CONTROL_POST_RAW_SENSITIVITY_BOOST_RANGE)?.lower,
+            tone = ToneCurve.choose(ch.get(CameraCharacteristics.TONEMAP_AVAILABLE_TONE_MAP_MODES)),
+            curvePoints = minOf(ch.get(CameraCharacteristics.TONEMAP_MAX_CURVE_POINTS) ?: 32, 64),
+            maxFrameNs = ch.get(CameraCharacteristics.SENSOR_INFO_MAX_FRAME_DURATION),
+        )
+    }
+
+    /**
+     * Camera thread: sets [b] up for the engine in use: AE off with the loop's exposure, the
+     * lowest boost and a known tone curve when [preferManual] and the camera allows it; else
+     * the phone's AE and the template's tone curve. AF and AWB stay automatic either way.
+     */
+    private fun applyEngine(b: CaptureRequest.Builder, log: Boolean) {
+        val m = manual
+        if (!preferManual || m == null) {
+            loop = null
+            curve = ToneCurve.SRGB
+            b.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_ON)
+            if (m != null) templateTonemap?.let { b.set(CaptureRequest.TONEMAP_MODE, it) }
+            if (log) Log.i(TAG, "engine ae: ${if (m == null) manualWhy else "manual engine turned off"}")
+            return
+        }
+        val l = ExposureLoop(m.limits, lastManual ?: ExposureLoop.DEFAULT_START)
+        loop = l
+        b.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
+        m.boostMin?.let { b.set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, it) }
+        when (m.tone.mode) {
+            CameraMetadata.TONEMAP_MODE_GAMMA_VALUE -> {
+                b.set(CaptureRequest.TONEMAP_MODE, CameraMetadata.TONEMAP_MODE_GAMMA_VALUE)
+                b.set(CaptureRequest.TONEMAP_GAMMA, ToneCurve.GAMMA.toFloat())
+            }
+            CameraMetadata.TONEMAP_MODE_PRESET_CURVE -> {
+                b.set(CaptureRequest.TONEMAP_MODE, CameraMetadata.TONEMAP_MODE_PRESET_CURVE)
+                b.set(CaptureRequest.TONEMAP_PRESET_CURVE, CameraMetadata.TONEMAP_PRESET_CURVE_SRGB)
+            }
+            CameraMetadata.TONEMAP_MODE_CONTRAST_CURVE -> {
+                val pts = ToneCurve.srgbCurvePoints(m.curvePoints)
+                b.set(CaptureRequest.TONEMAP_MODE, CameraMetadata.TONEMAP_MODE_CONTRAST_CURVE)
+                b.set(CaptureRequest.TONEMAP_CURVE, TonemapCurve(pts, pts, pts))
+            }
+        }
+        curve = m.tone.curve
+        setExposure(b, l.requested)
+        if (log) {
+            Log.i(
+                TAG,
+                "engine manual: $manualWhy; tonemap ${m.tone.why}, linearised as $curve; " +
+                    "boost ${m.boostMin ?: "unset"}; t ${m.limits.minExposureNs}..${m.limits.maxExposureNs} ns, " +
+                    "ISO ${m.limits.minIso}..${m.limits.maxIso}",
+            )
+        }
+    }
+
+    private fun setExposure(b: CaptureRequest.Builder, e: ExposureLoop.Settings) {
+        b.set(CaptureRequest.SENSOR_EXPOSURE_TIME, e.exposureNs)
+        b.set(CaptureRequest.SENSOR_SENSITIVITY, e.iso)
+        val frame = ExposureLoop.frameDuration(e.exposureNs)
+        b.set(CaptureRequest.SENSOR_FRAME_DURATION, manual?.maxFrameNs?.let { minOf(frame, it) } ?: frame)
+    }
+
+    /** Camera thread: the loop asked for [e]; the repeating request takes it from the next frame. */
+    private fun requestExposure(e: ExposureLoop.Settings) {
+        val s = session ?: return
+        val b = request ?: return
+        try {
+            setExposure(b, e)
+            s.setRepeatingRequest(b.build(), captureCallback, handler)
+        } catch (ex: Exception) {
+            Log.w(TAG, "exposure request failed", ex)
+        }
+    }
+
     private fun fail(message: String) {
         frameWait?.let { settle(it, run = it.onClose) }
         if (closed) return
@@ -593,6 +812,12 @@ class CameraSession(
 
     companion object {
         private const val TAG = "GrainCamera"
+
+        /** The manual engine's last steady settings: the next session starts there. */
+        @Volatile private var lastManual: ExposureLoop.Settings? = null
+
+        /** Capture results kept for pairing with their frames. */
+        private const val RESULTS_KEPT = 8
 
         /** Longest wait for a frame at a new zoom ratio before answering anyway. */
         private const val FRAME_WAIT_MS = 500L
@@ -707,7 +932,7 @@ class CameraSession(
             val quarterTurn = orientation % 180 != 0
             val displayWidthPx = if (quarterTurn) buffer.height else buffer.width
             val radiusPx = r.radius * (r.crop.r - r.crop.l) * displayWidthPx
-            return SensorRegions(crop, cx, cy, radiusPx / buffer.width)
+            return SensorRegions(crop, cx, cy, radiusPx / buffer.width, r.spotMetering)
         }
     }
 }

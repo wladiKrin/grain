@@ -32,6 +32,9 @@ const _zoomMargin = 0.95;
 /// How often the stats log line is printed while metering.
 const _statsLogEvery = Duration(seconds: 1);
 
+/// How long the EV pill shows the engine after [MeterController.toggleEngine].
+const _engineHintFor = Duration(milliseconds: 1500);
+
 /// State and lifecycle of the meter screen. Owns the camera subscription:
 /// [resume] opens it, [pause] releases it.
 class MeterController extends ChangeNotifier {
@@ -483,6 +486,7 @@ class MeterController extends ChangeNotifier {
             meteredLuma: area == MeterArea.spot ? s.spotLuma : s.cropLuma,
             latitude: latitude,
             offsetStops: mode == MeterMode.manual ? (offset ?? 0) : 0,
+            gamma: s.toneGamma,
           );
   }
 
@@ -617,7 +621,14 @@ class MeterController extends ChangeNotifier {
   void _sendRegions() {
     final crop = cropRect;
     if (crop == null) return;
-    unawaited(_source.setRegions(crop, spot, _spotRadius));
+    unawaited(
+      _source.setRegions(
+        crop,
+        spot,
+        _spotRadius,
+        spotMetering: area == MeterArea.spot,
+      ),
+    );
   }
 
   void setMode(MeterMode m) {
@@ -772,10 +783,41 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The engine the meter asks for; [toggleEngine] flips it (a hidden
+  /// developer switch for comparing the manual engine with the phone's AE).
+  bool _manualWanted = true;
+
+  /// "M" or "AE" for a moment after [toggleEngine]; the EV pill shows it.
+  String? engineHint;
+  Timer? _engineHintTimer;
+
+  /// Switches between the manual engine and the phone's AE; [engineHint]
+  /// shows the engine in use for [_engineHintFor].
+  Future<void> toggleEngine() async {
+    _manualWanted = !_manualWanted;
+    final MeterEngine e;
+    try {
+      e = await _source.setEngine(manual: _manualWanted);
+    } catch (err) {
+      debugPrint('GRAIN setEngine failed: $err');
+      return;
+    }
+    if (_disposed) return;
+    debugPrint('GRAIN engine ${e.name}');
+    engineHint = e == MeterEngine.manual ? 'M' : 'AE';
+    _engineHintTimer?.cancel();
+    _engineHintTimer = Timer(_engineHintFor, () {
+      engineHint = null;
+      if (!_disposed) notifyListeners();
+    });
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _wantRunning = false;
+    _engineHintTimer?.cancel();
     _sub?.cancel();
     histogram.dispose();
     super.dispose();
@@ -802,5 +844,23 @@ String statsLine(MeterStats s, Reading? reading) {
       'frame=${f(s.frameLuma)} crop=${f(s.cropLuma)} spot=${f(s.spotLuma)} '
       'ev100=${reading == null ? '-' : f(reading.ev100, 2)} '
       'range=${reading?.flag.name ?? '-'} '
-      'limits=${at.isEmpty ? '-' : at.join(',')}';
+      'limits=${at.isEmpty ? '-' : at.join(',')} '
+      '${_engineFields(s)}';
+}
+
+/// The engine part of [statsLine]: for the manual engine its tone curve, the
+/// requested exposure against the frame's, the loop state and its limits.
+String _engineFields(MeterStats s) {
+  if (s.engine == MeterEngine.ae) return 'engine=ae';
+  final rt = s.requestedExposureNs, ri = s.requestedSensitivity;
+  final req = rt == null || ri == null
+      ? '-'
+      : '1/${(1e9 / rt).toStringAsFixed(1)},iso$ri';
+  final res =
+      '1/${(1e9 / s.exposureNs).toStringAsFixed(1)},iso${s.sensitivity}';
+  final at = [if (s.atMinExposure) 'min', if (s.atMaxExposure) 'max'];
+  return 'engine=manual tonemap=${s.tonemap ?? '?'} '
+      'req=$req res=$res loop=${s.loop ?? '?'} '
+      'clip=${s.cropClip.toStringAsFixed(3)}/${s.spotClip.toStringAsFixed(3)} '
+      'loopLimit=${at.isEmpty ? '-' : at.join(',')}';
 }

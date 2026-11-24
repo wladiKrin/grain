@@ -110,6 +110,8 @@ class Viewfinder extends StatelessWidget {
     this.frameLandscape = false,
     this.onToggleFrame,
     this.fitToCrop = false,
+    this.onToggleEngine,
+    this.engineHint,
   });
 
   /// Null until the camera has started.
@@ -155,6 +157,12 @@ class Viewfinder extends StatelessWidget {
   /// The box shrinks to the crop's shape, so the crop fills it with no
   /// dimmed band.
   final bool fitToCrop;
+
+  /// Long-press on the EV pill: the hidden manual / AE engine switch.
+  final VoidCallback? onToggleEngine;
+
+  /// Shown in the EV pill instead of the reading while set ("M", "AE").
+  final String? engineHint;
 
   String get _evLine =>
       evLine(ev: ev, flag: flag, area: area, held: held, estimated: estimated);
@@ -225,21 +233,24 @@ class Viewfinder extends StatelessWidget {
                   child: Row(
                     spacing: 8,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: g.ground,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          _evLine,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: g.ink,
+                      GestureDetector(
+                        onLongPress: onToggleEngine,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: g.ground,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            engineHint ?? _evLine,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: g.ink,
+                            ),
                           ),
                         ),
                       ),

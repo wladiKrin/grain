@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/metering/meter_channel.dart';
+import 'package:grain/metering/reading.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -76,7 +77,31 @@ void main() {
     expect(calls.single.arguments, {
       'crop': [0.1, 0.2, 0.9, 0.8],
       'spot': [0.5, 0.4, 0.04],
+      'spotMetering': false,
     });
+  });
+
+  test('setRegions says when the spot is metered', () async {
+    await MeterChannel().setRegions(
+      const Rect.fromLTRB(0, 0, 1, 1),
+      const Offset(0.5, 0.5),
+      0.02,
+      spotMetering: true,
+    );
+    expect(calls.single.arguments['spotMetering'], isTrue);
+  });
+
+  test('setEngine sends the wish and parses the engine in use', () async {
+    messenger.setMockMethodCallHandler(method, (call) async {
+      calls.add(call);
+      return call.arguments['manual'] == true ? 'manual' : 'ae';
+    });
+    expect(await MeterChannel().setEngine(manual: true), MeterEngine.manual);
+    expect(await MeterChannel().setEngine(manual: false), MeterEngine.ae);
+    expect(calls.map((c) => (c.method, c.arguments['manual'])), [
+      ('setEngine', true),
+      ('setEngine', false),
+    ]);
   });
 
   test('stop calls stop', () async {

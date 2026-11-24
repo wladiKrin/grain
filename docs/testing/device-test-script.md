@@ -86,6 +86,14 @@ roll.
 
 ## 2. Metering accuracy and calibration against a reference meter
 
+> **Re-check every reading here with the manual-exposure engine.** Grain now
+> meters with AE off where the camera allows it (spec §5.2), so results taken
+> with the AE-based builds no longer apply, and the calibration offset may need
+> setting again. Watch the `GRAIN stats` line (`adb logcat -s flutter`) and
+> the once-per-session `GrainCamera` line saying which engine and tone curve
+> were chosen. A long-press on the EV pill switches to the phone's AE for a
+> comparison (the pill shows "AE" or "M" for a moment); switch back after.
+
 Reference: a camera's meter or a known handheld meter, same ISO, same
 aperture, read as EV at ISO 100. Take both readings at the same spot, within a
 minute. Set the calibration offset once (on the first scene) so the average
@@ -110,12 +118,17 @@ Calibration offset used: ______ EV
 | 2.9 | Tap a spot in Manual mode with the viewfinder on | The spot lands where tapped; the ring and ticks are clearly visible, not a dot | |
 | 2.10 | Turn the frame upright (frame button), tap in the dimmed area outside the crop | The spot lands on the crop edge | |
 | 2.11 | On a phone that reports no aperture (if available), read the EV line | It reads "EV ≈..." (f/1.8 assumed) | |
+| 2.12 | Manual engine, against the reference, same calibration: sun ____ / ____, open shade ____ / ____, dim room ____ / ____, very dark room ____ / ____ (reference / Grain average) | Each within 2/3 stop; the dim and very dark rooms no longer read ~3 stops bright | |
+| 2.13 | Same four scenes with the AE engine (long-press the EV pill, "AE"): sun ____, shade ____, dim ____, very dark ____ | Recorded for comparison; the manual engine is the closer one | |
+| 2.14 | Hold the phone still on a steady scene in normal light for 10 s | The preview does not flicker or pulse; the stats line stays `loop=steady` with the same `req=` | |
+| 2.15 | Pan from a bright window to a dark corner and back | The reading settles within about 1 s each way; no lasting ▲/▼ | |
+| 2.16 | Read the `GRAIN stats` line on the main camera, the ultra-wide and a long lens (zoomed) | It shows `engine=manual`, a `tonemap=` (gamma2.2 on a Pixel), `req=` matching `res=` when steady; `GrainCamera` logs "engine manual: ..." once per session | |
+| 2.17 | Cover the lens fully; then point at the sun's reflection on a car | ▼ with the lens covered (`loopLimit=max`); ▲ only if the region is still clipped at the shortest time (`loopLimit=min`) | |
 
 If spot readings look compressed (a bright or dark spot reads closer to the
-average than the reference meter says), the preview tone curve may not be the
-sRGB curve the luma linearization assumes. Try forcing it in the capture
-request: `TONEMAP_MODE_GAMMA_VALUE` with gamma 2.2, or
-`TONEMAP_MODE_PRESET_CURVE` with `TONEMAP_PRESET_CURVE_SRGB`.
+average than the reference meter says), the ISP may still apply a local tone
+map on top of the curve Grain sets: note the `tonemap=` value and the spot
+difference.
 
 ## 3. Dials, haptics, click sound
 

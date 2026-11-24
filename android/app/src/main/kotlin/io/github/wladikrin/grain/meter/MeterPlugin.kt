@@ -11,7 +11,8 @@ import io.flutter.view.TextureRegistry
 import java.io.File
 
 /**
- * `grain/meter` method channel (start / startScan / setZoom / stop / setRegions / snapshot), the
+ * `grain/meter` method channel (start / startScan / setZoom / stop / setRegions / snapshot /
+ * setEngine), the
  * `grain/meter/stats` event channel (METER mode) and the `grain/meter/qr` event channel
  * (SCAN mode). Everything here runs on the main thread.
  */
@@ -25,6 +26,9 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     private var qrSink: EventChannel.EventSink? = null
 
     private var regions = CameraSession.DisplayRegions.DEFAULT
+
+    /** Meter with the manual engine where the camera allows it; `setEngine` turns it off for comparison. */
+    private var preferManual = DEFAULT_MANUAL
     private var session: CameraSession? = null
     private var texture: TextureRegistry.SurfaceTextureEntry? = null
     private var ready: Map<String, Any>? = null
@@ -71,6 +75,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             "start" -> start(CameraSession.Mode.METER, 1f, result)
             "startScan" -> start(CameraSession.Mode.SCAN, 1f, result)
             "setZoom" -> setZoom(call.argument<Number>("zoom")?.toFloat() ?: 1f, result)
+            "setEngine" -> setEngine(call.argument<Boolean>("manual") != false, result)
             "stop" -> {
                 stops++
                 teardown("Stopped") { result.success(null) }
@@ -116,6 +121,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             entry.surfaceTexture(),
             mode,
             zoom,
+            preferManual,
             onReady = { setup -> if (session === created) onSessionReady(entry, setup) },
             onError = { message ->
                 if (session === created) {
@@ -262,9 +268,24 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         regions = CameraSession.DisplayRegions(
             RectD(crop[0].toDouble(), crop[1].toDouble(), crop[2].toDouble(), crop[3].toDouble()),
             spot[0].toDouble(), spot[1].toDouble(), spot[2].toDouble(),
+            spotMetering = call.argument<Boolean>("spotMetering") == true,
         )
         session?.setRegions(regions)
         result.success(null)
+    }
+
+    /**
+     * Picks the metering engine for this and later sessions; answers the engine in use
+     * ("manual" or "ae"), or the wanted one while no camera runs.
+     */
+    private fun setEngine(manual: Boolean, result: MethodChannel.Result) {
+        preferManual = manual
+        val s = session
+        if (s == null || s.mode != CameraSession.Mode.METER) {
+            result.success(if (manual) "manual" else "ae")
+            return
+        }
+        s.setEngine(manual) { engine -> result.success(engine) }
     }
 
     private fun sinkHandler(set: (EventChannel.EventSink?) -> Unit) = object : EventChannel.StreamHandler {
@@ -275,5 +296,8 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private companion object {
         val SNAPSHOT_ID = Regex("^[0-9a-f-]{36}$")
+
+        /** The engine a fresh app meters with; false forces the phone's AE. */
+        const val DEFAULT_MANUAL = true
     }
 }

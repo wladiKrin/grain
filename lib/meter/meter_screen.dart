@@ -515,6 +515,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.apertureAssumed,
       c.histogramOn,
       c.frameLandscape,
+      c.engineHint,
     ),
     builder: (context, _) {
       final notice = _notice();
@@ -545,6 +546,8 @@ class _MeterScreenState extends State<MeterScreen> {
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,
         onToggleHold: _c.toggleHold,
+        onToggleEngine: _c.toggleEngine,
+        engineHint: _c.engineHint,
         histogramOn: _c.histogramOn,
         onToggleHistogram: _c.toggleHistogram,
         histogram: _c.histogram,

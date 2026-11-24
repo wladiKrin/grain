@@ -6,7 +6,26 @@ double _log2(double x) => math.log(x) / math.ln2;
 
 const double _lumaFloor = 1e-4;
 
-/// One camera frame's AE metadata and linear-luma statistics.
+/// Mid grey, linear: the manual engine exposes the metered region near it.
+const double midGrey = 0.18;
+
+/// A region this bright or dark (linear) is clipped: its luma no longer
+/// measures. Same as the native loop.
+const double clipHigh = 0.95, clipLow = 0.002;
+
+/// Share of the region's pixels at the top code that counts as clipped.
+const double clipShare = 0.02;
+
+/// Which exposure a frame's stats come from.
+enum MeterEngine {
+  /// Grain set exposure time and ISO itself, AE off.
+  manual,
+
+  /// The phone's own auto-exposure.
+  ae,
+}
+
+/// One camera frame's exposure metadata and linear-luma statistics.
 class MeterStats {
   const MeterStats({
     required this.exposureNs,
@@ -25,6 +44,16 @@ class MeterStats {
     this.zoom = 1,
     this.camera,
     this.aeState,
+    this.engine = MeterEngine.ae,
+    this.tonemap,
+    this.toneGamma,
+    this.requestedExposureNs,
+    this.requestedSensitivity,
+    this.loop,
+    this.atMinExposure = false,
+    this.atMaxExposure = false,
+    this.cropClip = 0,
+    this.spotClip = 0,
   });
 
   factory MeterStats.fromMap(Map<Object?, Object?> m) {
@@ -56,6 +85,16 @@ class MeterStats {
       zoom: (m['zoom'] as num?)?.toDouble() ?? 1,
       camera: m['camera'] as String?,
       aeState: m['aeState'] as String?,
+      engine: m['engine'] == 'manual' ? MeterEngine.manual : MeterEngine.ae,
+      tonemap: m['tonemap'] as String?,
+      toneGamma: (m['toneGamma'] as num?)?.toDouble(),
+      requestedExposureNs: (m['requestedExposureNs'] as num?)?.toInt(),
+      requestedSensitivity: (m['requestedSensitivity'] as num?)?.toInt(),
+      loop: m['loop'] as String?,
+      atMinExposure: m['atMinExposure'] == true,
+      atMaxExposure: m['atMaxExposure'] == true,
+      cropClip: (m['cropClip'] as num?)?.toDouble() ?? 0,
+      spotClip: (m['spotClip'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -80,6 +119,28 @@ class MeterStats {
   /// and CONTROL_AE_STATE; for the stats log only.
   final double zoom;
   final String? camera, aeState;
+
+  /// Absent means [MeterEngine.ae].
+  final MeterEngine engine;
+
+  /// Manual engine: the tone curve the lumas were linearised with ("srgb",
+  /// "gamma2.2"), and its gamma (null: sRGB).
+  final String? tonemap;
+  final double? toneGamma;
+
+  /// Manual engine: the exposure last asked for; [exposureNs] and
+  /// [sensitivity] are what the frame really had, and the EV uses those.
+  final int? requestedExposureNs, requestedSensitivity;
+
+  /// Manual engine: the loop's state at this frame ("settling", "steady",
+  /// "clipped").
+  final String? loop;
+
+  /// Manual engine: the frame ran at the loop's shortest (longest) exposure.
+  final bool atMinExposure, atMaxExposure;
+
+  /// Shares of crop and spot pixels at the top code, 0..1.
+  final double cropClip, spotClip;
 }
 
 enum MeterArea { average, spot }
@@ -95,8 +156,13 @@ class Reading {
   String toString() => 'Reading($ev100, $flag)';
 }
 
-/// Null for a frame whose AE metadata or lumas cannot give a finite EV
-/// (non-positive aperture, exposure or ISO; non-finite values).
+/// Null for a frame whose metadata or lumas cannot give a finite EV
+/// (non-positive aperture, exposure or ISO; non-finite values), or a manual
+/// frame whose region is clipped while the loop can still re-expose.
+///
+/// AE: EV100 = log2(N²/t) − log2(ISO·boost/100/100) + log2(region / frame).
+/// Manual: the same exposure term + log2(region / [midGrey]); the frame's own
+/// result values, not the requested ones.
 Reading? readingFrom(
   MeterStats s, {
   required MeterArea area,
@@ -113,12 +179,15 @@ Reading? readingFrom(
     return null;
   }
   final phoneIso = s.sensitivity * s.boost / 100;
-  final evAE =
+  final evExposure =
       _log2(s.aperture * s.aperture / (s.exposureNs / 1e9)) -
       _log2(phoneIso / 100);
   final region = area == MeterArea.spot ? s.spotLuma : s.cropLuma;
+  if (s.engine == MeterEngine.manual) {
+    return _manualReading(s, area, region, evExposure + calibration);
+  }
   final ev100 =
-      evAE +
+      evExposure +
       _log2(math.max(region, _lumaFloor) / math.max(s.frameLuma, _lumaFloor)) +
       calibration;
 
@@ -135,4 +204,25 @@ Reading? readingFrom(
     flag = RangeFlag.over;
   }
   return Reading(ev100, flag);
+}
+
+/// Over when the region is clipped bright at the loop's shortest exposure,
+/// under when it is black at its longest; a clipped region the loop can
+/// still re-expose gives no reading (the next frames will).
+Reading? _manualReading(
+  MeterStats s,
+  MeterArea area,
+  double region,
+  double evAtMidGrey,
+) {
+  final ev100 = evAtMidGrey + _log2(math.max(region, _lumaFloor) / midGrey);
+  if (!ev100.isFinite) return null;
+  final clip = area == MeterArea.spot ? s.spotClip : s.cropClip;
+  final bright = region >= clipHigh || clip > clipShare;
+  if (s.atMinExposure && bright) return Reading(ev100, RangeFlag.over);
+  if (s.atMaxExposure && region <= clipLow) {
+    return Reading(ev100, RangeFlag.under);
+  }
+  if (region >= clipHigh || region <= clipLow) return null;
+  return Reading(ev100, RangeFlag.ok);
 }

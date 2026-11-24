@@ -48,6 +48,21 @@ class LumaStatsTest {
         assertEquals(200, s.histogram.sum())
     }
 
+    @Test fun clipSharesCountTopCodes() {
+        // Left quarter at 255, the rest at 100: the crop (left half) is half clipped, the spot on
+        // the right none, a spot on the left all.
+        val w = 40; val h = 40
+        val plane = ByteArray(w * h)
+        for (y in 0 until h) for (x in 0 until w) plane[y * w + x] = (if (x < 10) 255 else 100).toByte()
+        val s = LumaStats.compute(plane, w, h, w, RectD(0.0, 0.0, 0.5, 1.0), 0.75, 0.5, 0.05)
+        assertEquals(0.5, s.cropClip, 1e-9)
+        assertEquals(0.0, s.spotClip, 1e-9)
+        val left = LumaStats.compute(plane, w, h, w, RectD(0.0, 0.0, 0.5, 1.0), 0.125, 0.5, 0.05)
+        assertEquals(1.0, left.spotClip, 1e-9)
+        // An empty spot takes the nearest pixel, clipped or not.
+        assertEquals(1.0, LumaStats.compute(plane, w, h, w, RectD(0.0, 0.0, 1.0, 1.0), 0.1, 0.5, 0.0).spotClip, 0.0)
+    }
+
     @Test fun spotOnDarkSideIsZero() {
         val w = 40; val h = 40
         val plane = ByteArray(w * h)

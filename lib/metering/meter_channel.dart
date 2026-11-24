@@ -69,10 +69,21 @@ abstract class MeterSource {
   Future<void> stop();
 
   /// [crop] and [spot] are normalized 0..1 in display (portrait) coordinates;
-  /// [radius] is relative to the crop width.
-  Future<void> setRegions(Rect crop, Offset spot, double radius);
+  /// [radius] is relative to the crop width. With [spotMetering] the manual
+  /// engine exposes for the spot, else for the crop.
+  Future<void> setRegions(
+    Rect crop,
+    Offset spot,
+    double radius, {
+    bool spotMetering = false,
+  });
 
   Stream<MeterStats> get stats;
+
+  /// Meters with the manual engine (AE off) where the camera allows it, or
+  /// with the phone's AE; kept for later sessions. Answers the engine in use,
+  /// or the wanted one while no camera runs.
+  Future<MeterEngine> setEngine({required bool manual});
 
   /// Sets the camera's zoom: below 1 the ultra-wide, 1 the main camera, above
   /// 1 the main camera zoomed in (capped at [PreviewInfo.maxZoom]). What the
@@ -128,11 +139,24 @@ class MeterChannel implements MeterSource {
   Future<void> stop() => _method.invokeMethod<void>('stop');
 
   @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) =>
-      _method.invokeMethod<void>('setRegions', {
-        'crop': [crop.left, crop.top, crop.right, crop.bottom],
-        'spot': [spot.dx, spot.dy, radius],
-      });
+  Future<void> setRegions(
+    Rect crop,
+    Offset spot,
+    double radius, {
+    bool spotMetering = false,
+  }) => _method.invokeMethod<void>('setRegions', {
+    'crop': [crop.left, crop.top, crop.right, crop.bottom],
+    'spot': [spot.dx, spot.dy, radius],
+    'spotMetering': spotMetering,
+  });
+
+  @override
+  Future<MeterEngine> setEngine({required bool manual}) async {
+    final e = await _method.invokeMethod<String>('setEngine', {
+      'manual': manual,
+    });
+    return e == 'manual' ? MeterEngine.manual : MeterEngine.ae;
+  }
 
   @override
   Future<String?> snapshot(String id) async {

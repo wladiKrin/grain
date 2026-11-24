@@ -93,10 +93,30 @@ class FakeMeterSource implements MeterSource {
     await stopGate?.future;
   }
 
+  /// The `spotMetering` of each [setRegions], in step with [regions].
+  final spotMetering = <bool>[];
+
   @override
-  Future<void> setRegions(Rect crop, Offset spot, double radius) async {
+  Future<void> setRegions(
+    Rect crop,
+    Offset spot,
+    double radius, {
+    bool spotMetering = false,
+  }) async {
     if (logRegions) calls.add('setRegions');
     regions.add((crop, spot, radius));
+    this.spotMetering.add(spotMetering);
+  }
+
+  /// Whether the camera can run the manual engine; [setEngine] answers AE
+  /// when not.
+  bool manualSupported = true;
+
+  /// Recorded as `'setEngine(manual)'` / `'setEngine(ae)'`.
+  @override
+  Future<MeterEngine> setEngine({required bool manual}) async {
+    calls.add('setEngine(${manual ? 'manual' : 'ae'})');
+    return manual && manualSupported ? MeterEngine.manual : MeterEngine.ae;
   }
 
   /// Like the native side: below 1 the ultra-wide (unchanged without one),
@@ -135,3 +155,45 @@ class FakeMeterSource implements MeterSource {
   void emitQr(String text) => _qr.add(text);
   void failQr(Object error) => _qr.addError(error);
 }
+
+/// A manual-engine frame as the native side sends it: [exposureNs] and
+/// [iso] are the frame's own result values; the request defaults to them.
+MeterStats manualStats({
+  int exposureNs = 10000000,
+  int iso = 100,
+  double aperture = 2,
+  double frame = .18,
+  double crop = .18,
+  double spot = .18,
+  double cropClip = 0,
+  double spotClip = 0,
+  int? requestedExposureNs,
+  int? requestedIso,
+  String loop = 'steady',
+  bool atMin = false,
+  bool atMax = false,
+  double? toneGamma = 2.2,
+}) => MeterStats.fromMap({
+  'engine': 'manual',
+  'exposureNs': exposureNs,
+  'sensitivity': iso,
+  'boost': 100,
+  'aperture': aperture,
+  'minExposureNs': 10000,
+  'maxExposureNs': 1000000000,
+  'minIso': 30,
+  'maxIso': 6400,
+  'frameLuma': frame,
+  'cropLuma': crop,
+  'spotLuma': spot,
+  'cropClip': cropClip,
+  'spotClip': spotClip,
+  'histogram': List<Object?>.filled(64, 1),
+  'tonemap': toneGamma == null ? 'srgb' : 'gamma$toneGamma',
+  'toneGamma': ?toneGamma,
+  'requestedExposureNs': requestedExposureNs ?? exposureNs,
+  'requestedSensitivity': requestedIso ?? iso,
+  'loop': loop,
+  'atMinExposure': atMin,
+  'atMaxExposure': atMax,
+});
