@@ -42,13 +42,15 @@ Rect previewRect(Size box, Size preview, {Rect? crop}) {
 }
 
 /// "EV 12.3 · AVG": one decimal ("EV —" before a reading), ▲/▼ when the
-/// phone's AE is out of range, then SPOT, AVG or HELD.
+/// camera is out of range, then SPOT, AVG or HELD, and "· AE" when the
+/// reading comes from the phone's auto-exposure ([ae]).
 String evLine({
   required double? ev,
   required RangeFlag flag,
   required MeterArea area,
   required bool held,
   bool estimated = false,
+  bool ae = false,
 }) {
   final value = ev == null
       ? '—'
@@ -63,7 +65,7 @@ String evLine({
       : area == MeterArea.spot
       ? 'SPOT'
       : 'AVG';
-  return 'EV $value$mark · $tag';
+  return 'EV $value$mark · $tag${ae ? ' · AE' : ''}';
 }
 
 /// Radius of the faint outer ring drawn around a spot smaller than 8 px
@@ -110,8 +112,7 @@ class Viewfinder extends StatelessWidget {
     this.frameLandscape = false,
     this.onToggleFrame,
     this.fitToCrop = false,
-    this.onToggleEngine,
-    this.engineHint,
+    this.ae = false,
   });
 
   /// Null until the camera has started.
@@ -158,14 +159,17 @@ class Viewfinder extends StatelessWidget {
   /// dimmed band.
   final bool fitToCrop;
 
-  /// Long-press on the EV pill: the hidden manual / AE engine switch.
-  final VoidCallback? onToggleEngine;
+  /// The reading comes from the phone's auto-exposure (see [evLine]).
+  final bool ae;
 
-  /// Shown in the EV pill instead of the reading while set ("M", "AE").
-  final String? engineHint;
-
-  String get _evLine =>
-      evLine(ev: ev, flag: flag, area: area, held: held, estimated: estimated);
+  String get _evLine => evLine(
+    ev: ev,
+    flag: flag,
+    area: area,
+    held: held,
+    estimated: estimated,
+    ae: ae,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -233,24 +237,21 @@ class Viewfinder extends StatelessWidget {
                   child: Row(
                     spacing: 8,
                     children: [
-                      GestureDetector(
-                        onLongPress: onToggleEngine,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: g.ground,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            engineHint ?? _evLine,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: g.ink,
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: g.ground,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          _evLine,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: g.ink,
                           ),
                         ),
                       ),

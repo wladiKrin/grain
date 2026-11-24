@@ -32,9 +32,6 @@ const _zoomMargin = 0.95;
 /// How often the stats log line is printed while metering.
 const _statsLogEvery = Duration(seconds: 1);
 
-/// How long the EV pill shows the engine after [MeterController.toggleEngine].
-const _engineHintFor = Duration(milliseconds: 1500);
-
 /// State and lifecycle of the meter screen. Owns the camera subscription:
 /// [resume] opens it, [pause] releases it.
 class MeterController extends ChangeNotifier {
@@ -783,41 +780,29 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The engine the meter asks for; [toggleEngine] flips it (a hidden
-  /// developer switch for comparing the manual engine with the phone's AE).
-  bool _manualWanted = true;
+  /// Meter on the phone's auto-exposure rather than the manual engine (a
+  /// comparison setting).
+  bool phoneAe = false;
 
-  /// "M" or "AE" for a moment after [toggleEngine]; the EV pill shows it.
-  String? engineHint;
-  Timer? _engineHintTimer;
-
-  /// Switches between the manual engine and the phone's AE; [engineHint]
-  /// shows the engine in use for [_engineHintFor].
-  Future<void> toggleEngine() async {
-    _manualWanted = !_manualWanted;
-    final MeterEngine e;
+  /// Asks the camera for the phone's AE ([on]) or the manual engine; the
+  /// camera falls back to AE where it cannot meter manually.
+  Future<void> setPhoneAe(bool on) async {
+    phoneAe = on;
     try {
-      e = await _source.setEngine(manual: _manualWanted);
+      await _source.setEngine(manual: !on);
     } catch (err) {
       debugPrint('GRAIN setEngine failed: $err');
-      return;
     }
-    if (_disposed) return;
-    debugPrint('GRAIN engine ${e.name}');
-    engineHint = e == MeterEngine.manual ? 'M' : 'AE';
-    _engineHintTimer?.cancel();
-    _engineHintTimer = Timer(_engineHintFor, () {
-      engineHint = null;
-      if (!_disposed) notifyListeners();
-    });
-    notifyListeners();
   }
+
+  /// Whether the shown reading comes from the phone's AE: the EV line marks
+  /// it, as AE reads brighter in dim light.
+  bool get readingFromAe => (_frozenStats ?? _latest)?.engine == MeterEngine.ae;
 
   @override
   void dispose() {
     _disposed = true;
     _wantRunning = false;
-    _engineHintTimer?.cancel();
     _sub?.cancel();
     histogram.dispose();
     super.dispose();

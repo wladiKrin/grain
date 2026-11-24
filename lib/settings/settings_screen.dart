@@ -187,6 +187,13 @@ class SettingsScreen extends StatelessWidget {
             const _Divider(),
             _ThemeRow(value: settings.theme, onChanged: settings.setTheme),
             const _Divider(),
+            _SwitchRow(
+              label: 'Meter with the phone\u2019s auto-exposure',
+              subtitle: 'For comparison only: reads brighter than Grain\u2019s own metering in dim light. The EV line shows AE while it is on.',
+              value: settings.phoneAe,
+              onChanged: settings.setPhoneAe,
+            ),
+            const _Divider(),
             BackupSection(
               gear: gear,
               rolls: rolls,

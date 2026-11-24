@@ -249,6 +249,18 @@ void main() {
     },
   );
 
+  testWidgets('the phone-AE setting reaches the camera, at start too', (
+    t,
+  ) async {
+    final settings = Settings.inMemory();
+    await settings.setPhoneAe(true);
+    await pumpApp(t, settings: settings);
+    expect(src.calls, contains('setEngine(ae)'));
+    await t.runAsync(() => settings.setPhoneAe(false));
+    await settle(t);
+    expect(src.calls.last, 'setEngine(manual)');
+  });
+
   testWidgets('the frame orientation is remembered', (t) async {
     final settings = Settings.inMemory();
     await pumpApp(t, settings: settings);

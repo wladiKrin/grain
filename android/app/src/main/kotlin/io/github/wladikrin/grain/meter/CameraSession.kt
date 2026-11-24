@@ -2,6 +2,7 @@ package io.github.wladikrin.grain.meter
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.ImageFormat
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
@@ -94,6 +95,7 @@ class CameraSession(
     )
 
     private val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val thread = HandlerThread("GrainCamera").apply { start() }
     private val handler = Handler(thread.looper)
@@ -663,7 +665,7 @@ class CameraSession(
                 if (spot) stats.spotClip else stats.cropClip,
             )
             step.request?.let(::requestExposure)
-            if (step.state == ExposureLoop.State.STEADY) lastManual = l.requested
+            if (step.state == ExposureLoop.State.STEADY) saveLastManual(prefs, l.requested)
             event["requestedExposureNs"] = l.requested.exposureNs
             event["requestedSensitivity"] = l.requested.iso
             event["loop"] = step.state.name.lowercase()
@@ -754,7 +756,7 @@ class CameraSession(
             if (log) Log.i(TAG, "engine ae: ${if (m == null) manualWhy else "manual engine turned off"}")
             return
         }
-        val l = ExposureLoop(m.limits, lastManual ?: ExposureLoop.DEFAULT_START)
+        val l = ExposureLoop(m.limits, lastManual(prefs) ?: ExposureLoop.DEFAULT_START)
         loop = l
         b.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         m.boostMin?.let { b.set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, it) }
@@ -813,8 +815,31 @@ class CameraSession(
     companion object {
         private const val TAG = "GrainCamera"
 
-        /** The manual engine's last steady settings: the next session starts there. */
+        /**
+         * The manual engine's last steady settings: the next session, and the next launch,
+         * start there. Kept in [PREFS] (not backed up: it belongs to this phone's camera).
+         */
         @Volatile private var lastManual: ExposureLoop.Settings? = null
+
+        private const val PREFS = "grain_camera"
+        private const val KEY_EXPOSURE = "lastExposureNs"
+        private const val KEY_ISO = "lastIso"
+
+        private fun lastManual(prefs: SharedPreferences): ExposureLoop.Settings? {
+            lastManual?.let { return it }
+            val t = prefs.getLong(KEY_EXPOSURE, 0L)
+            val iso = prefs.getInt(KEY_ISO, 0)
+            if (t <= 0L || iso <= 0) return null
+            return ExposureLoop.Settings(t, iso).also { lastManual = it }
+        }
+
+        /** Writes only when [s] moved by a step worth taking, not every steady frame. */
+        private fun saveLastManual(prefs: SharedPreferences, s: ExposureLoop.Settings) {
+            val old = lastManual
+            lastManual = s
+            if (old != null && ExposureLoop.close(old, s)) return
+            prefs.edit().putLong(KEY_EXPOSURE, s.exposureNs).putInt(KEY_ISO, s.iso).apply()
+        }
 
         /** Capture results kept for pairing with their frames. */
         private const val RESULTS_KEPT = 8

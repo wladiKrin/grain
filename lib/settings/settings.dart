@@ -16,6 +16,7 @@ class Settings extends ChangeNotifier {
     required this._location,
     required this._histogram,
     required this._frameLandscape,
+    required this._phoneAe,
     required this._shakeWarning,
     required this._clickSound,
     required this._theme,
@@ -32,6 +33,7 @@ class Settings extends ChangeNotifier {
   static const _kLocation = 'location';
   static const _kHistogram = 'histogram';
   static const _kFrameLandscape = 'frameLandscape';
+  static const _kPhoneAe = 'phoneAe';
   static const _kShake = 'shakeWarning';
   static const _kClick = 'clickSound';
   static const _kTheme = 'themeChoice';
@@ -50,6 +52,7 @@ class Settings extends ChangeNotifier {
       location: p.getBool(_kLocation) ?? false,
       histogram: p.getBool(_kHistogram) ?? false,
       frameLandscape: p.getBool(_kFrameLandscape) ?? true,
+      phoneAe: p.getBool(_kPhoneAe) ?? false,
       shakeWarning: p.getBool(_kShake) ?? false,
       clickSound: p.getBool(_kClick) ?? false,
       theme:
@@ -67,6 +70,7 @@ class Settings extends ChangeNotifier {
   bool _location = false;
   bool _histogram = false;
   bool _frameLandscape = true;
+  bool _phoneAe = false;
   bool _shakeWarning = false;
   bool _clickSound = false;
   ThemeChoice _theme = ThemeChoice.system;
@@ -88,6 +92,10 @@ class Settings extends ChangeNotifier {
 
   /// Draw the lens frame sideways (landscape) in the viewfinder.
   bool get frameLandscape => _frameLandscape;
+
+  /// Meter on the phone's auto-exposure instead of Grain's own exposure
+  /// loop, for comparison. Belongs to this phone: not in backups.
+  bool get phoneAe => _phoneAe;
 
   /// Mark shutter speeds slower than 1/focal length (35 mm equivalent).
   bool get shakeWarning => _shakeWarning;
@@ -146,6 +154,13 @@ class Settings extends ChangeNotifier {
     _frameLandscape = v;
     notifyListeners();
     await _prefs?.setBool(_kFrameLandscape, v);
+  }
+
+  Future<void> setPhoneAe(bool v) async {
+    if (v == _phoneAe) return;
+    _phoneAe = v;
+    notifyListeners();
+    await _prefs?.setBool(_kPhoneAe, v);
   }
 
   Future<void> setShakeWarning(bool v) async {

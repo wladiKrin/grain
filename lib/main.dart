@@ -196,6 +196,7 @@ class _GrainAppState extends State<GrainApp> {
       onPause: _controller.enterBackground,
     );
     _settings.addListener(_onSettings);
+    if (_settings.phoneAe) unawaited(_controller.setPhoneAe(true));
     _controller.shakeWarning = _settings.shakeWarning;
     _controller.addListener(_onController);
     _gear.addListener(_onGear);
@@ -217,6 +218,9 @@ class _GrainAppState extends State<GrainApp> {
     }
     if (_controller.frameLandscape != _settings.frameLandscape) {
       _controller.toggleFrameOrientation();
+    }
+    if (_controller.phoneAe != _settings.phoneAe) {
+      unawaited(_controller.setPhoneAe(_settings.phoneAe));
     }
   }
 

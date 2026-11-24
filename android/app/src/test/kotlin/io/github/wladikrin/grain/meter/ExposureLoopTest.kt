@@ -48,7 +48,7 @@ class ExposureLoopTest {
 
     @Test fun clippedRegionJumpsThreeEv() {
         val f = Settings(4_000_000L, 100)
-        val hi = ExposureLoop.decide(f, 0.97, 0.9, limits)
+        val hi = ExposureLoop.decide(f, 0.97, 0.5, limits)
         assertEquals(State.CLIPPED, hi.state)
         assertEquals(-3.0, ev(f, hi.request!!), 0.02)
         val lo = ExposureLoop.decide(f, 0.001, 0.0, limits)
@@ -166,5 +166,35 @@ class ExposureLoopTest {
         assertNotNull(ExposureLoop.unsupportedReason(null, ae, true))
         assertNotNull(ExposureLoop.unsupportedReason(caps, intArrayOf(CameraMetadata.CONTROL_AE_MODE_ON), true))
         assertNotNull(ExposureLoop.unsupportedReason(caps, ae, false))
+    }
+
+    @Test fun aWhiteRegionJumpsSixEv() {
+        val f = Settings(4_000_000L, 100)
+        val d = ExposureLoop.decide(f, 0.995, 1.0, limits)
+        assertEquals(State.CLIPPED, d.state)
+        assertEquals(-6.0, ev(f, d.request!!), 0.02)
+    }
+
+    /**
+     * From the default start (about EV 7), a sunny scene about 8.5 stops brighter is measurable
+     * after at most two requests, each shown by the next frame. With 3 EV steps it took three.
+     */
+    @Test fun daylightFromTheDefaultStartTakesTwoRequests() {
+        val loop = ExposureLoop(limits, ExposureLoop.DEFAULT_START)
+        val start = ExposureLoop.DEFAULT_START.product
+        // Mid grey would sit 8.5 stops above the default exposure.
+        fun luma(s: Settings) = minOf(1.0, 0.18 * Math.pow(2.0, 8.5) * s.product / start)
+        var frame = loop.requested
+        var requests = 0
+        repeat(10) {
+            val l = luma(frame)
+            val step = loop.onFrame(frame, l, if (l >= 0.95) 1.0 else 0.0)
+            if (l < ExposureLoop.CLIP_HIGH) return@repeat
+            assertNotNull(step.request)
+            requests++
+            frame = step.request!!
+        }
+        assertTrue("requests $requests", requests <= 2)
+        assertTrue(luma(frame) < ExposureLoop.CLIP_HIGH)
     }
 }

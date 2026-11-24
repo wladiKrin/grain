@@ -83,6 +83,15 @@ void main() {
     },
   );
 
+  test('phone AE defaults off, persists, and stays out of backups', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.phoneAe, isFalse);
+    await s.setPhoneAe(true);
+    expect((await Settings.load()).phoneAe, isTrue);
+    expect(s.backupMap().containsKey('phoneAe'), isFalse);
+  });
+
   test(
     'the frame defaults sideways, persists and travels in the backup',
     () async {

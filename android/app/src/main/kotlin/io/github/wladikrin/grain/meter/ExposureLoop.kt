@@ -69,6 +69,12 @@ class ExposureLoop(val limits: Limits, start: Settings) {
 
         /** A region this bright or dark is clipped: its luma no longer measures. */
         const val CLIP_HIGH = 0.95
+
+        /** A region this bright is all but white: it may be many stops over. */
+        const val CLIP_FULL = 0.99
+
+        /** The step for a [CLIP_FULL] region, so daylight from an indoor start takes two steps. */
+        const val FULL_CLIP_STEP_EV = 6.0
         const val CLIP_LOW = 0.002
 
         /** Share of the region's pixels at the top code that counts as clipped. */
@@ -102,6 +108,7 @@ class ExposureLoop(val limits: Limits, start: Settings) {
 
         /** The step, EV, toward [TARGET] for region [luma] with a [clip] share clipped; 0 inside the band. */
         fun stepEv(luma: Double, clip: Double): Double = when {
+            luma >= CLIP_FULL -> -FULL_CLIP_STEP_EV
             luma >= CLIP_HIGH -> -MAX_STEP_EV
             luma <= CLIP_LOW -> MAX_STEP_EV
             luma > BAND_HIGH || luma < BAND_LOW -> log2(TARGET / luma).coerceIn(-MAX_STEP_EV, MAX_STEP_EV)

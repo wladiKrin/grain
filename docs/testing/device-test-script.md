@@ -91,8 +91,8 @@ roll.
 > with the AE-based builds no longer apply, and the calibration offset may need
 > setting again. Watch the `GRAIN stats` line (`adb logcat -s flutter`) and
 > the once-per-session `GrainCamera` line saying which engine and tone curve
-> were chosen. A long-press on the EV pill switches to the phone's AE for a
-> comparison (the pill shows "AE" or "M" for a moment); switch back after.
+> were chosen. Settings > "Meter with the phone's auto-exposure" switches to the phone's AE
+> for a comparison (the EV line ends in "· AE" while it is on); switch it off after.
 
 Reference: a camera's meter or a known handheld meter, same ISO, same
 aperture, read as EV at ISO 100. Take both readings at the same spot, within a
@@ -119,7 +119,9 @@ Calibration offset used: ______ EV
 | 2.10 | Turn the frame upright (frame button), tap in the dimmed area outside the crop | The spot lands on the crop edge | |
 | 2.11 | On a phone that reports no aperture (if available), read the EV line | It reads "EV ≈..." (f/1.8 assumed) | |
 | 2.12 | Manual engine, against the reference, same calibration: sun ____ / ____, open shade ____ / ____, dim room ____ / ____, very dark room ____ / ____ (reference / Grain average) | Each within 2/3 stop; the dim and very dark rooms no longer read ~3 stops bright | |
-| 2.13 | Same four scenes with the AE engine (long-press the EV pill, "AE"): sun ____, shade ____, dim ____, very dark ____ | Recorded for comparison; the manual engine is the closer one | |
+| 2.13 | Same four scenes with the AE engine (Settings > "Meter with the phone's auto-exposure" on; the EV line ends in "· AE"): sun ____, shade ____, dim ____, very dark ____ | Recorded for comparison; the manual engine is the closer one | |
+| 2.13a | Meter indoors, then force-stop Grain (`adb shell am force-stop io.github.wladikrin.grain`), walk into sunlight and open it with a stopwatch | A reading (not "EV —") within 1.5 s of tapping the icon; first launch after install, from 1/60 s, may take one step longer. Time ____ s | |
+| 2.13b | Long-press the EV pill | Nothing happens (the engine is only switched in Settings) | |
 | 2.14 | Hold the phone still on a steady scene in normal light for 10 s | The preview does not flicker or pulse; the stats line stays `loop=steady` with the same `req=` | |
 | 2.15 | Pan from a bright window to a dark corner and back | The reading settles within about 1 s each way; no lasting ▲/▼ | |
 | 2.16 | Read the `GRAIN stats` line on the main camera, the ultra-wide and a long lens (zoomed) | It shows `engine=manual`, a `tonemap=` (gamma2.2 on a Pixel), `req=` matching `res=` when steady; `GrainCamera` logs "engine manual: ..." once per session | |

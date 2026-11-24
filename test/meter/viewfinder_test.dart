@@ -54,11 +54,10 @@ Future<Rect> _pump(
 }
 
 void main() {
-  testWidgets('long-press on the EV pill toggles the engine; the hint shows', (
+  testWidgets('a long-press on the EV pill no longer switches anything', (
     t,
   ) async {
-    var toggles = 0;
-    Widget vf(String? hint) => Directionality(
+    Widget vf({bool ae = false}) => Directionality(
       textDirection: TextDirection.ltr,
       child: Center(
         child: SizedBox(
@@ -78,20 +77,15 @@ void main() {
             onSpot: (_) {},
             onClearSpot: () {},
             onToggleHold: () {},
-            onToggleEngine: () => toggles++,
-            engineHint: hint,
+            ae: ae,
           ),
         ),
       ),
     );
-    await t.pumpWidget(vf(null));
-    final pill = find.textContaining('EV');
-    expect(pill, findsOneWidget);
-    await t.longPress(pill);
-    expect(toggles, 1);
-    await t.pumpWidget(vf('M'));
-    expect(find.text('M'), findsOneWidget);
-    expect(find.textContaining('EV'), findsNothing);
+    await t.pumpWidget(vf());
+    expect(find.text('EV 12.0 · AVG'), findsOneWidget);
+    await t.pumpWidget(vf(ae: true));
+    expect(find.text('EV 12.0 · AVG · AE'), findsOneWidget);
   });
 
   testWidgets('the box stays near-black under the dark theme', (t) async {

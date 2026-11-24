@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/meter/meter_controller.dart';
+import 'package:grain/metering/reading.dart';
 
 import '../support/fake_source.dart';
 
@@ -53,26 +54,36 @@ void main() {
     expect(c.reading!.ev100, isNot(held));
   });
 
-  testWidgets('toggleEngine asks for AE, shows it briefly, then back', (
-    t,
-  ) async {
-    await c.toggleEngine();
+  test('setPhoneAe asks the camera for AE and back', () async {
+    await c.setPhoneAe(true);
     expect(src.calls.last, 'setEngine(ae)');
-    expect(c.engineHint, 'AE');
-    await t.pump(const Duration(seconds: 2));
-    expect(c.engineHint, isNull);
-    await c.toggleEngine();
+    expect(c.phoneAe, isTrue);
+    await c.setPhoneAe(false);
     expect(src.calls.last, 'setEngine(manual)');
-    expect(c.engineHint, 'M');
-    await t.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('without manual support the hint says AE', (t) async {
-    src.manualSupported = false;
-    await c.toggleEngine(); // to AE
-    await c.toggleEngine(); // asks for manual, gets AE
-    expect(src.calls.last, 'setEngine(manual)');
-    expect(c.engineHint, 'AE');
-    await t.pump(const Duration(seconds: 2));
+  test('the reading says whether it came from the phone\'s AE', () async {
+    await c.resume();
+    src.emit(manualStats());
+    await Future<void>.delayed(Duration.zero);
+    expect(c.readingFromAe, isFalse);
+    src.emit(
+      MeterStats.fromMap({
+        'exposureNs': 10000000,
+        'sensitivity': 100,
+        'boost': 100,
+        'aperture': 2.0,
+        'minExposureNs': 10000,
+        'maxExposureNs': 1000000000,
+        'minIso': 50,
+        'maxIso': 3200,
+        'frameLuma': .18,
+        'cropLuma': .18,
+        'spotLuma': .18,
+        'histogram': List<int>.filled(64, 0),
+      }),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(c.readingFromAe, isTrue);
   });
 }

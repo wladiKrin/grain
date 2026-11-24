@@ -348,6 +348,7 @@ class _MeterScreenState extends State<MeterScreen> {
                             c.area,
                             c.held,
                             c.apertureAssumed,
+                            c.readingFromAe,
                           ),
                           builder: (context, _) => _notice() ?? _evText(),
                         ),
@@ -489,6 +490,7 @@ class _MeterScreenState extends State<MeterScreen> {
       area: _c.area,
       held: _c.held,
       estimated: _c.apertureAssumed,
+      ae: _c.readingFromAe,
     ),
     textAlign: TextAlign.center,
     style: TextStyle(
@@ -515,7 +517,7 @@ class _MeterScreenState extends State<MeterScreen> {
       c.apertureAssumed,
       c.histogramOn,
       c.frameLandscape,
-      c.engineHint,
+      c.readingFromAe,
     ),
     builder: (context, _) {
       final notice = _notice();
@@ -546,8 +548,7 @@ class _MeterScreenState extends State<MeterScreen> {
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,
         onToggleHold: _c.toggleHold,
-        onToggleEngine: _c.toggleEngine,
-        engineHint: _c.engineHint,
+        ae: _c.readingFromAe,
         histogramOn: _c.histogramOn,
         onToggleHistogram: _c.toggleHistogram,
         histogram: _c.histogram,

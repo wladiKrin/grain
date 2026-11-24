@@ -363,12 +363,12 @@ void main() {
     src.emit(ev15());
     await t.pump();
     await t.pump();
-    expect(find.text('EV 15.0 · AVG'), findsOneWidget);
+    expect(find.text('EV 15.0 · AVG · AE'), findsOneWidget);
 
     await t.tap(find.byIcon(Icons.lock_open));
     await t.pump();
     expect(c.held, isTrue);
-    expect(find.text('EV 15.0 · HELD'), findsOneWidget);
+    expect(find.text('EV 15.0 · HELD · AE'), findsOneWidget);
     expect(find.byIcon(Icons.lock), findsOneWidget);
   });
 
@@ -382,7 +382,7 @@ void main() {
     expect(c.area, MeterArea.spot);
     expect(c.spot.dx, closeTo(.5, .01));
     expect(c.spot.dy, closeTo(.5, .01));
-    expect(find.text('EV 15.0 · SPOT'), findsOneWidget);
+    expect(find.text('EV 15.0 · SPOT · AE'), findsOneWidget);
 
     await t.longPressAt(box.center);
     await t.pump();
@@ -464,12 +464,12 @@ void main() {
       stats: ev15(exposureNs: 10000, sensitivity: 50, luma: .95),
     );
     expect(c.reading!.flag, RangeFlag.over);
-    expect(find.text('EV 17.6 ▲ · AVG'), findsOneWidget);
+    expect(find.text('EV 17.6 ▲ · AVG · AE'), findsOneWidget);
 
     // Still visible with the viewfinder off.
     await t.tap(find.byIcon(Icons.visibility));
     await t.pump();
-    expect(find.text('EV 17.6 ▲ · AVG'), findsOneWidget);
+    expect(find.text('EV 17.6 ▲ · AVG · AE'), findsOneWidget);
   });
 
   testWidgets('phone AE under range flags the EV pill with ▼', (t) async {
@@ -479,18 +479,18 @@ void main() {
       stats: ev15(exposureNs: 1000000000, sensitivity: 3200, luma: .005),
     );
     expect(c.reading!.flag, RangeFlag.under);
-    expect(find.text('EV −5.0 ▼ · AVG'), findsOneWidget);
+    expect(find.text('EV −5.0 ▼ · AVG · AE'), findsOneWidget);
 
     await t.tap(find.byIcon(Icons.visibility));
     await t.pump();
-    expect(find.text('EV −5.0 ▼ · AVG'), findsOneWidget);
+    expect(find.text('EV −5.0 ▼ · AVG · AE'), findsOneWidget);
   });
 
   testWidgets('viewfinder off shows the EV line without a flag', (t) async {
     await pumpScreen(t, stats: ev15());
     await t.tap(find.byIcon(Icons.visibility));
     await t.pump();
-    expect(find.text('EV 15.0 · AVG'), findsOneWidget);
+    expect(find.text('EV 15.0 · AVG · AE'), findsOneWidget);
   });
 
   testWidgets('header shows profile and mode', (t) async {
