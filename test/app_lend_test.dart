@@ -53,7 +53,7 @@ void main() {
 
   testWidgets('the meter camera stops behind the library', (t) async {
     await pumpApp(t);
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await settle(t);
     expect(find.text('Library'), findsOneWidget);
     expect(src.calls, ['start', 'stop']);
@@ -66,7 +66,7 @@ void main() {
     t,
   ) async {
     await pumpApp(t);
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await settle(t);
     await t.tap(find.byTooltip('Import'));
     await settle(t);
@@ -107,7 +107,7 @@ void main() {
     'returning from the library while backgrounded keeps the camera closed',
     (t) async {
       await pumpApp(t);
-      await t.tap(find.byIcon(Icons.photo_camera_outlined));
+      await t.tap(find.byIcon(Icons.expand_more).first);
       await settle(t);
       t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -127,7 +127,7 @@ void main() {
     t,
   ) async {
     await pumpApp(t);
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await settle(t);
     await t.tap(find.byTooltip('Import'));
     await settle(t);

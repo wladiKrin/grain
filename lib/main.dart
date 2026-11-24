@@ -333,9 +333,16 @@ class _GrainAppState extends State<GrainApp> {
     final roll = _rolls.active;
     final c = _overlayContext;
     if (roll == null || c == null || _rolls.logsFor(_gear.body)) return;
-    final choice = await showBodyChangeDialog(c, roll: roll);
-    if (choice == BodyChangeChoice.finishAndStart && mounted) {
-      await _startRoll();
+    final body = _gear.body;
+    final choice = await showBodyChangeDialog(c, roll: roll, to: body);
+    if (!mounted) return;
+    switch (choice) {
+      case BodyChangeChoice.moveRoll:
+        await _rolls.moveRoll(roll.id, body!);
+      case BodyChangeChoice.finishAndStart:
+        await _startRoll();
+      case BodyChangeChoice.meterOnly || null:
+        break;
     }
   }
 

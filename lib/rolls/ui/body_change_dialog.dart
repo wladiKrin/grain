@@ -1,15 +1,18 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../ui/theme.dart';
+import '../../gear/model.dart';
 import '../model.dart';
 
-enum BodyChangeChoice { finishAndStart, meterOnly }
+enum BodyChangeChoice { moveRoll, finishAndStart, meterOnly }
 
-/// Asked once the library closes with another body selected while a roll is
-/// active in a different one. Not barrier-dismissible: the user decides.
+/// Asked once another body is selected while a roll is active in a different
+/// one. The roll can move to [to] when that takes the same film format. Not
+/// barrier-dismissible: the user decides.
 Future<BodyChangeChoice?> showBodyChangeDialog(
   BuildContext context, {
   required Roll roll,
+  Body? to,
 }) => showDialog<BodyChangeChoice>(
   context: context,
   barrierDismissible: false,
@@ -23,6 +26,12 @@ Future<BodyChangeChoice?> showBodyChangeDialog(
     title: Text('Roll ${roll.number} is in the ${roll.bodyName}'),
     actionsOverflowDirection: VerticalDirection.down,
     actions: [
+      if (to != null && to.format == roll.format)
+        TextButton(
+          style: TextButton.styleFrom(minimumSize: const Size(44, 48)),
+          onPressed: () => Navigator.pop(c, BodyChangeChoice.moveRoll),
+          child: Text('Move roll ${roll.number} to the ${to.displayName}'),
+        ),
       TextButton(
         style: TextButton.styleFrom(minimumSize: const Size(44, 48)),
         onPressed: () => Navigator.pop(c, BodyChangeChoice.meterOnly),

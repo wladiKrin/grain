@@ -63,9 +63,8 @@ class MeterScreen extends StatefulWidget {
   /// Settings button action.
   final VoidCallback? onOpenSettings;
 
-  /// Gear library (the body list): the camera chip's ▾, the header's camera
-  /// button, and where a tap on the camera chip leads when there is no
-  /// favorite body to cycle.
+  /// Gear library (the body list): the camera chip's ▾, and where a tap on
+  /// the camera chip leads when there is no favorite body to cycle.
   final VoidCallback? onOpenLibrary;
 
   /// The lens list; also where a tap on the lens chip leads when there is
@@ -401,7 +400,6 @@ class _MeterScreenState extends State<MeterScreen> {
 
   Widget _gearHeader(bool viewfinderOn) {
     final body = _gear.body;
-    final onLibrary = widget.onOpenLibrary ?? () {};
     final roll = _rolls.active;
     return MeterHeader(
       title: _statusLine(body?.format.label ?? 'Free mode'),
@@ -411,7 +409,6 @@ class _MeterScreenState extends State<MeterScreen> {
       viewfinderOn: viewfinderOn,
       onToggleViewfinder: _c.toggleViewfinder,
       onOpenSettings: widget.onOpenSettings ?? () {},
-      onOpenLibrary: onLibrary,
     );
   }
 

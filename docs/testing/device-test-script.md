@@ -131,7 +131,7 @@ Click sound; 3.7 turns it off again.
 | 3.3 | Settings > Click sound on. Back on the meter, turn the aperture dial | A soft click per detent, louder on full stops | |
 | 3.4 | Click sound on: swipe the dials fast. Then Settings > Click sound off and swipe them fast again | The haptics feel the same in both runs: crisp, no lag with the click on | |
 | 3.5 | Click sound off; turn it on in Settings, go back and turn a dial at once | A click from the second detent on at the latest. The first detent right after turning it on may be silent (the sound loads asynchronously); that passes. No click after several detents fails | |
-| 3.6 | Click sound on. Set the ringer to silent and turn a dial; then ringer on and turn it again | Silent ringer: no click (the click uses the system-sound rules, like touch sounds). Ringer on: clicks. Result: silent ____, ringer on ____ | |
+| 3.6 | Click sound on. Set the ringer to vibrate or silent and turn a dial; then turn the media volume down to zero and turn it again | Vibrate/silent: still clicks (the click plays on the media volume). Media volume zero: no click. If it never clicks, run `adb logcat -s GrainClick` and note any line. Result: vibrate ____, media zero ____ | |
 | 3.7 | Settings > Click sound off, then `adb shell dumpsys media.audio_flinger \| grep -i soundpool` | No Grain track (the sound pool is released) | |
 | 3.8 | Drag the dials with Settings > Developer options > Profile GPU rendering > "On screen as bars" on (or `flutter run --profile` and DevTools Performance) | Bars stay under the 16 ms line; no jank frames while dragging the dials. Result: ______ | |
 | 3.9 | Look at thirds and halves on the calibration dial (Settings), the push dial and the two latitude dials (Start roll), and the manual-mode OFFSET readout | ⅓, ⅔ and ½ are all drawn as small Inter Tight fractions of the same weight and size (digits around a fraction slash, e.g. 2⁄3); the whole stop beside them (the 1 in −1⅓) is a normal-size digit; −, ≈, ▲ ▼, → render | |
@@ -201,7 +201,7 @@ largest kit) for the scan rows.
 | # | Action | Expected | Result |
 |---|---|---|---|
 | 6.1 | Tap the lens chip repeatedly | It cycles favorite lenses and feels instant | |
-| 6.1b | Favorite two or three bodies, then tap the camera chip repeatedly; with a roll loaded, tap it once more; then tap each chip's ▾ | Bodies cycle like lenses; the roll question appears when the roll's body is left; the ▾ opens the camera list and the lens list | |
+| 6.1b | Favorite two or three bodies, then tap the camera chip repeatedly; with a roll loaded, tap it once more; then tap each chip's ▾ | Bodies cycle like lenses; the roll question appears when the roll's body is left, with "Move roll N to the <camera>" when the new camera takes the same format (choosing it logs the next frames there); the ▾ opens the camera list and the lens list; there is no camera button in the header | |
 | 6.2 | At 360 px width (display size set small), look at the header and chips with the longest bundled names (e.g. "Zoom-Nikkor 35-105/3.5-4.5 AI-S") | They fit without overflow | |
 | 6.3 | 360 x 800 phone, Manual mode, viewfinder on, no roll | Nothing overflows; the numerals step down to their smallest and the viewfinder is small but usable (about 90 px) | |
 | 6.3a | Repeat 6.3 with the histogram on | Record whether the histogram panel (bottom right of the viewfinder) overlaps the EV pill or Hold (top right): overlap yes / no ____. An overlap that hides the EV value fails | |
@@ -333,5 +333,5 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 
 | # | Action | Expected | Result |
 |---|---|---|---|
-| 13.1 | `adb shell bmgr backupnow io.github.wladikrin.grain`, uninstall, reinstall the same APK (same signing key; a build with another key cannot restore into it), `adb shell bmgr restore io.github.wladikrin.grain` | Rolls, readings, profiles and settings are back; thumbnails show placeholders | |
+| 13.1 | `adb shell bmgr backupnow io.github.wladikrin.grain`; `adb shell bmgr list sets` and note the token (the hex number of the line for this phone); uninstall, reinstall the same APK (same signing key; a build with another key cannot restore into it); if the data is not back already (Android restores on install when Settings > System > Backup is on), `adb shell bmgr restore <token> io.github.wladikrin.grain` and reopen the app | Rolls, readings, profiles and settings are back; thumbnails show placeholders | |
 | 13.2 | `adb shell run-as io.github.wladikrin.grain ls files/snapshots` after the restore | Empty (snapshots are not backed up) | |

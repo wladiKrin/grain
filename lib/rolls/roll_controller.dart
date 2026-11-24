@@ -217,6 +217,19 @@ class RollController extends ChangeNotifier {
     return _enqueue(() => _repo.saveRoll(u));
   }
 
+  /// Moves roll [id] to [body]: its next frames log there. Frames already
+  /// logged keep their settings.
+  Future<void> moveRoll(String id, Body body) {
+    final r = _rolls.firstWhere((x) => x.id == id);
+    return updateRoll(
+      r.copyWith(
+        bodyId: () => body.id,
+        bodyMake: body.make,
+        bodyModel: body.model,
+      ),
+    );
+  }
+
   Future<void> finishRoll(String id) {
     final now = _now();
     Roll? done;

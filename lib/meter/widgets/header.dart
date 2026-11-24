@@ -3,8 +3,8 @@ import 'package:material_ui/material_ui.dart';
 import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
 
-/// Film format or roll status on the left; gear library, viewfinder toggle
-/// and settings right.
+/// Film format or roll status on the left; viewfinder toggle and settings
+/// right.
 class MeterHeader extends StatelessWidget {
   const MeterHeader({
     super.key,
@@ -13,7 +13,6 @@ class MeterHeader extends StatelessWidget {
     required this.viewfinderOn,
     required this.onToggleViewfinder,
     required this.onOpenSettings,
-    required this.onOpenLibrary,
   });
 
   final String title;
@@ -23,7 +22,6 @@ class MeterHeader extends StatelessWidget {
   final bool viewfinderOn;
   final VoidCallback onToggleViewfinder;
   final VoidCallback onOpenSettings;
-  final VoidCallback onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -55,12 +53,6 @@ class MeterHeader extends StatelessWidget {
             ],
           ),
         ),
-        RoundButton(
-          semanticLabel: 'Gear library',
-          onPressed: onOpenLibrary,
-          child: const Icon(Icons.photo_camera_outlined),
-        ),
-        const SizedBox(width: 8),
         RoundButton(
           filled: viewfinderOn,
           toggled: viewfinderOn,

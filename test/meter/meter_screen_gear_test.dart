@@ -246,7 +246,7 @@ void main() {
     expect(find.text('1m 04s'), findsOneWidget);
   });
 
-  testWidgets('library button and title open the library', (t) async {
+  testWidgets('the camera chip opens the library; no header button', (t) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
     addTearDown(t.view.reset);
@@ -261,13 +261,15 @@ void main() {
     );
     await t.pump();
 
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    expect(find.byIcon(Icons.photo_camera_outlined), findsNothing);
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await t.pumpAndSettle();
     expect(find.text('Library'), findsOneWidget);
     await t.tap(find.byIcon(Icons.arrow_back));
     await t.pumpAndSettle();
     expect(find.text('Library'), findsNothing);
 
+    // No favorite bodies: a tap on the name opens the library too.
     await t.tap(find.text('Canon A-1'));
     await t.pumpAndSettle();
     expect(find.text('Library'), findsOneWidget);

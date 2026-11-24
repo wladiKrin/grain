@@ -82,7 +82,7 @@ void main() {
   }
 
   Future<void> pickBody(WidgetTester t, String name) async {
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await settle(t);
     await t.tap(find.text(name));
     await settle(t);
@@ -100,7 +100,7 @@ void main() {
 
   testWidgets('choosing another body asks once the library closes', (t) async {
     await pumpApp(t);
-    await t.tap(find.byIcon(Icons.photo_camera_outlined));
+    await t.tap(find.byIcon(Icons.expand_more).first);
     await settle(t);
     await t.tap(find.text('Canon AE-1'));
     await t.pump();
@@ -115,6 +115,37 @@ void main() {
     await settle(t);
     expect(find.text('Roll 1 is in the Canon A-1'), findsOneWidget);
     expect(gear.body, ae1);
+  });
+
+  testWidgets('the roll can move to another body of the same format', (
+    t,
+  ) async {
+    await pumpApp(t);
+    await pickBody(t, 'Canon AE-1');
+    await t.tap(find.text('Move roll 1 to the Canon AE-1'));
+    await settle(t);
+    expect(rolls.active!.bodyId, 'canon-ae1');
+    expect(rolls.active!.bodyName, 'Canon AE-1');
+    expect(find.text('Log frame 1'), findsOneWidget);
+  });
+
+  testWidgets('no move to a body of another format', (t) async {
+    await pumpApp(t);
+    await pickBody(t, 'Pentax 67');
+    expect(find.text('Roll 1 is in the Canon A-1'), findsOneWidget);
+    expect(find.textContaining('Move roll'), findsNothing);
+  });
+
+  testWidgets('cycling the camera chip away from the roll asks too', (t) async {
+    await t.runAsync(() async {
+      await gear.toggleFavorite(a1);
+      await gear.toggleFavorite(ae1);
+    });
+    await pumpApp(t);
+    await t.tap(find.text('Canon A-1'));
+    await settle(t);
+    expect(gear.body, ae1);
+    expect(find.text('Roll 1 is in the Canon A-1'), findsOneWidget);
   });
 
   testWidgets("meter only keeps the roll and saves readings", (t) async {
