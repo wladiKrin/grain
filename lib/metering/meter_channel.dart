@@ -13,6 +13,8 @@ class PreviewInfo {
     this._mainEqFocal,
     this.wideEqFocal,
     this.wide = false,
+    this.zoom = 1,
+    this.maxZoom = 1,
   });
 
   factory PreviewInfo.fromMap(Map<Object?, Object?> m) => PreviewInfo(
@@ -26,6 +28,8 @@ class PreviewInfo {
     mainEqFocal: (m['mainEqFocal'] as num?)?.toDouble(),
     wideEqFocal: (m['wideEqFocal'] as num?)?.toDouble(),
     wide: m['wide'] as bool? ?? false,
+    zoom: (m['zoom'] as num?)?.toDouble() ?? 1,
+    maxZoom: (m['maxZoom'] as num?)?.toDouble() ?? 1,
   );
 
   final int textureId;
@@ -35,7 +39,7 @@ class PreviewInfo {
   final int sensorOrientation;
 
   /// The active camera's 35 mm-equivalent focal length, mm (the ultra-wide's
-  /// while [wide] is on).
+  /// while [wide] is on, `mainEqFocal × zoom` while zoomed in).
   final double phoneEqFocal;
 
   final double? _mainEqFocal;
@@ -48,6 +52,12 @@ class PreviewInfo {
 
   /// Whether the ultra-wide is in use.
   final bool wide;
+
+  /// [phoneEqFocal] / [mainEqFocal]: above 1 the main camera is zoomed in.
+  final double zoom;
+
+  /// Largest zoom the main camera takes; 1 without camera zoom.
+  final double maxZoom;
 }
 
 /// Source of live metering data; [MeterChannel] is the real one, tests pass fakes.
@@ -64,9 +74,10 @@ abstract class MeterSource {
 
   Stream<MeterStats> get stats;
 
-  /// Switches between the main camera and the ultra-wide. Without an
-  /// ultra-wide, `setWide(true)` answers the unchanged preview.
-  Future<PreviewInfo> setWide(bool wide);
+  /// Sets the camera's zoom: below 1 the ultra-wide, 1 the main camera, above
+  /// 1 the main camera zoomed in (capped at [PreviewInfo.maxZoom]). What the
+  /// phone cannot do (no ultra-wide, no zoom) answers the unchanged preview.
+  Future<PreviewInfo> setZoom(double zoom);
 
   /// Opens the camera for QR scanning: no [stats], decoded texts on [qrCodes].
   /// Same exceptions as [start]; [stop] ends it.
@@ -110,7 +121,8 @@ class MeterChannel implements MeterSource {
   Future<PreviewInfo> startScan() => _preview('startScan');
 
   @override
-  Future<PreviewInfo> setWide(bool wide) => _preview('setWide', {'wide': wide});
+  Future<PreviewInfo> setZoom(double zoom) =>
+      _preview('setZoom', {'zoom': zoom});
 
   @override
   Future<void> stop() => _method.invokeMethod<void>('stop');

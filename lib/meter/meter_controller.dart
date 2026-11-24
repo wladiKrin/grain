@@ -22,6 +22,16 @@ const _centre = Offset(.5, .5);
 /// Spot radius relative to the crop width: a 4 % circle (spec §5.2: ~3–5 %).
 const _spotRadius = 0.02;
 
+/// The camera zooms in only this far or further; below, the preview crop
+/// is plenty.
+const _minZoom = 2.0;
+
+/// Share of the zoomed picture the lens frame may take at most.
+const _zoomMargin = 0.95;
+
+/// How often the stats log line is printed while metering.
+const _statsLogEvery = Duration(seconds: 1);
+
 /// State and lifecycle of the meter screen. Owns the camera subscription:
 /// [resume] opens it, [pause] releases it.
 class MeterController extends ChangeNotifier {
@@ -32,7 +42,10 @@ class MeterController extends ChangeNotifier {
     this.histogramOn = false,
     this.frameLandscape = false,
     GearSetup gear = const GearSetup(),
-  }) : _gear = gear {
+    DebugPrintCallback? statsLog,
+    this.clock = DateTime.now,
+  }) : _gear = gear,
+       statsLog = statsLog ?? debugPrint {
     _scales = _scalesAt(gear);
     // Nearest, never -1: the gear may lack the defaults (e.g. ISO 400).
     apertureIndex = nearestIndex(apertures, 5.6);
@@ -42,6 +55,10 @@ class MeterController extends ChangeNotifier {
   }
 
   final MeterSource _source;
+
+  /// Where the once-a-second `GRAIN stats` line goes, and its clock.
+  final DebugPrintCallback statsLog;
+  final DateTime Function() clock;
 
   GearSetup _gear;
   late GearScales _scales;
@@ -301,7 +318,7 @@ class MeterController extends ChangeNotifier {
           preview = info;
           _running = true;
           _session++;
-          _wideFailed = false;
+          _zoomFailed = false;
           _sub = _source.stats.listen(_onStats, onError: _onStatsError);
           _reframe();
           _sendRegions();
@@ -324,7 +341,7 @@ class MeterController extends ChangeNotifier {
     }
     if (_disposed) return;
     notifyListeners();
-    await _syncWide();
+    await _syncZoom();
   }
 
   /// Lends in progress; they nest (a scan started from the library).
@@ -392,6 +409,7 @@ class MeterController extends ChangeNotifier {
   }
 
   bool _loggedFirstStats = false;
+  DateTime? _lastStatsLog;
 
   void _onStats(MeterStats s) {
     if (!_running) return;
@@ -400,6 +418,7 @@ class MeterController extends ChangeNotifier {
       // Cold-start timing: compare this logcat timestamp with the launch.
       debugPrint('GRAIN first EV');
     }
+    _logStats(s);
     // A frame that gives no finite EV (bad AE metadata) is dropped, so
     // [_latest] always derives a reading.
     if (readingFrom(s, area: area) == null) return;
@@ -408,6 +427,18 @@ class MeterController extends ChangeNotifier {
     _derive();
     _updateHistogram();
     notifyListeners();
+  }
+
+  /// At most once per [_statsLogEvery]: the frame's AE metadata, lumas and
+  /// the EV it gives, for comparing with another meter.
+  void _logStats(MeterStats s) {
+    final now = clock();
+    final last = _lastStatsLog;
+    if (last != null && now.difference(last) < _statsLogEvery) return;
+    _lastStatsLog = now;
+    statsLog(
+      statsLine(s, readingFrom(s, area: area, calibration: _calibrationEv)),
+    );
   }
 
   /// The native side tears the camera down after reporting an error; a later
@@ -467,7 +498,7 @@ class MeterController extends ChangeNotifier {
     frameLandscape = !frameLandscape;
     _reframe();
     _sendRegions();
-    unawaited(_syncWide());
+    unawaited(_syncZoom());
     _updateHistogram();
     notifyListeners();
   }
@@ -521,13 +552,38 @@ class MeterController extends ChangeNotifier {
     );
   }
 
-  /// Whether a move to or from the ultra-wide is due for the dials.
+  /// The zoom the dials want (see [MeterSource.setZoom]): the ultra-wide
+  /// when the lens is wider than the main camera; zoomed in as far as the
+  /// whole frame still fits, within [_zoomMargin] and [PreviewInfo.maxZoom],
+  /// when that is at least [_minZoom]; else 1.
+  double _wantedZoom(PreviewInfo p) {
+    final wideEq = p.wideEqFocal;
+    if (!_fits(p.mainEqFocal)) {
+      return wideEq == null ? 1 : math.min(wideEq / p.mainEqFocal, .99);
+    }
+    if (p.maxZoom < _minZoom) return 1;
+    final f = _target;
+    final c = lensCrop(
+      preview: previewSize!,
+      lensFocal: equivalentFocal(f.focal, f.format),
+      phoneEqFocal: p.mainEqFocal,
+      aspect: f.format.aspect(landscape: f.landscape),
+    );
+    final fit = _zoomMargin / math.max(c.width, c.height);
+    // Floored to hundredths, so the frame still fits.
+    final z = (math.min(fit, p.maxZoom) * 100).floorToDouble() / 100;
+    return z >= _minZoom ? z : 1;
+  }
+
+  /// Whether [p] is the camera at [zoom].
+  static bool _zoomed(PreviewInfo p, double zoom) =>
+      zoom < 1 ? p.wide : !p.wide && (p.zoom - zoom).abs() <= .01 * zoom;
+
+  /// Whether a camera switch (ultra-wide, main or zoom) is due for the dials.
   bool get _switchDue {
     final p = preview;
-    if (p == null || !_running || _wideFailed || p.wideEqFocal == null) {
-      return false;
-    }
-    return !_fits(p.mainEqFocal) != p.wide;
+    if (p == null || !_running || _zoomFailed) return false;
+    return !_zoomed(p, _wantedZoom(p));
   }
 
   /// Moves the shown framing to the dials unless a camera switch is due; a
@@ -600,7 +656,7 @@ class MeterController extends ChangeNotifier {
     }
     _reframe();
     _sendRegions();
-    unawaited(_syncWide());
+    unawaited(_syncZoom());
     _updateHistogram();
     notifyListeners();
   }
@@ -619,7 +675,7 @@ class MeterController extends ChangeNotifier {
     isoIndex = nearestIndex(isos, iso);
     _reframe();
     _sendRegions();
-    unawaited(_syncWide());
+    unawaited(_syncZoom());
     _updateHistogram();
     notifyListeners();
   }
@@ -627,25 +683,24 @@ class MeterController extends ChangeNotifier {
   /// Bumped on every successful start; a switch answer from an earlier
   /// camera session is dropped.
   int _session = 0;
-  bool _wideBusy = false;
+  bool _zoomBusy = false;
 
-  /// A switch failed in this camera session: stay on the main camera until
+  /// A switch failed in this camera session: keep the camera as it is until
   /// the next start.
-  bool _wideFailed = false;
+  bool _zoomFailed = false;
 
-  /// Moves to the ultra-wide when the lens is wider than the main camera
-  /// and back when it is not. One call in flight; the wanted state is
-  /// re-checked when it answers, so the last focal change wins.
-  Future<void> _syncWide() async {
-    if (_wideBusy) return;
-    _wideBusy = true;
+  /// Moves the camera to the zoom the dials want ([_wantedZoom]). One call
+  /// in flight; the wanted zoom is re-checked when it answers, so the last
+  /// focal change wins.
+  Future<void> _syncZoom() async {
+    if (_zoomBusy) return;
+    _zoomBusy = true;
     try {
       while (true) {
         final p = preview;
-        if (!_running || _disposed || _wideFailed || p == null) return;
-        final wideEq = p.wideEqFocal;
-        final want = wideEq != null && !_fits(p.mainEqFocal);
-        if (want == p.wide) {
+        if (!_running || _disposed || _zoomFailed || p == null) return;
+        final want = _wantedZoom(p);
+        if (_zoomed(p, want)) {
           // Dialled back before the switch started: show the dials again.
           if (_framing != _target) {
             _reframe();
@@ -657,11 +712,11 @@ class MeterController extends ChangeNotifier {
         final session = _session;
         final PreviewInfo next;
         try {
-          next = await _source.setWide(want);
+          next = await _source.setZoom(want);
         } catch (e) {
-          debugPrint('GRAIN setWide($want) failed: $e');
+          debugPrint('GRAIN setZoom($want) failed: $e');
           if (session == _session) {
-            _wideFailed = true;
+            _zoomFailed = true;
             _reframe();
             // The native side answers an error only after it tore the
             // session down and could reopen neither camera: like any camera
@@ -673,15 +728,15 @@ class MeterController extends ChangeNotifier {
         // Paused, stopped or restarted meanwhile: the answer is stale.
         if (session != _session || !_running || _disposed) continue;
         preview = next;
-        // The camera could not switch (it answered its unchanged preview):
+        // The camera could not switch (it answered another preview):
         // asking again would loop.
-        if (next.wide != want) _wideFailed = true;
+        if (!_zoomed(next, want)) _zoomFailed = true;
         _reframe();
         _sendRegions();
         notifyListeners();
       }
     } finally {
-      _wideBusy = false;
+      _zoomBusy = false;
     }
   }
 
@@ -728,3 +783,24 @@ class MeterController extends ChangeNotifier {
 }
 
 typedef _Framing = ({double focal, FilmFormat format, bool landscape});
+
+/// One `GRAIN stats` log line: the AE metadata, lumas and [reading] of [s].
+String statsLine(MeterStats s, Reading? reading) {
+  String f(double v, [int d = 4]) => v.toStringAsFixed(d);
+  final t = s.exposureNs / 1e9;
+  final at = [
+    if (s.exposureNs >= 0.95 * s.maxExposureNs) 'tMax',
+    if (s.sensitivity >= 0.95 * s.maxIso) 'isoMax',
+    if (s.exposureNs <= 1.05 * s.minExposureNs) 'tMin',
+    if (s.sensitivity <= 1.05 * s.minIso) 'isoMin',
+  ];
+  return 'GRAIN stats '
+      't=${f(t, 5)}s (1/${(1 / t).toStringAsFixed(1)}) '
+      'iso=${s.sensitivity} boost=${s.boost} '
+      'f/${f(s.aperture, 2)}${s.apertureAssumed ? '(assumed)' : ''} '
+      'zoom=${f(s.zoom, 2)} cam=${s.camera ?? '?'} ae=${s.aeState ?? '?'} '
+      'frame=${f(s.frameLuma)} crop=${f(s.cropLuma)} spot=${f(s.spotLuma)} '
+      'ev100=${reading == null ? '-' : f(reading.ev100, 2)} '
+      'range=${reading?.flag.name ?? '-'} '
+      'limits=${at.isEmpty ? '-' : at.join(',')}';
+}

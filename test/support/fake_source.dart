@@ -13,6 +13,7 @@ class FakeMeterSource implements MeterSource {
     this.sensorOrientation = 90,
     this.mainEqFocal = 25,
     this.wideEqFocal,
+    this.maxZoom = 1,
     this.logRegions = true,
   });
 
@@ -24,18 +25,22 @@ class FakeMeterSource implements MeterSource {
   /// The phone's ultra-wide; null means it has none.
   final double? wideEqFocal;
 
+  /// The main camera's largest zoom; 1 means no camera zoom.
+  final double maxZoom;
+
   /// Whether [setRegions] is recorded in [calls] (it always is in [regions]).
   final bool logRegions;
 
-  /// `'start'`, `'startScan'`, `'stop'`, `'setRegions'`, `'setWide(true)'`, ...
+  /// `'start'`, `'startScan'`, `'stop'`, `'setRegions'`, `'setZoom(0.52)'`
+  /// (the zoom asked for, two decimals), ...
   final calls = <String>[];
   final regions = <(Rect, Offset, double)>[];
 
   /// Thrown by [start] and [startScan] when set.
   Object? startError;
 
-  /// Thrown by [setWide] when set.
-  Object? setWideError;
+  /// Thrown by [setZoom] when set.
+  Object? setZoomError;
 
   /// When set, [start]/[startScan] and [stop] wait for these.
   Completer<void>? startGate;
@@ -47,10 +52,11 @@ class FakeMeterSource implements MeterSource {
   /// When set, [snapshot] waits for it before answering.
   Completer<void>? snapshotGate;
 
-  /// When set, [setWide] waits for it before answering.
-  Completer<void>? wideGate;
+  /// When set, [setZoom] waits for it before answering.
+  Completer<void>? zoomGate;
 
   bool _wide = false;
+  double _zoom = 1;
   final _stats = StreamController<MeterStats>.broadcast();
   final _qr = StreamController<String>.broadcast();
 
@@ -58,10 +64,12 @@ class FakeMeterSource implements MeterSource {
     textureId: textureId,
     size: size,
     sensorOrientation: sensorOrientation,
-    phoneEqFocal: _wide ? wideEqFocal! : mainEqFocal,
+    phoneEqFocal: _wide ? wideEqFocal! : mainEqFocal * _zoom,
     mainEqFocal: mainEqFocal,
     wideEqFocal: wideEqFocal,
     wide: _wide,
+    zoom: _wide ? wideEqFocal! / mainEqFocal : _zoom,
+    maxZoom: maxZoom,
   );
 
   Future<PreviewInfo> _open(String call) async {
@@ -69,6 +77,7 @@ class FakeMeterSource implements MeterSource {
     await startGate?.future;
     if (startError != null) throw startError!;
     _wide = false;
+    _zoom = 1;
     return _preview;
   }
 
@@ -90,12 +99,19 @@ class FakeMeterSource implements MeterSource {
     regions.add((crop, spot, radius));
   }
 
+  /// Like the native side: below 1 the ultra-wide (unchanged without one),
+  /// above 1 capped at [maxZoom].
   @override
-  Future<PreviewInfo> setWide(bool wide) async {
-    calls.add('setWide($wide)');
-    await wideGate?.future;
-    if (setWideError != null) throw setWideError!;
-    _wide = wide && wideEqFocal != null;
+  Future<PreviewInfo> setZoom(double zoom) async {
+    calls.add('setZoom(${zoom.toStringAsFixed(2)})');
+    await zoomGate?.future;
+    if (setZoomError != null) throw setZoomError!;
+    if (zoom < 1) {
+      if (wideEqFocal != null) _wide = true;
+    } else {
+      _wide = false;
+      _zoom = zoom.clamp(1, maxZoom).toDouble();
+    }
     return _preview;
   }
 

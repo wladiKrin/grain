@@ -3,27 +3,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fake_source.dart';
 
 void main() {
-  test('setWide switches to the ultra-wide and back', () async {
+  test('setZoom switches to the ultra-wide and back', () async {
     final src = FakeMeterSource(mainEqFocal: 25, wideEqFocal: 13);
     final main = await src.start();
     expect(main.wide, isFalse);
     expect(main.phoneEqFocal, 25);
     expect(main.wideEqFocal, 13);
 
-    final wide = await src.setWide(true);
+    final wide = await src.setZoom(0.52);
     expect(wide.wide, isTrue);
     expect(wide.phoneEqFocal, 13);
     expect(wide.mainEqFocal, 25);
 
-    final back = await src.setWide(false);
+    final back = await src.setZoom(1.00);
     expect(back.wide, isFalse);
     expect(back.phoneEqFocal, 25);
-    expect(src.calls, ['start', 'setWide(true)', 'setWide(false)']);
+    expect(src.calls, ['start', 'setZoom(0.52)', 'setZoom(1.00)']);
   });
 
-  test('setWide without an ultra-wide answers the main camera', () async {
+  test('setZoom without an ultra-wide answers the main camera', () async {
     final src = FakeMeterSource();
-    final info = await src.setWide(true);
+    final info = await src.setZoom(0.52);
     expect(info.wide, isFalse);
     expect(info.wideEqFocal, isNull);
     expect(info.phoneEqFocal, 25);

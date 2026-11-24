@@ -22,6 +22,9 @@ class MeterStats {
     required this.spotLuma,
     required this.histogram,
     this.apertureAssumed = false,
+    this.zoom = 1,
+    this.camera,
+    this.aeState,
   });
 
   factory MeterStats.fromMap(Map<Object?, Object?> m) {
@@ -50,6 +53,9 @@ class MeterStats {
         (req('histogram') as List<Object?>).map((e) => (e as num).toInt()),
       ),
       apertureAssumed: m['apertureAssumed'] == true,
+      zoom: (m['zoom'] as num?)?.toDouble() ?? 1,
+      camera: m['camera'] as String?,
+      aeState: m['aeState'] as String?,
     );
   }
 
@@ -69,6 +75,11 @@ class MeterStats {
 
   /// The phone gave no aperture; [aperture] is the f/1.8 fallback.
   final bool apertureAssumed;
+
+  /// The frame's CONTROL_ZOOM_RATIO, active camera ("main", "wide", "tele")
+  /// and CONTROL_AE_STATE; for the stats log only.
+  final double zoom;
+  final String? camera, aeState;
 }
 
 enum MeterArea { average, spot }

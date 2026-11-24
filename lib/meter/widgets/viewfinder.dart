@@ -10,9 +10,13 @@ import '../../ui/round_button.dart';
 import '../../ui/theme.dart';
 import 'histogram_overlay.dart';
 
+/// The drawn preview's larger side is at most this many times the box's.
+const maxPreviewZoom = 4.0;
+
 /// Where the [preview] is drawn in [box]: zoomed until the [crop]
 /// (normalized in [preview]) touches the box on one axis, centred in it; with
-/// no crop, scaled to cover the box.
+/// no crop, scaled to cover the box. The zoom stops at [maxPreviewZoom], so a
+/// tiny crop is drawn smaller rather than as a huge texture.
 Rect previewRect(Size box, Size preview, {Rect? crop}) {
   var s = math.max(box.width / preview.width, box.height / preview.height);
   var centre = const Offset(.5, .5);
@@ -23,6 +27,11 @@ Rect previewRect(Size box, Size preview, {Rect? crop}) {
     );
     centre = crop.center;
   }
+  final cap =
+      maxPreviewZoom *
+      math.max(box.width, box.height) /
+      math.max(preview.width, preview.height);
+  if (s > cap) s = cap;
   final w = preview.width * s, h = preview.height * s;
   return Rect.fromLTWH(
     box.width / 2 - centre.dx * w,

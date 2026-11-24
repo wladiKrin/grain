@@ -24,19 +24,23 @@ void main() {
             'sensorOrientation': 90,
             'phoneEqFocal': 24.5,
           };
-        case 'setWide':
+        case 'setZoom':
         case 'startScan':
-          final wide =
-              call.method == 'setWide' && call.arguments['wide'] == true;
+          final zoom = call.method == 'setZoom'
+              ? call.arguments['zoom'] as double
+              : 1.0;
+          final wide = zoom < 1;
           return {
             'textureId': 7,
             'previewWidth': 1440,
             'previewHeight': 1080,
             'sensorOrientation': 90,
-            'phoneEqFocal': wide ? 13.0 : 24.5,
+            'phoneEqFocal': wide ? 13.0 : 24.5 * zoom,
             'mainEqFocal': 24.5,
             'wideEqFocal': 13.0,
             'wide': wide,
+            'zoom': wide ? 13 / 24.5 : zoom,
+            'maxZoom': 10.0,
           };
         case 'snapshot':
           return '/data/user/0/io.github.wladikrin.grain/files/snapshots/'
@@ -119,15 +123,30 @@ void main() {
     expect(s.histogram.length, 64);
   });
 
-  test('setWide sends the flag and parses the new keys', () async {
-    final info = await MeterChannel().setWide(true);
-    expect(calls.single.method, 'setWide');
-    expect(calls.single.arguments, {'wide': true});
+  test('setZoom below 1 asks for the ultra-wide and parses the keys', () async {
+    final info = await MeterChannel().setZoom(.53);
+    expect(calls.single.method, 'setZoom');
+    expect(calls.single.arguments, {'zoom': .53});
     expect(info.wide, isTrue);
     expect(info.wideEqFocal, 13.0);
     expect(info.mainEqFocal, 24.5);
     expect(info.phoneEqFocal, 13.0);
+    expect(info.maxZoom, 10.0);
     expect(info.textureId, 7);
+  });
+
+  test('setZoom above 1 parses the zoomed preview', () async {
+    final info = await MeterChannel().setZoom(4);
+    expect(calls.single.arguments, {'zoom': 4.0});
+    expect(info.wide, isFalse);
+    expect(info.zoom, 4.0);
+    expect(info.phoneEqFocal, 98.0);
+  });
+
+  test('a preview without zoom keys is unzoomed', () async {
+    final info = await MeterChannel().start();
+    expect(info.zoom, 1.0);
+    expect(info.maxZoom, 1.0);
   });
 
   test('startScan calls startScan and parses PreviewInfo', () async {

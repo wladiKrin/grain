@@ -308,7 +308,7 @@ void main() {
     expect(c.preview!.wide, isFalse);
     c.setFocal(idx(c.focalValues, '20'));
     await settle();
-    expect(src.calls, contains('setWide(true)'));
+    expect(src.calls, contains('setZoom(0.52)'));
     expect(c.preview!.wide, isTrue);
     expect(c.preview!.phoneEqFocal, 13);
     expect(c.lensWiderThanCamera, isFalse);
@@ -319,13 +319,13 @@ void main() {
 
     c.setFocal(idx(c.focalValues, '24'));
     await settle();
-    expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), ['setZoom(0.52)']);
 
     c.setFocal(idx(c.focalValues, '50'));
     await settle();
-    expect(src.calls.where((e) => e.startsWith('setWide')), [
-      'setWide(true)',
-      'setWide(false)',
+    expect(src.calls.where((e) => e.startsWith('setZoom')), [
+      'setZoom(0.52)',
+      'setZoom(1.00)',
     ]);
     expect(c.preview!.wide, isFalse);
     expect(c.preview!.phoneEqFocal, 25);
@@ -362,23 +362,23 @@ void main() {
   test('a quick wide on → off ends on the main camera', () async {
     await c.resume();
     c.setFocal(idx(c.focalValues, '20'));
-    c.setFocal(idx(c.focalValues, '50')); // while setWide(true) is in flight
+    c.setFocal(idx(c.focalValues, '50')); // while setZoom(0.52) is in flight
     await settle();
-    expect(src.calls.where((e) => e.startsWith('setWide')), [
-      'setWide(true)',
-      'setWide(false)',
+    expect(src.calls.where((e) => e.startsWith('setZoom')), [
+      'setZoom(0.52)',
+      'setZoom(1.00)',
     ]);
     expect(c.preview!.wide, isFalse);
   });
 
-  test('only one setWide is in flight at a time', () async {
+  test('only one setZoom is in flight at a time', () async {
     await c.resume();
     c.setFocal(idx(c.focalValues, '20'));
     c.setFocal(idx(c.focalValues, '50'));
     c.setFocal(idx(c.focalValues, '16'));
     await settle();
     // The in-flight 'true' already matches the last wish: nothing more.
-    expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), ['setZoom(0.52)']);
     expect(c.preview!.wide, isTrue);
   });
 
@@ -391,13 +391,13 @@ void main() {
     expect(c.reading, isNotNull);
     var notified = 0;
     c.addListener(() => notified++);
-    src.setWideError = PlatformException(
+    src.setZoomError = PlatformException(
       code: 'camera_error',
       message: 'Camera failed',
     );
     c.setFocal(idx(c.focalValues, '20'));
     await settle();
-    expect(src.calls, contains('setWide(true)'));
+    expect(src.calls, contains('setZoom(0.52)'));
     expect(c.cameraError, 'Camera failed');
     expect(c.reading, isNull);
     expect(c.preview, isNull);
@@ -409,27 +409,27 @@ void main() {
     // No retry on every detent while the camera is down.
     c.setFocal(idx(c.focalValues, '18'));
     await settle();
-    expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), ['setZoom(0.52)']);
   });
 
-  test('an unexpected setWide error is handled the same way', () async {
+  test('an unexpected setZoom error is handled the same way', () async {
     await c.resume();
     src.emit(statsAt(10));
     await settle();
-    src.setWideError = StateError('boom');
+    src.setZoomError = StateError('boom');
     c.setFocal(idx(c.focalValues, '20'));
     await settle();
     expect(c.cameraError, contains('boom'));
     expect(c.reading, isNull);
   });
 
-  test('a setWide error from an earlier session is ignored', () async {
+  test('a setZoom error from an earlier session is ignored', () async {
     await c.resume();
-    src.setWideError = PlatformException(code: 'camera_error');
+    src.setZoomError = PlatformException(code: 'camera_error');
     src.stopGate = null;
-    c.setFocal(idx(c.focalValues, '20')); // setWide(true) in flight
+    c.setFocal(idx(c.focalValues, '20')); // setZoom(0.52) in flight
     await c.pause();
-    src.setWideError = null;
+    src.setZoomError = null;
     await c.resume();
     await settle();
     expect(c.cameraError, isNull);
@@ -438,10 +438,10 @@ void main() {
 
   test('a failed switch is retried after the camera restarts', () async {
     await c.resume();
-    src.setWideError = PlatformException(code: 'camera_error');
+    src.setZoomError = PlatformException(code: 'camera_error');
     c.setFocal(idx(c.focalValues, '20'));
     await settle();
-    src.setWideError = null;
+    src.setZoomError = null;
     await c.pause();
     await c.resume();
     await settle();
@@ -461,7 +461,7 @@ void main() {
     final r = c.cropRect!;
     expect((r.width * 3000) / (r.height * 4000), closeTo(3 / 2, 1e-6));
     // Sideways, its 36 mm side no longer fits the picture's width.
-    expect(src.calls.where((e) => e.startsWith('setWide')), ['setWide(true)']);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), ['setZoom(0.52)']);
     expect(c.preview!.wide, isTrue);
     expect(src.regions.last.$1, c.cropRect);
 
@@ -475,13 +475,13 @@ void main() {
     c.setFocal(idx(c.focalValues, '28'));
     await settle();
     final upright = c.cropRect!;
-    src.wideGate = Completer<void>();
+    src.zoomGate = Completer<void>();
     c.toggleFrameOrientation();
     await settle();
     // Switching to the ultra-wide: the main camera's picture keeps its frame.
-    expect(src.calls.last, 'setWide(true)');
+    expect(src.calls.last, 'setZoom(0.52)');
     expect(c.cropRect, upright);
-    src.wideGate!.complete();
+    src.zoomGate!.complete();
     await settle();
     expect(c.preview!.wide, isTrue);
     final r = c.cropRect!;
@@ -495,7 +495,7 @@ void main() {
     final before = c.cropRect!;
     c.toggleFrameOrientation();
     expect(c.cropRect, isNot(before));
-    expect(src.calls.where((e) => e.startsWith('setWide')), isEmpty);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), isEmpty);
   });
 
   test('turning the frame keeps the spot inside it', () async {
@@ -517,8 +517,8 @@ void main() {
     await settle();
     m.setFocal(idx(m.focalValues, '18'));
     await settle();
-    expect(stuck.calls.where((e) => e.startsWith('setWide')), [
-      'setWide(true)',
+    expect(stuck.calls.where((e) => e.startsWith('setZoom')), [
+      'setZoom(0.52)',
     ]);
     expect(m.preview!.wide, isFalse);
     expect(m.lensWiderThanCamera, isTrue);
@@ -531,7 +531,7 @@ void main() {
     await m.resume();
     m.setFocal(idx(m.focalValues, '12'));
     await settle();
-    expect(src.calls.where((e) => e.startsWith('setWide')), isEmpty);
+    expect(src.calls.where((e) => e.startsWith('setZoom')), isEmpty);
     expect(m.preview!.wide, isFalse);
     expect(m.lensWiderThanCamera, isTrue);
   });
@@ -547,7 +547,7 @@ void main() {
     c.setFocal(idx(c.focalValues, '20'));
     await c.resume();
     await settle();
-    expect(src.calls, ['start', 'setRegions', 'setWide(true)', 'setRegions']);
+    expect(src.calls, ['start', 'setRegions', 'setZoom(0.52)', 'setRegions']);
     expect(c.preview!.wide, isTrue);
     await c.pause();
     await c.resume();
@@ -556,7 +556,7 @@ void main() {
     expect(src.calls.sublist(last), [
       'start',
       'setRegions',
-      'setWide(true)',
+      'setZoom(0.52)',
       'setRegions',
     ]);
     expect(c.preview!.wide, isTrue);
@@ -564,7 +564,7 @@ void main() {
 
   test('pause during a switch drops its answer', () async {
     await c.resume();
-    c.setFocal(idx(c.focalValues, '20')); // setWide(true) in flight
+    c.setFocal(idx(c.focalValues, '20')); // setZoom(0.52) in flight
     await c.pause();
     await settle();
     expect(c.preview!.wide, isFalse);
@@ -721,8 +721,8 @@ class _StuckWideSource extends FakeMeterSource {
     : super(size: const Size(4000, 3000), mainEqFocal: 25, wideEqFocal: 13);
 
   @override
-  Future<PreviewInfo> setWide(bool wide) async {
-    calls.add('setWide($wide)');
+  Future<PreviewInfo> setZoom(double zoom) async {
+    calls.add('setZoom(${zoom.toStringAsFixed(2)})');
     return start().then((p) {
       calls.removeLast();
       return p;

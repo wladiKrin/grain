@@ -34,7 +34,7 @@ import kotlin.math.min
 
 /**
  * One Camera2 session on the main back camera (or its separate ultra-wide when opened with
- * [startWide]): a preview into [surfaceTexture] and a YUV ImageReader whose Y plane feeds
+ * [startZoom] below 1): a preview into [surfaceTexture] and a YUV ImageReader whose Y plane feeds
  * [LumaStats] in [Mode.METER] or [QrDecoder] in [Mode.SCAN]. All camera work runs on a private
  * HandlerThread; [onReady], [onError], [onStats] and [onQr] are invoked on the main thread.
  * In [Mode.METER] the reader runs at preview size, so [requestSnapshot] can JPEG the next frame.
@@ -43,7 +43,8 @@ class CameraSession(
     context: Context,
     private val surfaceTexture: SurfaceTexture,
     val mode: Mode,
-    private val startWide: Boolean,
+    /** Below 1 the ultra-wide, 1 the main camera, above 1 the main camera zoomed in. */
+    private val startZoom: Float,
     private val onReady: (PreviewSetup) -> Unit,
     private val onError: (String) -> Unit,
     private val onStats: (Map<String, Any>) -> Unit,
@@ -61,6 +62,10 @@ class CameraSession(
         /** Null when the phone has no ultra-wide. */
         val wideEqFocal: Double?,
         val wide: Boolean,
+        /** phoneEqFocal / mainEqFocal: the CONTROL_ZOOM_RATIO in use on the main camera. */
+        val zoom: Float = 1f,
+        /** Largest tele ratio of the main camera; 1 without camera zoom. */
+        val maxZoom: Float = 1f,
     )
 
     /** One [requestSnapshot] call; [finish] answers it once, on the main thread. */
@@ -101,8 +106,11 @@ class CameraSession(
     private var maxExposureNs = 0L
     private var minIso = 0
     private var maxIso = 0
-    private var defaultAperture = FALLBACK_APERTURE
-    private var apertureListed = false
+    private var listedApertures: FloatArray? = null
+    private var mainEq = FALLBACK_EQ_FOCAL_MM
+
+    /** Kind ("main", "wide", "tele") and listed apertures of each physical camera seen. */
+    private val physicals = mutableMapOf<String, Pair<String?, FloatArray?>>()
     private var latest: TotalCaptureResult? = null
     private var wideSupport: Wide? = null
     private var request: CaptureRequest.Builder? = null
@@ -120,15 +128,17 @@ class CameraSession(
     fun open() = handler.post { openOnCameraThread() }
 
     /**
-     * Switches to or from the ultra-wide. On the zoom-ratio path this updates the repeating
-     * request in place and [onDone] gets the new setup; without an ultra-wide it gets the
-     * unchanged setup. Null means this session cannot switch in place (the ultra-wide is a
-     * separate camera, or the session is closed): the caller reopens with `startWide = want`.
-     * [onDone] runs on the main thread.
+     * Sets the camera's zoom: below 1 the ultra-wide, 1 the main camera, above 1 the main
+     * camera zoomed in via CONTROL_ZOOM_RATIO (capped at [PreviewSetup.maxZoom]; on a logical
+     * multi-camera the HAL moves to its telephoto by itself). On the main logical camera this
+     * updates the repeating request in place and [onDone] gets the new setup; where nothing can
+     * change (no ultra-wide, no zoom headroom) it gets the unchanged setup. Null means this
+     * session cannot switch in place (to or from a separate ultra-wide camera, or the session
+     * is closed): the caller reopens with `startZoom = want`. [onDone] runs on the main thread.
      */
-    fun setWide(want: Boolean, onDone: (PreviewSetup?) -> Unit) {
+    fun setZoom(want: Float, onDone: (PreviewSetup?) -> Unit) {
         val posted = handler.post {
-            setWideOnCameraThread(want) { result -> mainHandler.post { onDone(result) } }
+            setZoomOnCameraThread(want) { result -> mainHandler.post { onDone(result) } }
         }
         if (!posted) onDone(null) // The thread already quit after close().
     }
@@ -137,28 +147,30 @@ class CameraSession(
      * Camera thread. On the zoom-ratio path [answer] waits for the first frame at the new
      * ratio, so the caller reframes when the picture changes, not a few frames before.
      */
-    private fun setWideOnCameraThread(want: Boolean, answer: (PreviewSetup?) -> Unit) {
+    private fun setZoomOnCameraThread(want: Float, answer: (PreviewSetup?) -> Unit) {
         val cur = current
         if (closed || cur == null) return answer(null)
-        if (want == cur.wide) return answer(cur)
-        when (val w = wideSupport) {
-            null -> answer(cur)
-            is Wide.Camera -> answer(null)
-            is Wide.ZoomRatio -> {
-                val s = session ?: return answer(null)
-                val b = request ?: return answer(null)
-                val ratio = if (want) w.ratio else 1f
-                try {
-                    b.set(CaptureRequest.CONTROL_ZOOM_RATIO, ratio)
-                    s.setRepeatingRequest(b.build(), captureCallback, handler)
-                    val next = cur.copy(wide = want, phoneEqFocal = if (want) w.eqFocal else cur.mainEqFocal)
-                    current = next
-                    afterFrame(ratio, onClose = true) { answer(next) }
-                } catch (e: Exception) {
-                    Log.w(TAG, "zoom ratio switch failed", e)
-                    answer(cur)
-                }
-            }
+        val w = wideSupport
+        val wantWide = want < 1f
+        if (wantWide && (w == null || cur.wide)) return answer(cur)
+        // To or from a separate ultra-wide: another camera, so the caller reopens.
+        if (w is Wide.Camera && (wantWide || cur.wide)) return answer(null)
+        val ratio = if (wantWide) (w as Wide.ZoomRatio).ratio else ZoomSupport.clampTele(want.toDouble(), cur.maxZoom)
+        if (!cur.wide && !wantWide && zoomClose(cur.zoom, ratio)) return answer(cur)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return answer(cur)
+        val s = session ?: return answer(null)
+        val b = request ?: return answer(null)
+        try {
+            b.set(CaptureRequest.CONTROL_ZOOM_RATIO, ratio)
+            s.setRepeatingRequest(b.build(), captureCallback, handler)
+            val eq = if (wantWide) (w as Wide.ZoomRatio).eqFocal else cur.mainEqFocal * ratio
+            val next = cur.copy(wide = wantWide, zoom = ratio, phoneEqFocal = eq)
+            current = next
+            Log.i(TAG, ZoomSupport.describeZoom(ratio, eq))
+            afterFrame(ratio, onClose = true) { answer(next) }
+        } catch (e: Exception) {
+            Log.w(TAG, "zoom ratio switch failed", e)
+            answer(cur)
         }
     }
 
@@ -312,22 +324,33 @@ class CameraSession(
             val mainId = selectMainBackCamera(backs) ?: return fail("No back camera")
             val mainCh = backs.first { it.first == mainId }.second
             val mainEq = phoneEqFocal(eqFocal(mainCh))
-            val zoomLower = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                mainCh.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)?.lower
+            this.mainEq = mainEq
+            val zoomRange = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                mainCh.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)
             } else {
                 null
             }
+            val zoomLower = zoomRange?.lower
+            val maxZoom = ZoomSupport.maxRatio(Build.VERSION.SDK_INT, zoomRange?.upper)
             val others = backs.filter { it.first != mainId }
                 .mapNotNull { (id, ch) -> eqFocal(ch)?.takeIf { it.isFinite() && it > 0 }?.let { id to it } }
             val wideWay = WideSupport.choose(mainEq, zoomLower, Build.VERSION.SDK_INT, others)
             wideSupport = wideWay
-            Log.i(TAG, "main camera $mainId eq ${"%.1f".format(mainEq)} mm; ultra-wide: ${describe(wideWay)}")
+            Log.i(
+                TAG,
+                "main camera $mainId eq ${"%.1f".format(mainEq)} mm, zoom up to $maxZoom; " +
+                    "ultra-wide: ${describe(wideWay)}",
+            )
 
-            val wide = startWide && wideWay != null
+            val wide = startZoom < 1f && wideWay != null
             val id = if (wide && wideWay is Wide.Camera) wideWay.id else mainId
             val ch = if (id == mainId) mainCh else backs.first { it.first == id }.second
-            val activeEq = if (wide) eqOf(wideWay!!) else mainEq
-            val zoomRatio = if (wide && wideWay is Wide.ZoomRatio) wideWay.ratio else null
+            val zoomRatio = when {
+                wide && wideWay is Wide.ZoomRatio -> wideWay.ratio
+                !wide && startZoom > 1f && maxZoom > 1f -> ZoomSupport.clampTele(startZoom.toDouble(), maxZoom)
+                else -> null
+            }
+            val activeEq = if (wide) eqOf(wideWay!!) else mainEq * (zoomRatio ?: 1f)
 
             val map = ch.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                 ?: return fail("No stream configuration")
@@ -349,15 +372,15 @@ class CameraSession(
                 minIso = it.lower
                 maxIso = it.upper
             }
-            val availableApertures = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
-            defaultAperture = phoneAperture(availableApertures)
-            apertureListed = hasListedAperture(availableApertures)
+            listedApertures = ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
             val setup = PreviewSetup(
                 preview.width, preview.height, sensorOrientation,
                 phoneEqFocal = activeEq,
                 mainEqFocal = mainEq,
                 wideEqFocal = wideWay?.let(::eqOf),
                 wide = wide,
+                zoom = (activeEq / mainEq).toFloat(),
+                maxZoom = maxZoom,
             )
 
             surfaceTexture.setDefaultBufferSize(preview.width, preview.height)
@@ -501,6 +524,18 @@ class CameraSession(
             val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
             val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
             lastEmitMs = now
+            val physical = activePhysical(result)
+            // Per frame: on a logical multi-camera the aperture changes with the active lens.
+            val (aperture, assumed) = ZoomSupport.frameAperture(
+                result.get(CaptureResult.LENS_APERTURE), physical?.second, listedApertures,
+            )
+            val reportedZoom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                result.get(CaptureResult.CONTROL_ZOOM_RATIO)
+            } else {
+                null
+            }
+            val zoom = reportedZoom ?: current?.zoom ?: 1f
+            val camera = physical?.first ?: if (current?.wide == true) "wide" else "main"
 
             // Reads only the sampled pixels from the plane; no per-frame copy of the preview-size Y.
             val plane = img.planes[0]
@@ -513,8 +548,11 @@ class CameraSession(
                 "exposureNs" to exposure,
                 "sensitivity" to sensitivity,
                 "boost" to (result.get(CaptureResult.CONTROL_POST_RAW_SENSITIVITY_BOOST) ?: 100),
-                "aperture" to (result.get(CaptureResult.LENS_APERTURE)?.toDouble() ?: defaultAperture),
-                "apertureAssumed" to (result.get(CaptureResult.LENS_APERTURE) == null && !apertureListed),
+                "aperture" to aperture,
+                "apertureAssumed" to assumed,
+                "zoom" to zoom.toDouble(),
+                "camera" to camera,
+                "aeState" to ZoomSupport.aeStateName(result.get(CaptureResult.CONTROL_AE_STATE)),
                 "minExposureNs" to minExposureNs,
                 "maxExposureNs" to maxExposureNs,
                 "minIso" to minIso,
@@ -525,6 +563,25 @@ class CameraSession(
                 "histogram" to stats.histogram.toList(),
             )
             mainHandler.post { onStats(event) }
+        }
+    }
+
+    /**
+     * Camera thread. Kind and listed apertures of the physical camera behind [result] on a
+     * logical multi-camera; null where the phone does not say. Looked up once per camera.
+     */
+    private fun activePhysical(result: CaptureResult): Pair<String?, FloatArray?>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val id = result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID) ?: return null
+        return physicals.getOrPut(id) {
+            try {
+                val ch = manager.getCameraCharacteristics(id)
+                val kind = ZoomSupport.cameraKind(eqFocal(ch), mainEq)
+                Log.i(TAG, "physical camera $id: ${kind ?: "unknown"}")
+                kind to ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+            } catch (e: Exception) {
+                null to null
+            }
         }
     }
 

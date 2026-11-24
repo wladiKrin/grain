@@ -11,7 +11,7 @@ import io.flutter.view.TextureRegistry
 import java.io.File
 
 /**
- * `grain/meter` method channel (start / startScan / setWide / stop / setRegions / snapshot), the
+ * `grain/meter` method channel (start / startScan / setZoom / stop / setRegions / snapshot), the
  * `grain/meter/stats` event channel (METER mode) and the `grain/meter/qr` event channel
  * (SCAN mode). Everything here runs on the main thread.
  */
@@ -36,7 +36,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     /**
      * Counts deliberate teardowns (stop, mode change, detach). Work deferred across a close
-     * (a queued start, a wide-switch reopen, its fallback) captures it first and is dropped,
+     * (a queued start, a camera-switch reopen, its fallback) captures it first and is dropped,
      * answering "Camera stopped", when it changed meanwhile.
      */
     private var stops = 0
@@ -68,9 +68,9 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "start" -> start(CameraSession.Mode.METER, false, result)
-            "startScan" -> start(CameraSession.Mode.SCAN, false, result)
-            "setWide" -> setWide(call.argument<Boolean>("wide") == true, result)
+            "start" -> start(CameraSession.Mode.METER, 1f, result)
+            "startScan" -> start(CameraSession.Mode.SCAN, 1f, result)
+            "setZoom" -> setZoom(call.argument<Number>("zoom")?.toFloat() ?: 1f, result)
             "stop" -> {
                 stops++
                 teardown("Stopped") { result.success(null) }
@@ -82,23 +82,23 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     /**
-     * Opens a session in [mode] (on the ultra-wide when [wide] and it is a separate camera), or
-     * answers the running one's preview map. A running session in the other mode is closed first.
+     * Opens a session in [mode] at [zoom] (see [CameraSession.setZoom]), or answers the running
+     * one's preview map. A running session in the other mode is closed first.
      */
-    private fun start(mode: CameraSession.Mode, wide: Boolean, result: MethodChannel.Result) {
+    private fun start(mode: CameraSession.Mode, zoom: Float, result: MethodChannel.Result) {
         if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             result.error("denied", "Camera permission not granted", null)
             return
         }
         if (closing) {
             val gen = stops
-            afterClose.add { unlessStopped(gen, result) { start(mode, wide, result) } }
+            afterClose.add { unlessStopped(gen, result) { start(mode, zoom, result) } }
             return
         }
         val running = session
         if (running != null && running.mode != mode) {
             val gen = ++stops
-            teardown("Camera mode changed") { unlessStopped(gen, result) { start(mode, wide, result) } }
+            teardown("Camera mode changed") { unlessStopped(gen, result) { start(mode, zoom, result) } }
             return
         }
         ready?.let {
@@ -115,7 +115,7 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             context,
             entry.surfaceTexture(),
             mode,
-            wide,
+            zoom,
             onReady = { setup -> if (session === created) onSessionReady(entry, setup) },
             onError = { message ->
                 if (session === created) {
@@ -145,6 +145,8 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             put("mainEqFocal", setup.mainEqFocal)
             setup.wideEqFocal?.let { put("wideEqFocal", it) }
             put("wide", setup.wide)
+            put("zoom", setup.zoom.toDouble())
+            put("maxZoom", setup.maxZoom.toDouble())
         }
 
     private fun onSessionReady(entry: TextureRegistry.SurfaceTextureEntry, setup: CameraSession.PreviewSetup) {
@@ -156,18 +158,19 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     /**
-     * Zoom-ratio ultra-wide: switched in place, same texture. Separate ultra-wide camera: the
-     * session is reopened on the other camera (new texture); if that camera fails to open, the
-     * other one is reopened so a preview keeps running, and its map is the answer.
+     * Zoom ratios on the main camera (ultra-wide or tele): switched in place, same texture.
+     * Separate ultra-wide camera: the session is reopened on the other camera (new texture); if
+     * the ultra-wide fails to open, the main camera is reopened so a preview keeps running, and
+     * its map is the answer.
      */
-    private fun setWide(want: Boolean, result: MethodChannel.Result) {
+    private fun setZoom(want: Float, result: MethodChannel.Result) {
         val s = session
         val entry = texture
         if (s == null || entry == null || ready == null || closing) {
             result.error("camera_error", "Camera not running", null)
             return
         }
-        s.setWide(want) { setup ->
+        s.setZoom(want) { setup ->
             if (session !== s) {
                 result.error("camera_error", "Camera stopped", null)
             } else if (setup != null) {
@@ -187,13 +190,13 @@ class MeterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         if (stops == gen) action() else result.error("camera_error", "Camera stopped", null)
     }
 
-    private fun reopen(mode: CameraSession.Mode, wide: Boolean, gen: Int, result: MethodChannel.Result) {
-        start(mode, wide, object : MethodChannel.Result {
+    private fun reopen(mode: CameraSession.Mode, zoom: Float, gen: Int, result: MethodChannel.Result) {
+        start(mode, zoom, object : MethodChannel.Result {
             override fun success(value: Any?) = result.success(value)
 
             override fun error(code: String, message: String?, details: Any?) {
-                val failedToOpen = wide && code == "camera_error" && stops == gen
-                if (failedToOpen) start(mode, false, result) else result.error(code, message, details)
+                val failedToOpen = zoom < 1f && code == "camera_error" && stops == gen
+                if (failedToOpen) start(mode, 1f, result) else result.error(code, message, details)
             }
 
             override fun notImplemented() = result.notImplemented()

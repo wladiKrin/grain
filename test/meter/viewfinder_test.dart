@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/exposure/solver.dart';
 import 'package:grain/meter/widgets/viewfinder.dart';
@@ -242,17 +244,67 @@ void main() {
     );
   });
 
-  testWidgets('a long lens is zoomed in until its crop meets the box', (
-    t,
-  ) async {
+  for (final (focal, zoom) in const [(200.0, 6.0), (400.0, 13.0)]) {
+    testWidgets('with camera zoom, a ${focal.toInt()} mm crop meets the box', (
+      t,
+    ) async {
+      const box = Size(364, 335);
+      final crop = lensCrop(
+        preview: _preview,
+        lensFocal: focal,
+        phoneEqFocal: 25 * zoom,
+      );
+      final cropPx = await _pump(t, box, crop);
+      expect(
+        (cropPx.width - box.width).abs() < .5 ||
+            (cropPx.height - box.height).abs() < .5,
+        isTrue,
+      );
+    });
+  }
+
+  for (final landscape in [false, true]) {
+    testWidgets('600 mm without camera zoom draws no giant texture '
+        '(${landscape ? 'sideways' : 'upright'})', (t) async {
+      const box = Size(364, 335);
+      final crop = lensCrop(
+        preview: _preview,
+        lensFocal: 600,
+        phoneEqFocal: 25,
+        aspect: landscape ? 3 / 2 : 2 / 3,
+      );
+      final cropPx = await _pump(t, box, crop);
+      final content = t.getRect(find.byType(Texture));
+      expect(
+        math.max(content.width, content.height),
+        lessThanOrEqualTo(maxPreviewZoom * 364 + 1e-6),
+      );
+      // The frame is drawn smaller, centred, inside the box.
+      final boxRect = t.getRect(find.byType(Viewfinder));
+      expect(cropPx.width, lessThan(box.width));
+      expect(cropPx.height, lessThan(box.height));
+      expect(cropPx.center.dx, closeTo(boxRect.center.dx, .5));
+      expect(cropPx.center.dy, closeTo(boxRect.center.dy, .5));
+    });
+  }
+
+  test('previewRect caps the zoom for every focal stop', () {
     const box = Size(364, 335);
-    final crop = lensCrop(preview: _preview, lensFocal: 200, phoneEqFocal: 25);
-    final cropPx = await _pump(t, box, crop);
-    expect(
-      (cropPx.width - box.width).abs() < .5 ||
-          (cropPx.height - box.height).abs() < .5,
-      isTrue,
-    );
+    for (final f in focalStops) {
+      final r = previewRect(
+        box,
+        _preview,
+        crop: lensCrop(
+          preview: _preview,
+          lensFocal: f.toDouble(),
+          phoneEqFocal: 25,
+        ),
+      );
+      expect(
+        math.max(r.width, r.height),
+        lessThanOrEqualTo(maxPreviewZoom * 364 + 1e-6),
+      );
+    }
   });
 
   testWidgets('fitted to a sideways crop, the box takes its shape', (t) async {

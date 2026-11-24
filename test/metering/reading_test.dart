@@ -46,6 +46,32 @@ void main() {
       isTrue,
     );
   });
+  test('zoom, camera and AE state are read; absent means unknown', () {
+    expect(stats().zoom, 1);
+    expect(stats().camera, isNull);
+    expect(stats().aeState, isNull);
+    final m = {
+      'exposureNs': 1000000,
+      'sensitivity': 100,
+      'aperture': 2.8,
+      'minExposureNs': 1,
+      'maxExposureNs': 2,
+      'minIso': 50,
+      'maxIso': 6400,
+      'frameLuma': .18,
+      'cropLuma': .18,
+      'spotLuma': .18,
+      'histogram': <Object?>[1],
+      'zoom': 4.2,
+      'camera': 'tele',
+      'aeState': 'converged',
+    };
+    final s = MeterStats.fromMap(m);
+    expect(s.zoom, 4.2);
+    expect(s.camera, 'tele');
+    expect(s.aeState, 'converged');
+  });
+
   test('AE result to EV100', () {
     expect(
       readingFrom(stats(), area: MeterArea.average)!.ev100,
