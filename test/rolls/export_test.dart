@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grain/gear/save.dart';
 import 'package:grain/rolls/export.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/snapshot_store.dart';
@@ -218,5 +219,89 @@ void main() {
       'roll-4-ilford-hp5-plus.json',
     ]);
     expect(platform.sharedSubjects.single, 'Roll 4 · Ilford HP5 Plus');
+    expect(platform.saves, isEmpty);
+  });
+
+  for (final (label, result, message, closes) in [
+    ('saved', null, 'Saved 2 files', true),
+    ('failed', const SaveFailed('no space'), "Couldn't save: no space", false),
+    ('cancelled', const SaveCancelled(), null, false),
+  ]) {
+    testWidgets('export sheet saves to the device: $label', (tester) async {
+      final rolls = inMemoryRolls();
+      final started = await tester.runAsync(
+        () => rolls.startRoll(
+          filmStock: 'Ilford HP5 Plus',
+          filmType: FilmType.bwNeg,
+          boxIso: 400,
+          pushThirds: 0,
+          body: null,
+          size: 36,
+          startFrame: StartFrame.one,
+        ),
+      );
+      final platform = FakeGearPlatform()..saveResult = result;
+      addTearDown(() {
+        final d = platform.exportDir;
+        if (d != null && d.existsSync()) d.deleteSync(recursive: true);
+      });
+      late BuildContext ctx;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (c) {
+                ctx = c;
+                return const SizedBox();
+              },
+            ),
+          ),
+        ),
+      );
+      unawaited(
+        showExportSheet(
+          ctx,
+          roll: started!.copyWith(number: 4),
+          rolls: rolls,
+          platform: platform,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 200)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Share'), findsOneWidget);
+      await tester.tap(find.text('Save to device'));
+      for (var i = 0; i < 50 && platform.saves.isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+      expect(platform.saves.single, [
+        ('roll-4-ilford-hp5-plus.csv', 'text/csv'),
+        ('roll-4-ilford-hp5-plus.json', 'application/json'),
+      ]);
+      expect(platform.sharedPaths, isEmpty);
+      expect(
+        find.text('Export roll 4'),
+        closes ? findsNothing : findsOneWidget,
+      );
+      if (message == null) {
+        expect(find.byType(SnackBar), findsNothing);
+      } else {
+        expect(find.text(message), findsOneWidget);
+      }
+    });
+  }
+
+  test('mimeOf and savedMessage', () {
+    expect(mimeOf('a.zip'), 'application/zip');
+    expect(mimeOf('a.CSV'), 'text/csv');
+    expect(mimeOf('a'), 'application/octet-stream');
+    expect(savedMessage(['x.zip']), 'Saved x.zip');
+    expect(savedMessage(['a', 'b', 'c']), 'Saved 3 files');
   });
 }

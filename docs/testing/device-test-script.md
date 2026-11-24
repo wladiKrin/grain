@@ -278,6 +278,11 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, frame orientation, camera-shake warning and click sound follow the file; Appearance, calibration and location stay as they were | |
 | 8.11 | Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |
 | 8.12 | Create a roll, log and edit a frame, export the roll (CSV and backup zip) on the current build | All work | |
+| 8.14 | Roll export sheet > Save to device; pick a folder in Downloads, then one in Drive | The system folder picker opens; the three files (CSV, JSON, snapshots zip) appear in the folder; the snackbar says "Saved 3 files" and the sheet closes | |
+| 8.15 | Settings > Export everything > Save to device; choose a location | The picker suggests grain-backup-<date>.zip; the file is there and opens as a zip; the snackbar says "Saved grain-backup-<date>.zip" | |
+| 8.16 | Start Save to device (roll sheet and Export everything), then back out of the picker | Nothing happens: no snackbar, the sheet stays usable | |
+| 8.17 | Save the same roll to the same folder twice | The second time the files get a renamed copy (e.g. "(1)"); nothing is overwritten | |
+| 8.18 | Choose Share in the roll sheet and in Export everything | The share sheet opens as before | |
 | 8.13 | The auto-backup restore uninstalls the app, so it is step 13, at the end | — | |
 
 ## 9. Settings and permissions (blocked flows)

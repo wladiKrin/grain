@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'codec.dart';
+import 'save.dart';
 
 /// The two platform touchpoints of sharing; replaced by a fake in tests.
 abstract class GearPlatform {
@@ -17,6 +18,10 @@ abstract class GearPlatform {
 
   /// Offers the files at [paths] to the share sheet.
   Future<void> sharePaths(List<String> paths, {required String subject});
+
+  /// Copies the files at [paths] to a place the user picks: a new file for
+  /// one, a folder for several.
+  Future<SaveResult> saveFiles(List<String> paths);
 
   /// Lets the user pick a file and returns a readable path; null when
   /// cancelled.
@@ -67,6 +72,11 @@ class SystemGearPlatform implements GearPlatform {
       SharePlus.instance.share(
         ShareParams(files: [for (final p in paths) XFile(p)], subject: subject),
       );
+
+  @override
+  Future<SaveResult> saveFiles(List<String> paths) => const SaveChannel().save([
+    for (final p in paths) (path: p, name: p.substring(p.lastIndexOf('/') + 1)),
+  ]);
 
   @override
   Future<String?> pickFilePath() async {

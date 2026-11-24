@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/backup/backup.dart';
 import 'package:grain/gear/gear_controller.dart';
+import 'package:grain/gear/save.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
 import 'package:grain/settings/licences.dart';
@@ -268,13 +269,47 @@ void main() {
     await _reveal(tester, find.text('Export everything'));
     expect(find.text('BACKUP'), findsOneWidget);
     await tester.tap(find.text('Export everything'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save to device'), findsOneWidget);
+    await tester.tap(find.text('Share'));
     await _until(tester, () => platform.sharedPaths.isNotEmpty);
     expect(platform.sharedPaths.single.map((p) => p.split('/').last), [
       'grain-backup-2026-11-21.zip',
     ]);
     expect(platform.sharedSubjects.single, 'Grain backup 21 Nov 2026');
+    expect(platform.saves, isEmpty);
     await tester.pumpAndSettle();
   });
+
+  for (final (label, result, message) in [
+    ('saved', null, 'Saved grain-backup-2026-11-21.zip'),
+    ('failed', const SaveFailed('disk full'), "Couldn't save: disk full"),
+    ('cancelled', const SaveCancelled(), null),
+  ]) {
+    testWidgets('export everything saves to the device: $label', (
+      tester,
+    ) async {
+      final s = Settings.inMemory();
+      final platform = FakeGearPlatform()..saveResult = result;
+      addTearDown(() => platform.exportDir?.deleteSync(recursive: true));
+      await tester.pumpWidget(_app(s, null, null, platform));
+      await _reveal(tester, find.text('Export everything'));
+      await tester.tap(find.text('Export everything'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save to device'));
+      await _until(tester, () => platform.saves.isNotEmpty);
+      await tester.pumpAndSettle();
+      expect(platform.saves.single, [
+        ('grain-backup-2026-11-21.zip', 'application/zip'),
+      ]);
+      expect(platform.sharedPaths, isEmpty);
+      if (message == null) {
+        expect(find.byType(SnackBar), findsNothing);
+      } else {
+        expect(find.text(message), findsOneWidget);
+      }
+    });
+  }
 
   testWidgets('import everything confirms and reports', (tester) async {
     final s = Settings.inMemory();

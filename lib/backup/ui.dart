@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../gear/gear_controller.dart';
 import '../gear/platform.dart';
+import '../gear/save.dart';
 import '../rolls/roll_controller.dart';
 import '../settings/settings.dart';
 import '../ui/theme.dart';
@@ -63,7 +64,53 @@ class _BackupSectionState extends State<BackupSection> {
     }
   }
 
-  Future<void> _export() => _run(() async {
+  /// Null when dismissed; else true to save, false to share.
+  Future<bool?> _choose() => showModalBottomSheet<bool>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 16,
+          children: [
+            const Text(
+              'Export everything',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            ),
+            Row(
+              spacing: 12,
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Save to device'),
+                  ),
+                ),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Share'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _export() async {
+    final save = await _choose();
+    if (save == null || !mounted) return;
+    await _run(() => _write(save: save));
+  }
+
+  Future<void> _write({required bool save}) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final now = widget.now();
       final dir = await widget.platform.exportDirectory();
@@ -74,13 +121,26 @@ class _BackupSectionState extends State<BackupSection> {
         settings: widget.settings,
         now: now,
       );
-      await widget.platform.sharePaths([
-        file.path,
-      ], subject: 'Grain backup ${backupDateLabel(now)}');
+      if (!save) {
+        await widget.platform.sharePaths([
+          file.path,
+        ], subject: 'Grain backup ${backupDateLabel(now)}');
+        return;
+      }
+      switch (await widget.platform.saveFiles([file.path])) {
+        case Saved(:final names):
+          messenger.showSnackBar(SnackBar(content: Text(savedMessage(names))));
+        case SaveCancelled():
+          break;
+        case SaveFailed(:final message):
+          messenger.showSnackBar(
+            SnackBar(content: Text("Couldn't save: $message")),
+          );
+      }
     } on Object {
       await _message("Can't export", 'The backup could not be written.');
     }
-  });
+  }
 
   Future<void> _import() => _run(() async {
     try {

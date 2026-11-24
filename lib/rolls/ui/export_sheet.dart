@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../../gear/platform.dart';
+import '../../gear/save.dart';
 import '../export.dart';
 import '../model.dart';
 import '../roll_controller.dart';
@@ -47,9 +48,14 @@ class _ExportSheetState extends State<_ExportSheet> {
 
   bool get _hasSnapshots => _frames?.any((f) => f.snapshot != null) ?? false;
 
-  Future<void> _share() async {
+  Future<void> _share() => _export(save: false);
+
+  Future<void> _save() => _export(save: true);
+
+  Future<void> _export({required bool save}) async {
     final frames = _frames;
     if (frames == null || _busy) return;
+    final messenger = ScaffoldMessenger.of(context);
     setState(() {
       _busy = true;
       _error = null;
@@ -63,9 +69,30 @@ class _ExportSheetState extends State<_ExportSheet> {
         store: widget.rolls.snapshots,
         withSnapshots: _snapshots && _hasSnapshots,
       );
-      await widget.platform.sharePaths([
-        for (final f in files) f.path,
-      ], subject: 'Roll ${widget.roll.number} · ${widget.roll.filmStock}');
+      final paths = [for (final f in files) f.path];
+      if (save) {
+        final r = await widget.platform.saveFiles(paths);
+        if (!mounted) return;
+        switch (r) {
+          case Saved(:final names):
+            messenger.showSnackBar(
+              SnackBar(content: Text(savedMessage(names))),
+            );
+            Navigator.pop(context);
+          case SaveCancelled():
+            setState(() => _busy = false);
+          case SaveFailed(:final message):
+            messenger.showSnackBar(
+              SnackBar(content: Text("Couldn't save: $message")),
+            );
+            setState(() => _busy = false);
+        }
+        return;
+      }
+      await widget.platform.sharePaths(
+        paths,
+        subject: 'Roll ${widget.roll.number} · ${widget.roll.filmStock}',
+      );
       if (mounted) Navigator.pop(context);
     } on Object {
       if (mounted) {
@@ -104,9 +131,22 @@ class _ExportSheetState extends State<_ExportSheet> {
                 onChanged: (v) => setState(() => _snapshots = v),
               ),
             if (_error != null) Text(_error!, textAlign: TextAlign.center),
-            FilledButton(
-              onPressed: _frames == null || _busy ? null : _share,
-              child: const Text('Share'),
+            Row(
+              spacing: 12,
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _frames == null || _busy ? null : _save,
+                    child: const Text('Save to device'),
+                  ),
+                ),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _frames == null || _busy ? null : _share,
+                    child: const Text('Share'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
