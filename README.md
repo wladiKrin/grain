@@ -20,15 +20,17 @@ of each roll. There is no paywall, no ads and no tracking.
 - Rolls and a frame log with a reference snapshot per frame.
 - CSV, JSON and zip export of rolls, and backup and restore.
 - A map of where frames and readings were logged (with Save location on),
-  drawn from bundled Natural Earth outlines.
+  drawn by MapLibre Native (vector rendering on the GPU): offline from
+  bundled Natural Earth outlines and place names, or in an online style.
 - Works offline: no ads, no tracking, no Google Play Services. The meter never
   uses the network. The app holds the INTERNET permission only for the map's
-  optional online tiles, and goes online only with an online map style
-  chosen (Settings > Map, or the map's layers button); the default style is
-  Offline. The styles load tiles from one of tiles.openfreemap.org
-  (Streets, Minimal: OpenFreeMap vector tiles drawn in the app),
+  optional online styles, and goes online only with one chosen (Settings >
+  Map, or the map's layers button); the default style is Offline, with which
+  MapLibre is told there is no network and every request is refused before
+  it leaves the phone. The styles load from one of tiles.openfreemap.org
+  (Streets, Minimal: OpenFreeMap's vector styles),
   tile.openstreetmap.org (Standard, Muted) or opentopomap.org
-  (Topographic), and nothing else.
+  (Topographic), and nothing else. No Mapbox SDK, no API key, no telemetry.
 
 ## Screenshots
 
@@ -39,7 +41,8 @@ To be added after the first device session.
 You need:
 
 - Flutter 3.50.1 (stable)
-- JDK 17
+- JDK 21 (the `maplibre_gl` plugin's Android side is compiled for Java 21;
+  JDK 17 fails with "invalid source release: 21")
 - The Android SDK (platform 36 or 37, build-tools, platform-tools and the NDK
   that `flutter doctor` asks for; Gradle installs a missing NDK itself once the
   licences are accepted)
@@ -54,7 +57,7 @@ The maintainer keeps a user-space toolchain in an environment script,
 your installation, for example:
 
 ```
-export JAVA_HOME="$HOME/.local/jdk-17"
+export JAVA_HOME="$HOME/.local/jdk-21"
 export ANDROID_HOME="$HOME/Android/Sdk"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export PATH="$HOME/flutter/bin:$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -131,6 +134,17 @@ notices under Settings > Licences.
 - The Flutter engine and framework and the pub packages (BSD, MIT and Apache
   2.0 licences): Flutter collects their notices into the build.
 - Inter Tight: SIL Open Font License 1.1 (`assets/licenses/ofl-1.1.txt`).
+- MapLibre Native for Android 13.7.1 (`org.maplibre.gl:android-sdk-opengl`,
+  through the `maplibre_gl` plugin, itself BSD 3-Clause): BSD 2-Clause
+  (`assets/licenses/maplibre-native.txt`).
+- OkHttp 5 (the map's HTTP client): Apache License 2.0.
+- Noto Sans Regular and Bold glyphs for the offline map's place names (from
+  openmaptiles/fonts, cut to the characters used by `tool/basemap/glyphs.dart`):
+  SIL Open Font License 1.1 (`assets/licenses/noto-sans.txt`).
+- Natural Earth (the offline map): public domain
+  (`assets/licenses/natural-earth.txt`).
+- OpenFreeMap and OpenMapTiles (the Streets and Minimal styles): CC-BY 4.0,
+  with OpenStreetMap data under the ODbL (`assets/licenses/openfreemap.txt`).
 - SQLite: public domain (`assets/licenses/sqlite.txt`).
 - The gear library: CC0 1.0 (`assets/licenses/cc0-1.0.txt`).
 

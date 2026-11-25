@@ -100,19 +100,36 @@ same options as the release command,
   `changelogs/<versionCode>.txt`, `images/icon.png`).
 - Build the unsigned release with `GRAIN_UNSIGNED=1` as above.
 - The app has no ads, no tracking and no Google Play Services.
-- The app requests `INTERNET` only for the map's online tiles, loaded only
-  with an online map style chosen in Settings > Map or on the map (the
-  default style is Offline): tiles.openfreemap.org (Streets, Minimal;
-  vector tiles drawn in the app by `vector_map_tiles`, OpenMapTiles schema
-  under CC-BY 4.0, data © OpenStreetMap contributors under the ODbL),
-  tile.openstreetmap.org (Standard, Muted) or opentopomap.org
-  (Topographic). Every request names Grain in its User-Agent; at most two
-  connections go to a raster server and four to OpenFreeMap. The tiles
-  are cached on the phone (at most 50 MB raster, 40 MB vector, plus the
-  OpenFreeMap style files) and nothing is fetched ahead. The meter and
-  everything else work without the network; the offline map is drawn from
-  bundled Natural Earth data (public domain, `assets/map/`, reproduced by
-  `tool/basemap/`).
+- The map is drawn by MapLibre Native for Android 13.7.1 (BSD-2, the
+  `org.maplibre.gl:android-sdk-opengl` AAR from Maven Central, with a
+  prebuilt `libmaplibre.so`) through the official `maplibre_gl` plugin
+  0.28.1 (BSD-3). `android/gradle.properties` sets
+  `maplibre_gl.playServicesLocation=false`, so nothing from Google is
+  downloaded or compiled (0 `com/google/android/gms` in the dex files).
+  MapLibre has no telemetry (no telemetry classes in the AAR or the dex;
+  the plugin's telemetry calls are no-ops). The plugin's Android side is
+  compiled for Java 21: build with JDK 21.
+- MapLibre's manifest asks for `ACCESS_NETWORK_STATE` and
+  `ACCESS_WIFI_STATE`; Grain removes both (`tools:node="remove"`), and tells
+  MapLibre whether it is connected instead (`MapNetPlugin.kt`). The merged
+  manifest has `CAMERA`, the two location permissions and `INTERNET`, plus
+  AndroidX's own non-network `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`.
+- The app requests `INTERNET` only for the map's online styles, loaded only
+  with one chosen in Settings > Map or on the map (the default style is
+  Offline: MapLibre is told it is offline, and the app's HTTP client refuses
+  any request): tiles.openfreemap.org (Streets, Minimal; OpenFreeMap's
+  vector styles, OpenMapTiles schema under CC-BY 4.0, data © OpenStreetMap
+  contributors under the ODbL), tile.openstreetmap.org (Standard, Muted) or
+  opentopomap.org (Topographic). Every request goes through Grain's OkHttp
+  client, which names Grain in its User-Agent; at most two connections go
+  to OpenStreetMap or OpenTopoMap and four to an OpenFreeMap host. MapLibre
+  keeps what it loads in its own cache on the phone (its default ambient
+  cache, about 50 MB) and fetches only what the screen needs. The meter
+  and everything else work without the network; the offline map is drawn
+  from bundled Natural Earth data (public domain, `assets/map/basemap.bin`,
+  written once as GeoJSON to the app's cache directory) with bundled Noto
+  Sans glyphs (OFL, `assets/map/glyphs/`), both reproduced by
+  `tool/basemap/`.
 - `tool/icon/icon.svg` is the source of the store icon:
   `rsvg-convert -w 512 -h 512 tool/icon/icon.svg -o fastlane/metadata/android/en-US/images/icon.png`.
 
