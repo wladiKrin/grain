@@ -442,7 +442,27 @@ class RollController extends ChangeNotifier {
 
   // ---- logging -----------------------------------------------------------
 
-  Future<Frame> logFrame(Exposure e, {String? note}) async {
+  Future<Frame> logFrame(Exposure e, {String? note}) =>
+      _addFrame(e, note: note, snapshot: true);
+
+  /// Records a frame shot without a reading: a blank at the next number
+  /// with the time (and location), the camera and [lens] (only its lens and
+  /// focal length are kept), but no snapshot. It can be filled in later.
+  Future<Frame> skipFrame({Exposure lens = Exposure.blank}) => _addFrame(
+    Exposure(
+      lensId: lens.lensId,
+      lensMake: lens.lensMake,
+      lensName: lens.lensName,
+      focal: lens.focal,
+    ),
+    snapshot: false,
+  );
+
+  Future<Frame> _addFrame(
+    Exposure e, {
+    String? note,
+    required bool snapshot,
+  }) async {
     final roll = active;
     if (roll == null) throw StateError('No active roll');
     final list = _frames.putIfAbsent(roll.id, () => []);
@@ -466,6 +486,7 @@ class RollController extends ChangeNotifier {
     final persisted = _enqueue(() => _repo.saveFrames([frame]));
     _attachLater(
       id: frame.id,
+      snapshot: snapshot,
       attachSnapshot: (name) => _setFrameField(frame.id, snapshot: name),
       attachFix: (fix) => _setFrameField(frame.id, location: fix),
       exists: () => _findFrame(frame.id) != null,
@@ -509,12 +530,13 @@ class RollController extends ChangeNotifier {
   /// Starts the snapshot and location requests without waiting for them.
   void _attachLater({
     required String id,
+    bool snapshot = true,
     required bool Function(String name) attachSnapshot,
     required bool Function(GeoFix fix) attachFix,
     required bool Function() exists,
   }) {
     final take = _takeSnapshot;
-    if (_settings.snapshots && take != null) {
+    if (snapshot && _settings.snapshots && take != null) {
       _pendingSnapshots.add(id);
       unawaited(() async {
         try {

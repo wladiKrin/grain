@@ -261,6 +261,23 @@ void main() {
     expect(blankY, lessThan(t.getTopLeft(find.text('4')).dy));
   });
 
+  testWidgets('a skipped frame shows as blank, with its lens', (t) async {
+    await start(t, n: 1);
+    await t.runAsync(
+      () => rolls.skipFrame(
+        lens: const Exposure(lensName: 'Canon FD 50mm f/1.8', focal: 50),
+      ),
+    );
+    await pumpScreen(t);
+    expect(labels(t), ['1', '2']);
+    expect(find.text('Blank'), findsOneWidget);
+    expect(find.textContaining('50 mm'), findsOneWidget);
+    expect(
+      t.getTopLeft(find.text('Blank')).dy,
+      greaterThan(t.getTopLeft(find.text('f/5.6 · 1/125')).dy),
+    );
+  });
+
   testWidgets('delete frame moves later frames down', (t) async {
     await start(t);
     await pumpScreen(t);

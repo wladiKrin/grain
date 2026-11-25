@@ -197,6 +197,7 @@ void main() {
         await t.pump();
         expect(t.takeException(), isNull);
         expect(find.text('Log frame 1'), findsOneWidget);
+        expect(find.bySemanticsLabel('Skip frame'), findsOneWidget);
         expect(find.text('Start roll'), findsNothing);
         expect(find.text('Delta 3200 · 3200 → 12800'), findsOneWidget);
         expect(

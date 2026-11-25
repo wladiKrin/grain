@@ -169,6 +169,74 @@ void main() {
     expect(rolls.activeFrames, isEmpty);
   });
 
+  testWidgets('Skip frame shows only when a roll logs here', (t) async {
+    await t.runAsync(() => gear.selectBody(a1));
+    await pumpApp(t);
+    expect(find.bySemanticsLabel('Skip frame'), findsNothing);
+    await startRoll(t, a1);
+    await t.pump();
+    expect(find.bySemanticsLabel('Skip frame'), findsOneWidget);
+    expect(t.getSize(find.bySemanticsLabel('Skip frame')), const Size(44, 44));
+    await t.runAsync(() => gear.selectBody(ae1));
+    await t.pump();
+    expect(find.text('Save reading'), findsOneWidget);
+    expect(find.bySemanticsLabel('Skip frame'), findsNothing);
+  });
+
+  testWidgets('Skip frame logs a blank with the lens, no snapshot, and '
+      'Undo removes it', (t) async {
+    await t.runAsync(() => gear.selectBody(a1));
+    await pumpApp(t);
+    await startRoll(t, a1);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Skip frame'));
+    await t.pump();
+    expect(find.text('Frame 1 skipped'), findsOneWidget);
+    expect(find.text('Log frame 2'), findsOneWidget);
+    expect(find.text('Roll 4 · frame 2/36'), findsOneWidget);
+    expect(haptics.ticks, [false]);
+    await settle(t);
+    expect(src.calls.where((c) => c.startsWith('snapshot(')), isEmpty);
+    final f = rolls.activeFrames.single;
+    expect(f.label, '1');
+    expect(f.bodyId, a1.id);
+    expect(f.takenAt, isNotNull);
+    expect(f.snapshot, isNull);
+    expect(f.exposure.hasNoValues, isTrue);
+    expect(f.exposure.lensName, gear.lens?.name);
+    await t.pump(const Duration(milliseconds: 400));
+    await t.tap(find.text('Undo'));
+    await settle(t);
+    expect(rolls.activeFrames, isEmpty);
+    expect(find.text('Log frame 1'), findsOneWidget);
+  });
+
+  testWidgets('the skip snack bar goes away by itself, unless a screen '
+      'reader is on', (t) async {
+    await t.runAsync(() => gear.selectBody(a1));
+    await pumpApp(t);
+    await startRoll(t, a1);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Skip frame'));
+    await t.pump();
+    expect(find.text('Frame 1 skipped'), findsOneWidget);
+    for (var i = 0; i < 6; i++) {
+      await t.pump(const Duration(seconds: 1));
+    }
+    expect(find.text('Frame 1 skipped'), findsNothing);
+    t.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(accessibleNavigation: true);
+    addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Skip frame'));
+    await t.pump();
+    for (var i = 0; i < 6; i++) {
+      await t.pump(const Duration(seconds: 1));
+    }
+    expect(find.text('Frame 2 skipped'), findsOneWidget);
+    await settle(t);
+  });
+
   testWidgets('the snack bar does not cover the button', (t) async {
     await t.runAsync(() => gear.selectBody(a1));
     await pumpApp(t);

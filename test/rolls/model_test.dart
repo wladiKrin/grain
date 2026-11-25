@@ -51,6 +51,10 @@ void main() {
 
   test('value equality and exposure blank', () {
     expect(Exposure.blank.isBlank, isTrue);
+    expect(Exposure.blank.hasNoValues, isTrue);
+    expect(const Exposure(lensName: 'FD 50', focal: 50).hasNoValues, isTrue);
+    expect(const Exposure(lensName: 'FD 50', iso: 100).hasNoValues, isFalse);
+    expect(const Exposure(mode: MeterMode.manual).hasNoValues, isFalse);
     expect(const Exposure(iso: 100).isBlank, isFalse);
     expect(const Exposure(iso: 100), const Exposure(iso: 100));
     expect(

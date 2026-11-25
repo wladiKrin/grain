@@ -167,6 +167,58 @@ void main() {
     expect((await repo.frames(roll.id)).single.location, fix);
   });
 
+  test('a skipped frame is a blank with the time, camera, lens and '
+      'location, and no snapshot', () async {
+    await settings.setLocation(true);
+    const fix = GeoFix(latitude: 52.52, longitude: 13.405);
+    loc.fix = fix;
+    final roll = await start();
+    await rolls.logFrame(e);
+    final pending = rolls.skipFrame(
+      lens: const Exposure(
+        lensId: 'fd-50',
+        lensMake: 'Canon',
+        lensName: 'FD 50mm f/1.8',
+        focal: 50,
+        // Only the lens is kept.
+        iso: 400,
+        aperture: 8,
+      ),
+    );
+    expect(rolls.activeFrames.map((f) => f.label), ['1', '2']);
+    expect(rolls.nextLabel, '3');
+    final f = await pending;
+    await pumpEventQueue();
+    // Only the logged frame asked for a snapshot.
+    expect(snaps, hasLength(1));
+    expect(f.number, 2);
+    expect(f.takenAt, DateTime.utc(2026, 11, 21, 13, 3, 22));
+    expect(f.utcOffsetMinutes, isNotNull);
+    expect(f.bodyId, 'a1');
+    expect(f.bodyModel, 'A-1');
+    expect(f.exposure.lensName, 'FD 50mm f/1.8');
+    expect(f.exposure.focal, 50);
+    expect(f.exposure.iso, isNull);
+    expect(f.exposure.aperture, isNull);
+    expect(f.exposure.mode, isNull);
+    expect(f.exposure.hasNoValues, isTrue);
+    expect(f.exposure.isBlank, isFalse);
+    final stored = (await repo.frames(roll.id)).last;
+    expect(stored.location, fix);
+    expect(stored.snapshot, isNull);
+    expect(stored.exposure, f.exposure);
+    // Undo is a delete, as for a logged frame.
+    await rolls.deleteFrame(roll.id, f.id);
+    expect(rolls.nextLabel, '2');
+  });
+
+  test('a skip without a lens is fully blank', () async {
+    await start();
+    final f = await rolls.skipFrame();
+    expect(f.exposure.isBlank, isTrue);
+    expect(f.takenAt, isNotNull);
+  });
+
   test('00 start, 36 frames: counter runs on past the size', () async {
     await start(sf: StartFrame.doubleZero);
     for (var i = 0; i < 38; i++) {

@@ -250,6 +250,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 7.1 | Start a roll; log a frame | The new frame number shows with no visible delay (at most one frame); the snapshot and location arrive later without blocking | |
 | 7.2 | Log a frame at 35 mm, then at 50 mm (portrait) | A snapshot appears within ~1 s, upright, matching the viewfinder crop of that lens | |
 | 7.2b | Log a frame and wait | The "Frame N logged" message with Undo disappears by itself after about 3 s | |
+| 7.2c | With a roll logging for the selected camera, tap the small Skip frame button (⏭) beside Log frame; then open the roll; then select another camera; then turn TalkBack on and skip again | A light tick; "Frame N skipped" with Undo for about 3 s, the button now reads Log frame N+1 and Undo takes the frame back; in the roll view frame N reads Blank with the lens and time, has no thumbnail, and its editor fills it in; with another camera (Save reading) the Skip button is gone; TalkBack reads "Skip frame" and the message stays until dismissed | |
 | 7.3 | Hide the viewfinder and log a frame | A snapshot is still saved | |
 | 7.4 | `adb shell run-as io.github.wladikrin.grain ls -l files/snapshots` | Each file 60–120 KB, long edge ≤ 1000 px | |
 | 7.5 | Log 10 frames rapidly | 10 snapshot files; the dial stays smooth | |
@@ -258,7 +259,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 7.8 | Open the phone's gallery app | No Grain snapshots appear there | |
 | 7.9 | Log a frame, press Home at once, return | The snapshot still attaches to that frame on return | |
 | 7.10 | Note: the activity is portrait-locked; snapshots are rotated by sensor orientation only, so a frame logged with the phone held landscape is stored sideways (by design for now; device orientation/EXIF is later work) | — | |
-| 7.11 | At 360 px width, with a roll at frame 37/36 +1 and a Delta 3200 · 3200 → 12800 film | "Roll 12 · frame 37/36 +1" and "Delta 3200 · 3200 → 12800" fit the header without overflow; the Log button, rolls button and Start roll link fit | |
+| 7.11 | At 360 px width, with a roll at frame 37/36 +1 and a Delta 3200 · 3200 → 12800 film | "Roll 12 · frame 37/36 +1" and "Delta 3200 · 3200 → 12800" fit the header without overflow; the Log button, Skip frame button, rolls button and Start roll link fit | |
 | 7.12 | Tap Log frame twice quickly | The Undo snack bar floats above the button and never covers it; both frames log | |
 | 7.13 | Settings: turn Save location on | System dialog offers precise / approximate; refuse → switch stays off with "Location permission was not granted." | |
 | 7.14 | Location on: log a frame | A fix is attached within 10 s (indoors: the last known fix) | |

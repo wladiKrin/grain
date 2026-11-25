@@ -107,6 +107,40 @@ void main() {
     );
   });
 
+  test('a skipped frame exports its time and lens, no exposure values', () {
+    final skipped = Frame(
+      id: 's',
+      rollId: 'r',
+      position: 0,
+      number: 8,
+      bodyId: 'b1',
+      bodyMake: 'Canon',
+      bodyModel: 'A-1',
+      exposure: const Exposure(
+        lensId: 'canon-fd-50-1.8',
+        lensMake: 'Canon',
+        lensName: 'FD 50mm f/1.8',
+        focal: 50,
+      ),
+      takenAt: DateTime.utc(2026, 11, 21, 13, 3, 22),
+      utcOffsetMinutes: 60,
+      updatedAt: t0,
+    );
+    expect(
+      row(rollToCsv(r4, [skipped]), 1),
+      '4,Ilford HP5 Plus,bw-neg,400,+1.33,1000,Canon A-1,Canon,A-1,8,'
+      '2026-11-21T14:03:22,+01:00,,,,,FD 50mm f/1.8,50,,,,,,,',
+    );
+    final json = rollToJson(r4, [skipped]);
+    final f = (json['frames'] as List).single as Map;
+    expect(f['takenAt'], '2026-11-21T14:03:22+01:00');
+    expect(f['aperture'], isNull);
+    expect(f['iso'], isNull);
+    expect(f['mode'], isNull);
+    expect((f['lens'] as Map)['name'], 'FD 50mm f/1.8');
+    expect(rollFromJson(json).$2, [skipped]);
+  });
+
   test('JSON is EXIF-ready', () {
     final f = (rollToJson(r4, [frame()])['frames'] as List).single as Map;
     expect(f['number'], '12');

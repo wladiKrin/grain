@@ -119,6 +119,17 @@ class Exposure {
 
   bool get isBlank => _fields.every((f) => f == null);
 
+  /// No exposure values: blank but for the lens and focal length, as a
+  /// skipped frame records it. Shown as a blank frame.
+  bool get hasNoValues =>
+      Exposure(
+        lensId: lensId,
+        lensMake: lensMake,
+        lensName: lensName,
+        focal: focal,
+      ) ==
+      this;
+
   Exposure copyWith({
     MeterMode? Function()? mode,
     double? Function()? aperture,

@@ -331,7 +331,7 @@ class _RollScreenState extends State<RollScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (e.isBlank)
+                    if (e.hasNoValues)
                       Text(
                         'Blank',
                         style: TextStyle(color: g.faded, fontSize: 16),

@@ -10,6 +10,7 @@ import '../exposure/scales.dart';
 import '../exposure/solver.dart';
 import '../gear/gear_controller.dart';
 import '../metering/reading.dart';
+import '../rolls/model.dart';
 import '../rolls/push.dart';
 import '../rolls/roll_controller.dart';
 import '../ui/haptics.dart';
@@ -124,6 +125,44 @@ class _MeterScreenState extends State<MeterScreen> {
       done = reading;
       undo = () async => _rolls.deleteReading((await reading).id);
     }
+    _showLogged(messenger, message, done: done, undo: undo);
+  }
+
+  /// Records a frame shot on the camera without a reading: a blank with the
+  /// time, camera and lens, but no snapshot.
+  void _skip() {
+    if (!_rolls.logsFor(_gear.body)) return;
+    widget.haptics.tick(strong: false);
+    final lens = _gear.lens;
+    final messenger = ScaffoldMessenger.of(context);
+    final message = 'Frame ${_rolls.nextLabel} skipped';
+    final frame = _rolls.skipFrame(
+      lens: Exposure(
+        lensId: lens?.id,
+        lensMake: lens?.make,
+        lensName: lens?.name,
+        focal: lens == null ? null : _c.focal,
+      ),
+    );
+    _showLogged(
+      messenger,
+      message,
+      done: frame,
+      undo: () async {
+        final f = await frame;
+        await _rolls.deleteFrame(f.rollId, f.id);
+      },
+    );
+  }
+
+  /// The snack bar after a log or a skip, with Undo; "Not saved" replaces
+  /// it when the write fails.
+  void _showLogged(
+    ScaffoldMessengerState messenger,
+    String message, {
+    required Future<void> done,
+    required Future<void> Function() undo,
+  }) {
     unawaited(
       done.then<void>(
         (_) {},
@@ -384,6 +423,7 @@ class _MeterScreenState extends State<MeterScreen> {
                             ? 'Log frame ${_rolls.nextLabel}'
                             : 'Save reading',
                         onPressed: _log,
+                        onSkip: logs ? _skip : null,
                         onStartRoll: logs
                             ? null
                             : (widget.onStartRoll ?? () {}),
