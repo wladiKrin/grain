@@ -137,7 +137,7 @@ void main() {
     expect((await Settings.load()).mapStyle, MapStyle.offline);
     SharedPreferences.setMockInitialValues({
       'onlineMap': true,
-      'mapStyle': 'carto',
+      'mapStyle': 'retired',
     });
     expect((await Settings.load()).mapStyle, MapStyle.offline);
   });

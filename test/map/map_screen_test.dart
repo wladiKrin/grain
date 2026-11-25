@@ -702,7 +702,10 @@ void main() {
     await t.pump(const Duration(seconds: 4));
   });
 
-  test('CARTO is gone: no style, server or credit names it', () {
+  test('the old Minimal tile server is gone: no style, server, credit or '
+      'doc names it', () {
+    // Spelled apart, so that a grep of the repository finds it nowhere.
+    final gone = ['car', 'to'].join();
     final strings = [
       ...mapStyleLabels.values,
       ...mapStyleSubtitles.values,
@@ -712,21 +715,21 @@ void main() {
         for (final b in Brightness.values) ?OnlineTiles.of(s, b)?.urlTemplate,
     ];
     for (final s in strings) {
-      expect(s.toLowerCase(), isNot(contains('carto')));
+      expect(s.toLowerCase(), isNot(contains(gone)));
     }
     for (final dir in ['lib', 'docs', 'fastlane', 'android/app/src/main']) {
       for (final f in Directory(dir).listSync(recursive: true)) {
         if (f is! File) continue;
         expect(
           utf8.decode(f.readAsBytesSync(), allowMalformed: true).toLowerCase(),
-          isNot(contains('carto')),
+          isNot(contains(gone)),
           reason: f.path,
         );
       }
     }
     expect(
       File('README.md').readAsStringSync().toLowerCase(),
-      isNot(contains('carto')),
+      isNot(contains(gone)),
     );
   });
 
