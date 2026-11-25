@@ -43,7 +43,8 @@ Rect previewRect(Size box, Size preview, {Rect? crop}) {
 
 /// "EV 12.3 · AVG": one decimal ("EV —" before a reading), ▲/▼ when the
 /// camera is out of range, then SPOT, AVG or HELD, and "· AE" when the
-/// reading comes from the phone's auto-exposure ([ae]).
+/// reading comes from the phone's auto-exposure ([ae]). Without [showArea]
+/// the SPOT / AVG / HELD tag is left out, for beside the AVG | SPOT switch.
 String evLine({
   required double? ev,
   required RangeFlag flag,
@@ -51,6 +52,7 @@ String evLine({
   required bool held,
   bool estimated = false,
   bool ae = false,
+  bool showArea = true,
 }) {
   final value = ev == null
       ? '—'
@@ -65,7 +67,8 @@ String evLine({
       : area == MeterArea.spot
       ? 'SPOT'
       : 'AVG';
-  return 'EV $value$mark · $tag${ae ? ' · AE' : ''}';
+  final tagPart = showArea ? ' · $tag' : '';
+  return 'EV $value$mark$tagPart${ae ? ' · AE' : ''}';
 }
 
 /// Radius of the faint outer ring drawn around a spot smaller than 8 px
@@ -173,6 +176,7 @@ class Viewfinder extends StatelessWidget {
     held: held,
     estimated: estimated,
     ae: ae,
+    showArea: onSelectArea == null,
   );
 
   @override
@@ -241,24 +245,25 @@ class Viewfinder extends StatelessWidget {
                   child: Row(
                     spacing: 8,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: g.ground,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          _evLine,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: g.ink,
+                      if (onSelectArea == null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: g.ground,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _evLine,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: g.ink,
+                            ),
                           ),
                         ),
-                      ),
                       RoundButton(
                         filled: held,
                         toggled: held,
@@ -314,7 +319,11 @@ class Viewfinder extends StatelessWidget {
                   Positioned(
                     left: 10,
                     bottom: 4,
-                    child: AreaSwitch(area: area, onChanged: onSelectArea!),
+                    child: AreaSwitch(
+                      area: area,
+                      onChanged: onSelectArea!,
+                      reading: _evLine,
+                    ),
                   ),
                 if (widerThanPhone)
                   Positioned(
@@ -341,12 +350,21 @@ class Viewfinder extends StatelessWidget {
 
 // The preview is dark in both themes, so what sits directly on it (the box,
 // the crop dimming, the reticle) uses the light palette, not the themed one.
-/// AVG | SPOT: shows the metering area and switches it in one tap.
+/// AVG | SPOT: shows the metering area and switches it in one tap, with
+/// the [reading] for that area beside it.
 class AreaSwitch extends StatelessWidget {
-  const AreaSwitch({super.key, required this.area, required this.onChanged});
+  const AreaSwitch({
+    super.key,
+    required this.area,
+    required this.onChanged,
+    this.reading,
+  });
 
   final MeterArea area;
   final ValueChanged<MeterArea> onChanged;
+
+  /// E.g. "EV 12.3"; null shows the switch alone.
+  final String? reading;
 
   @override
   Widget build(BuildContext context) {
@@ -409,6 +427,18 @@ class AreaSwitch extends StatelessWidget {
             children: [
               segment(MeterArea.average, 'AVG', 'Average metering'),
               segment(MeterArea.spot, 'SPOT', 'Spot metering'),
+              if (reading case final r?)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6, right: 10),
+                  child: Text(
+                    r,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: g.ink,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

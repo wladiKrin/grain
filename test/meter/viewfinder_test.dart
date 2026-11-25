@@ -391,4 +391,45 @@ void main() {
     await t.tap(find.text('AVG'));
     expect(picked, MeterArea.average);
   });
+
+  testWidgets('with the switch, the EV reading sits in it, without the tag', (
+    t,
+  ) async {
+    await t.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: SizedBox(
+            width: 364,
+            height: 335,
+            child: Viewfinder(
+              textureId: 1,
+              previewSize: _preview,
+              crop: null,
+              area: MeterArea.spot,
+              spot: const Offset(.5, .5),
+              spotRadius: .02,
+              ev: 12,
+              flag: RangeFlag.ok,
+              held: true,
+              widerThanPhone: false,
+              onSpot: (_) {},
+              onClearSpot: () {},
+              onToggleHold: () {},
+              onSelectArea: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AreaSwitch),
+        matching: find.text('EV 12.0'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('SPOT ·'), findsNothing);
+    expect(find.textContaining('HELD'), findsNothing);
+  });
 }

@@ -354,23 +354,24 @@ void main() {
     expect(find.text('▼ under'), findsOneWidget);
   });
 
-  testWidgets('EV pill shows — before a reading, then EV, area and hold', (
-    t,
-  ) async {
-    await pumpScreen(t);
-    expect(find.text('EV — · AVG'), findsOneWidget);
+  testWidgets(
+    'the EV reading sits in the AVG | SPOT pill; hold shows on the lock',
+    (t) async {
+      await pumpScreen(t);
+      expect(find.text('EV —'), findsOneWidget);
 
-    src.emit(ev15());
-    await t.pump();
-    await t.pump();
-    expect(find.text('EV 15.0 · AVG · AE'), findsOneWidget);
+      src.emit(ev15());
+      await t.pump();
+      await t.pump();
+      expect(find.text('EV 15.0 · AE'), findsOneWidget);
 
-    await t.tap(find.byIcon(Icons.lock_open));
-    await t.pump();
-    expect(c.held, isTrue);
-    expect(find.text('EV 15.0 · HELD · AE'), findsOneWidget);
-    expect(find.byIcon(Icons.lock), findsOneWidget);
-  });
+      await t.tap(find.byIcon(Icons.lock_open));
+      await t.pump();
+      expect(c.held, isTrue);
+      expect(find.text('EV 15.0 · AE'), findsOneWidget);
+      expect(find.byIcon(Icons.lock), findsOneWidget);
+    },
+  );
 
   testWidgets('tap on the preview sets spot, long-press returns to average', (
     t,
@@ -382,7 +383,7 @@ void main() {
     expect(c.area, MeterArea.spot);
     expect(c.spot.dx, closeTo(.5, .01));
     expect(c.spot.dy, closeTo(.5, .01));
-    expect(find.text('EV 15.0 · SPOT · AE'), findsOneWidget);
+    expect(find.text('EV 15.0 · AE'), findsOneWidget);
 
     await t.longPressAt(box.center);
     await t.pump();
@@ -413,7 +414,7 @@ void main() {
     await t.pump();
     expect(c.area, MeterArea.spot);
     expect(c.spot, put);
-    expect(find.text('EV 15.0 · SPOT · AE'), findsOneWidget);
+    expect(find.text('EV 15.0 · AE'), findsOneWidget);
     handle.dispose();
   });
 
@@ -492,7 +493,7 @@ void main() {
       stats: ev15(exposureNs: 10000, sensitivity: 50, luma: .95),
     );
     expect(c.reading!.flag, RangeFlag.over);
-    expect(find.text('EV 17.6 ▲ · AVG · AE'), findsOneWidget);
+    expect(find.text('EV 17.6 ▲ · AE'), findsOneWidget);
 
     // Still visible with the viewfinder off.
     await t.tap(find.byIcon(Icons.visibility));
@@ -507,7 +508,7 @@ void main() {
       stats: ev15(exposureNs: 1000000000, sensitivity: 3200, luma: .005),
     );
     expect(c.reading!.flag, RangeFlag.under);
-    expect(find.text('EV −5.0 ▼ · AVG · AE'), findsOneWidget);
+    expect(find.text('EV −5.0 ▼ · AE'), findsOneWidget);
 
     await t.tap(find.byIcon(Icons.visibility));
     await t.pump();
