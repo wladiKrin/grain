@@ -162,8 +162,13 @@ class CameraSession(
             size > RESULTS_KEPT
     }
 
-    /** A frame's stats waiting for its capture result. */
-    private var pendingFrame: Pair<Long, Stats>? = null
+    /** The manual engine's last region was white: the first one that is not goes to Dart at once. */
+    private var lastWhite = false
+
+    /** A frame's stats waiting for its capture result; [emit] says whether Dart gets them. */
+    private class PendingFrame(val ts: Long, val stats: Stats, val emit: Boolean)
+
+    private var pendingFrame: PendingFrame? = null
 
     /** Display (portrait) regions as sent by Dart; normalized 0..1, radius relative to crop width. */
     data class DisplayRegions(
@@ -548,9 +553,9 @@ class CameraSession(
             result.get(CaptureResult.SENSOR_TIMESTAMP)?.let { ts ->
                 results[ts] = result
                 val p = pendingFrame
-                if (p != null && p.first == ts) {
+                if (p != null && p.ts == ts) {
                     pendingFrame = null
-                    if (!closed) emitStats(p.second, result)
+                    if (!closed) emitStats(p.stats, result, p.emit)
                 }
             }
             val w = frameWait ?: return
@@ -559,9 +564,10 @@ class CameraSession(
     }
 
     /**
-     * Camera thread. Every Image is closed; stats are computed at most 15 times a second
-     * (METER), a QR decode is tried at most every 200 ms (SCAN). A waiting snapshot takes the
-     * first METER frame regardless of the stats rate.
+     * Camera thread. Every Image is closed; stats are sent to Dart at most 15 times a second
+     * (METER), but with the manual engine every frame steps the loop; a QR decode is tried at
+     * most every 200 ms (SCAN). A waiting snapshot takes the first METER frame regardless of
+     * the stats rate.
      */
     private fun onImage(r: ImageReader) {
         val image = try {
@@ -587,8 +593,9 @@ class CameraSession(
                 return
             }
             if (snapshots.isNotEmpty()) captureSnapshot(img)
-            if (now - lastEmitMs < MIN_EVENT_INTERVAL_MS) return
-            lastEmitMs = now
+            val emit = now - lastEmitMs >= MIN_EVENT_INTERVAL_MS
+            if (!emit && loop == null) return
+            if (emit) lastEmitMs = now
 
             // Reads only the sampled pixels from the plane; no per-frame copy of the preview-size Y.
             val plane = img.planes[0]
@@ -604,18 +611,43 @@ class CameraSession(
             val own = results[ts]
             val newest = latest
             when {
-                own != null -> emitStats(stats, own)
+                own != null -> emitStats(stats, own, emit)
                 newest != null && (newest.get(CaptureResult.SENSOR_TIMESTAMP) ?: Long.MAX_VALUE) > ts ->
-                    emitStats(stats, newest)
-                else -> pendingFrame = ts to stats
+                    emitStats(stats, newest, emit)
+                // A newer frame replaces one still waiting, and keeps its event.
+                else -> pendingFrame = PendingFrame(ts, stats, emit || pendingFrame?.emit == true)
             }
         }
     }
 
-    /** Camera thread: one stats event from [stats] and its frame's [result]; steps the loop. */
-    private fun emitStats(stats: Stats, result: CaptureResult) {
+    /**
+     * Camera thread: steps the loop with [stats] and its frame's [result]; when [emit], or when
+     * the region is no longer white (the first frame that reads after a step down), also sends
+     * them to Dart as one stats event.
+     */
+    private fun emitStats(stats: Stats, result: CaptureResult, emit: Boolean) {
         val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
         val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
+        val manualFrame = result.get(CaptureResult.CONTROL_AE_MODE)?.let { it == CameraMetadata.CONTROL_AE_MODE_OFF }
+            ?: (loop != null)
+        val l = loop
+        var cleared = false
+        val step = if (manualFrame && l != null) {
+            val spot = regions.spotMetering
+            val frame = ExposureLoop.Settings(exposure, sensitivity)
+            val luma = if (spot) stats.spot else stats.crop
+            val white = luma >= ExposureLoop.CLIP_HIGH
+            cleared = lastWhite && !white
+            lastWhite = white
+            l.onFrame(frame, luma, if (spot) stats.spotClip else stats.cropClip).also { step ->
+                step.request?.let { requestExposure(it, flush = ExposureLoop.flushes(frame, it)) }
+                if (step.state == ExposureLoop.State.STEADY) saveLastManual(prefs, l.requested)
+            }
+        } else {
+            null
+        }
+        if (!emit && !cleared) return
+        if (!emit) lastEmitMs = SystemClock.elapsedRealtime()
         val physical = activePhysical(result)
         // Per frame: on a logical multi-camera the aperture changes with the active lens.
         val (aperture, assumed) = ZoomSupport.frameAperture(
@@ -647,8 +679,6 @@ class CameraSession(
             "spotLuma" to stats.spot,
             "histogram" to stats.histogram.toList(),
         )
-        val manualFrame = result.get(CaptureResult.CONTROL_AE_MODE)?.let { it == CameraMetadata.CONTROL_AE_MODE_OFF }
-            ?: (loop != null)
         event["engine"] = if (manualFrame) "manual" else "ae"
         event["cropClip"] = stats.cropClip
         event["spotClip"] = stats.spotClip
@@ -656,16 +686,7 @@ class CameraSession(
             event["tonemap"] = curve.name
             curve.gamma?.let { event["toneGamma"] = it }
         }
-        val l = loop
-        if (manualFrame && l != null) {
-            val spot = regions.spotMetering
-            val step = l.onFrame(
-                ExposureLoop.Settings(exposure, sensitivity),
-                if (spot) stats.spot else stats.crop,
-                if (spot) stats.spotClip else stats.cropClip,
-            )
-            step.request?.let(::requestExposure)
-            if (step.state == ExposureLoop.State.STEADY) saveLastManual(prefs, l.requested)
+        if (step != null && l != null) {
             event["requestedExposureNs"] = l.requested.exposureNs
             event["requestedSensitivity"] = l.requested.iso
             event["loop"] = step.state.name.lowercase()
@@ -794,12 +815,16 @@ class CameraSession(
         b.set(CaptureRequest.SENSOR_FRAME_DURATION, manual?.maxFrameNs?.let { minOf(frame, it) } ?: frame)
     }
 
-    /** Camera thread: the loop asked for [e]; the repeating request takes it from the next frame. */
-    private fun requestExposure(e: ExposureLoop.Settings) {
+    /**
+     * Camera thread: the loop asked for [e]; the repeating request takes it once the captures
+     * in flight are done, or at once when [flush] drops them (see [ExposureLoop.flushes]).
+     */
+    private fun requestExposure(e: ExposureLoop.Settings, flush: Boolean) {
         val s = session ?: return
         val b = request ?: return
         try {
             setExposure(b, e)
+            if (flush) s.abortCaptures()
             s.setRepeatingRequest(b.build(), captureCallback, handler)
         } catch (ex: Exception) {
             Log.w(TAG, "exposure request failed", ex)

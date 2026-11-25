@@ -46,11 +46,13 @@ class ExposureLoopTest {
         assertEquals(3.0, ev(f, d.request!!), 0.02)
     }
 
-    @Test fun clippedRegionJumpsThreeEv() {
+    @Test fun clippedRegionJumpsThreeToSixEvByItsClippedShare() {
         val f = Settings(4_000_000L, 100)
-        val hi = ExposureLoop.decide(f, 0.97, 0.5, limits)
+        val hi = ExposureLoop.decide(f, 0.97, 0.0, limits)
         assertEquals(State.CLIPPED, hi.state)
         assertEquals(-3.0, ev(f, hi.request!!), 0.02)
+        assertEquals(-4.5, ev(f, ExposureLoop.decide(f, 0.97, 0.5, limits).request!!), 0.02)
+        assertEquals(-6.0, ev(f, ExposureLoop.decide(f, 0.97, 1.0, limits).request!!), 0.02)
         val lo = ExposureLoop.decide(f, 0.001, 0.0, limits)
         assertEquals(State.CLIPPED, lo.state)
         assertEquals(3.0, ev(f, lo.request!!), 0.02)
@@ -134,13 +136,48 @@ class ExposureLoopTest {
     @Test fun settlingGivesUpAfterAFewFrames() {
         val loop = ExposureLoop(limits, Settings(1_000_000L, 30))
         loop.onFrame(Settings(1_000_000L, 30), 0.045, 0.0) // asks for 4 ms
-        // The camera keeps delivering 3 ms (it cannot do 4): after SETTLE_FRAMES it is accepted.
-        val frame = Settings(3_000_000L, 30)
+        // The camera keeps delivering 1.5 ms (it cannot do 4): after SETTLE_FRAMES it is accepted.
+        val frame = Settings(1_500_000L, 30)
         repeat(ExposureLoop.SETTLE_FRAMES) {
-            assertEquals(State.SETTLING, loop.onFrame(frame, 0.135, 0.0).state)
+            assertEquals(State.SETTLING, loop.onFrame(frame, 0.0675, 0.0).state)
         }
-        assertEquals(State.STEADY, loop.onFrame(frame, 0.135, 0.0).state)
+        assertEquals(State.STEADY, loop.onFrame(frame, 0.0675, 0.0).state)
         assertEquals(frame, loop.requested)
+    }
+
+    @Test fun aFrameMostOfTheWayToTheRequestShowsIt() {
+        val loop = ExposureLoop(limits, Settings(1_000_000L, 30))
+        loop.onFrame(Settings(1_000_000L, 30), 0.045, 0.0) // asks for 4 ms
+        // 3 ms (the camera rounds): nearer the request than the old 1 ms, so no wait.
+        assertEquals(State.STEADY, loop.onFrame(Settings(3_000_000L, 30), 0.135, 0.0).state)
+        val old = Settings(1_000_000L, 30)
+        val want = Settings(4_000_000L, 30)
+        assertTrue(ExposureLoop.shows(Settings(3_000_000L, 30), want, old))
+        assertTrue(ExposureLoop.shows(Settings(4_100_000L, 30), want, old))
+        assertFalse(ExposureLoop.shows(Settings(1_500_000L, 30), want, old))
+        assertFalse(ExposureLoop.shows(old, want, old))
+    }
+
+    @Test fun capturesInFlightAreDroppedOnlyLeavingLongFrames() {
+        // From 1/5 s down to 1/30 s frames: dropped.
+        assertTrue(ExposureLoop.flushes(Settings(200_000_000L, 6400), Settings(33_333_333L, 600)))
+        // 1/30 s frames either way, or longer ones: kept.
+        assertFalse(ExposureLoop.flushes(Settings(33_333_333L, 1000), Settings(1_000_000L, 30)))
+        assertFalse(ExposureLoop.flushes(Settings(50_000_000L, 6400), Settings(33_333_333L, 6400)))
+        assertFalse(ExposureLoop.flushes(Settings(33_333_333L, 6400), Settings(200_000_000L, 6400)))
+    }
+
+    /** Every frame steps the loop now: a flickering scene inside the band, or a window held at the floor, never asks. */
+    @Test fun aSteadySceneNeverAsksOnAnyFrame() {
+        val f = Settings(10_000_000L, 100)
+        val loop = ExposureLoop(limits, f)
+        val rnd = java.util.Random(1)
+        repeat(600) {
+            val luma = 0.18 * Math.pow(2.0, rnd.nextGaussian() * 0.5).coerceIn(0.4, 2.5)
+            assertNull(loop.onFrame(f, luma, 0.0).request)
+        }
+        // A dark room with a window, clipped at CLIP_FLOOR: no further step either.
+        repeat(600) { assertNull(loop.onFrame(f, ExposureLoop.CLIP_FLOOR * (1 + rnd.nextDouble() * 0.05), 0.2).request) }
     }
 
     @Test fun smallStepsAreNotRequested() {

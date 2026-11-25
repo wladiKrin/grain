@@ -40,17 +40,21 @@ class ExposureLoop(val limits: Limits, start: Settings) {
     var requested: Settings = split(start.product, limits)
         private set
 
+    /** The frame values the last request was stepped from. */
+    private var from: Settings = requested
+
     private var waited = 0
 
     /**
      * One metered frame, captured with [frame] (its own result values) at region luma [luma]
-     * with a [clip] share of clipped pixels. Until a frame shows the last request no new step
-     * is taken (the frame still measures); after [SETTLE_FRAMES] frames the camera's own
-     * values are taken as what it can do.
+     * with a [clip] share of clipped pixels; called for every frame, not only the ones sent
+     * to Dart. Until a frame [shows] the last request no new step is taken (the frame still
+     * measures); after [SETTLE_FRAMES] frames the camera's own values are taken as what it
+     * can do.
      */
     fun onFrame(frame: Settings, luma: Double, clip: Double): Step {
         val d = decide(frame, luma, clip, limits)
-        if (!close(frame, requested)) {
+        if (!shows(frame, requested, from)) {
             if (waited < SETTLE_FRAMES) {
                 waited++
                 return d.copy(request = null, state = State.SETTLING)
@@ -58,7 +62,10 @@ class ExposureLoop(val limits: Limits, start: Settings) {
             requested = frame
         }
         waited = 0
-        d.request?.let { requested = it }
+        d.request?.let {
+            from = frame
+            requested = it
+        }
         return d
     }
 
@@ -73,7 +80,11 @@ class ExposureLoop(val limits: Limits, start: Settings) {
         /** A region this bright is all but white: it may be many stops over. */
         const val CLIP_FULL = 0.99
 
-        /** The step for a [CLIP_FULL] region, so daylight from an indoor start takes two steps. */
+        /**
+         * The step for a [CLIP_FULL] region, so daylight from an indoor start takes two steps;
+         * a region between [CLIP_HIGH] and [CLIP_FULL] steps from [MAX_STEP_EV] up to this by
+         * its clipped share.
+         */
         const val FULL_CLIP_STEP_EV = 6.0
         const val CLIP_LOW = 0.002
 
@@ -93,8 +104,11 @@ class ExposureLoop(val limits: Limits, start: Settings) {
         /** Longest time at all: 1/4 s. */
         const val MAX_EXPOSURE_NS = 250_000_000L
 
-        /** Frames to wait for a request to show in the results before stepping anyway. */
-        const val SETTLE_FRAMES = 6
+        /**
+         * Frames (every frame, not only the throttled stats ones) to wait for a request to show
+         * in the results before stepping anyway: deeper than the pipelines seen so far.
+         */
+        const val SETTLE_FRAMES = 8
 
         /** A first guess before any frame: 1/60 s at ISO 200, about EV 7 at mid grey. */
         val DEFAULT_START = Settings(16_666_667L, 200)
@@ -106,13 +120,20 @@ class ExposureLoop(val limits: Limits, start: Settings) {
             abs(log2(a.exposureNs.toDouble() / b.exposureNs)) < MIN_STEP_EV / 2 &&
                 abs(log2(a.iso.toDouble() / b.iso)) < MIN_STEP_EV / 2
 
+        /**
+         * Whether [frame] shows the request [want] stepped from [origin]: it is [close] to it, or
+         * it moved most of the way (a camera that rounds ISO or time never lands exactly).
+         */
+        fun shows(frame: Settings, want: Settings, origin: Settings): Boolean =
+            close(frame, want) || abs(log2(frame.product / want.product)) < abs(log2(frame.product / origin.product))
+
         /** The step, EV, toward [TARGET] for region [luma] with a [clip] share clipped; 0 inside the band. */
         fun stepEv(luma: Double, clip: Double): Double = when {
             luma >= CLIP_FULL -> -FULL_CLIP_STEP_EV
-            luma >= CLIP_HIGH -> -MAX_STEP_EV
+            luma >= CLIP_HIGH -> -(MAX_STEP_EV + (FULL_CLIP_STEP_EV - MAX_STEP_EV) * clip.coerceIn(0.0, 1.0))
             luma <= CLIP_LOW -> MAX_STEP_EV
             luma > BAND_HIGH || luma < BAND_LOW -> log2(TARGET / luma).coerceIn(-MAX_STEP_EV, MAX_STEP_EV)
-            clip > CLIP_SHARE -> log2(CLIP_FLOOR / luma).coerceIn(-1.0, 0.0)
+            clip > CLIP_SHARE -> log2(CLIP_FLOOR / luma).coerceIn(-2.0, 0.0)
             else -> 0.0
         }
 
@@ -156,6 +177,13 @@ class ExposureLoop(val limits: Limits, start: Settings) {
 
         /** The frame duration for [exposureNs]: at least 1/30 s and at least the exposure. */
         fun frameDuration(exposureNs: Long): Long = max(exposureNs, SMOOTH_EXPOSURE_NS)
+
+        /**
+         * Whether to drop the captures in flight for [next], stepped from [frame]: when its frames
+         * are at most half as long, so the old long ones (several deep) do not hold it back.
+         */
+        fun flushes(frame: Settings, next: Settings): Boolean =
+            2 * frameDuration(next.exposureNs) <= frameDuration(frame.exposureNs)
 
         /** Why the manual engine can or cannot run on a camera; null [reason] means it can. */
         fun unsupportedReason(capabilities: IntArray?, aeModes: IntArray?, hasRanges: Boolean): String? = when {
