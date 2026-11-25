@@ -754,13 +754,30 @@ class MeterController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Where the spot was last put; [useSpot] goes back there.
+  Offset _lastSpot = _centre;
+
   void tapSpot(Offset normalized) {
     spot = normalized;
+    _lastSpot = normalized;
     area = MeterArea.spot;
     _derive();
     _updateHistogram();
     _sendRegions();
     notifyListeners();
+  }
+
+  /// Spot metering at the last spot (the centre at first), kept inside the
+  /// lens frame.
+  void useSpot() {
+    final c = cropRect;
+    final p = c == null
+        ? _lastSpot
+        : Offset(
+            _lastSpot.dx.clamp(c.left, c.right).toDouble(),
+            _lastSpot.dy.clamp(c.top, c.bottom).toDouble(),
+          );
+    tapSpot(p);
   }
 
   void clearSpot() {

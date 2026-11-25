@@ -389,6 +389,34 @@ void main() {
     expect(c.area, MeterArea.average);
   });
 
+  testWidgets('the AVG | SPOT switch shows and changes the area', (t) async {
+    await pumpScreen(t, stats: ev15());
+    final handle = t.ensureSemantics();
+    expect(
+      t.getSemantics(find.bySemanticsLabel('Average metering')),
+      matchesSemantics(
+        label: 'Average metering',
+        isButton: true,
+        isSelected: true,
+        hasSelectedState: true,
+      ),
+    );
+    // A spot put by tapping the picture comes back after AVG, SPOT.
+    final box = t.getRect(find.byType(Viewfinder));
+    await t.tapAt(box.center + const Offset(20, -20));
+    await t.pump();
+    final put = c.spot;
+    await t.tap(find.text('AVG'));
+    await t.pump();
+    expect(c.area, MeterArea.average);
+    await t.tap(find.text('SPOT'));
+    await t.pump();
+    expect(c.area, MeterArea.spot);
+    expect(c.spot, put);
+    expect(find.text('EV 15.0 · SPOT · AE'), findsOneWidget);
+    handle.dispose();
+  });
+
   testWidgets('ISO stepper steps the scale with a haptic tick', (t) async {
     await pumpScreen(t, stats: ev15());
     expect(find.text('400'), findsOneWidget);

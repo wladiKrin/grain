@@ -242,6 +242,18 @@ void main() {
     },
   );
 
+  test('useSpot meters at the centre first, then at the last spot', () async {
+    await c.resume();
+    c.useSpot();
+    expect(c.area, MeterArea.spot);
+    expect(c.spot, const Offset(.5, .5));
+    c.tapSpot(const Offset(.45, .55));
+    c.clearSpot();
+    c.useSpot();
+    expect(c.spot, const Offset(.45, .55));
+    expect(src.regions.last.$2, const Offset(.45, .55));
+  });
+
   test('held reading ignores new stats until released', () async {
     await run();
     final frozen = c.reading!.ev100;

@@ -9,6 +9,7 @@ import '../exposure/mode.dart';
 import '../exposure/scales.dart';
 import '../exposure/solver.dart';
 import '../gear/gear_controller.dart';
+import '../metering/reading.dart';
 import '../rolls/push.dart';
 import '../rolls/roll_controller.dart';
 import '../ui/haptics.dart';
@@ -547,6 +548,8 @@ class _MeterScreenState extends State<MeterScreen> {
         widerThanPhone: _c.lensWiderThanCamera,
         onSpot: _c.tapSpot,
         onClearSpot: _c.clearSpot,
+        onSelectArea: (a) =>
+            a == MeterArea.spot ? _c.useSpot() : _c.clearSpot(),
         onToggleHold: _c.toggleHold,
         ae: _c.readingFromAe,
         histogramOn: _c.histogramOn,

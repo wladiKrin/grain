@@ -372,4 +372,23 @@ void main() {
     expect(size.width, closeTo(200, 1e-9));
     expect(size.height, 200);
   });
+
+  testWidgets('AreaSwitch marks the area and reports the other one', (t) async {
+    MeterArea? picked;
+    Widget sw(MeterArea a) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Center(
+        child: AreaSwitch(area: a, onChanged: (v) => picked = v),
+      ),
+    );
+    await t.pumpWidget(sw(MeterArea.average));
+    await t.tap(find.text('AVG'));
+    expect(picked, isNull); // already selected
+    await t.tap(find.text('SPOT'));
+    expect(picked, MeterArea.spot);
+    expect(t.getSize(find.byType(AreaSwitch)).height, 44);
+    await t.pumpWidget(sw(MeterArea.spot));
+    await t.tap(find.text('AVG'));
+    expect(picked, MeterArea.average);
+  });
 }

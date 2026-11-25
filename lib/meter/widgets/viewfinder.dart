@@ -113,6 +113,7 @@ class Viewfinder extends StatelessWidget {
     this.onToggleFrame,
     this.fitToCrop = false,
     this.ae = false,
+    this.onSelectArea,
   });
 
   /// Null until the camera has started.
@@ -161,6 +162,9 @@ class Viewfinder extends StatelessWidget {
 
   /// The reading comes from the phone's auto-exposure (see [evLine]).
   final bool ae;
+
+  /// The AVG | SPOT switch at the bottom left; null hides it.
+  final ValueChanged<MeterArea>? onSelectArea;
 
   String get _evLine => evLine(
     ev: ev,
@@ -306,10 +310,16 @@ class Viewfinder extends StatelessWidget {
                     bottom: 10,
                     child: HistogramOverlay(view: histogram!),
                   ),
+                if (onSelectArea != null)
+                  Positioned(
+                    left: 10,
+                    bottom: 4,
+                    child: AreaSwitch(area: area, onChanged: onSelectArea!),
+                  ),
                 if (widerThanPhone)
                   Positioned(
                     left: 12,
-                    bottom: 10,
+                    bottom: onSelectArea != null ? 52 : 10,
                     child: Text(
                       'Wider than this camera',
                       style: TextStyle(
@@ -331,6 +341,82 @@ class Viewfinder extends StatelessWidget {
 
 // The preview is dark in both themes, so what sits directly on it (the box,
 // the crop dimming, the reticle) uses the light palette, not the themed one.
+/// AVG | SPOT: shows the metering area and switches it in one tap.
+class AreaSwitch extends StatelessWidget {
+  const AreaSwitch({super.key, required this.area, required this.onChanged});
+
+  final MeterArea area;
+  final ValueChanged<MeterArea> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = context.grain;
+    Widget segment(MeterArea a, String label, String semantics) {
+      final on = a == area;
+      return Semantics(
+        button: true,
+        selected: on,
+        label: semantics,
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: on ? null : () => onChanged(a),
+          // 44 px tall to tap; the pill inside is 28.
+          child: Container(
+            height: 44,
+            alignment: Alignment.center,
+            child: Container(
+              height: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: on ? g.ink : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 12 * .06,
+                  color: on ? g.ground : g.ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // The pill is 32 px tall; both segments take the full 44 to tap.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: g.ground,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              segment(MeterArea.average, 'AVG', 'Average metering'),
+              segment(MeterArea.spot, 'SPOT', 'Spot metering'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 final _previewInk = GrainPalette.light.ink;
 final _previewPaper = GrainPalette.light.ground;
 
