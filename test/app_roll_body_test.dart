@@ -50,6 +50,7 @@ void main() {
     bool roll = true,
     FilmType filmType = FilmType.bwNeg,
     Settings? settings,
+    bool engineSwitch = true,
   }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
@@ -76,6 +77,7 @@ void main() {
         gear: gear,
         rolls: rolls,
         settings: settings,
+        engineSwitch: engineSwitch,
       ),
     );
     await settle(t);
@@ -273,6 +275,16 @@ void main() {
       expect(meter(t).latitude, FilmLatitude.slide);
     },
   );
+
+  testWidgets('a release build ignores a stored phone-AE setting', (t) async {
+    final settings = Settings.inMemory();
+    await settings.setPhoneAe(true);
+    await pumpApp(t, settings: settings, engineSwitch: false);
+    expect(src.calls.where((c) => c.startsWith('setEngine')), isEmpty);
+    await t.tap(find.byIcon(Icons.tune));
+    await settle(t);
+    expect(find.textContaining('auto-exposure'), findsNothing);
+  });
 
   testWidgets('the phone-AE setting reaches the camera, at start too', (
     t,

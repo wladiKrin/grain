@@ -91,8 +91,9 @@ roll.
 > with the AE-based builds no longer apply, and the calibration offset may need
 > setting again. Watch the `GRAIN stats` line (`adb logcat -s flutter`) and
 > the once-per-session `GrainCamera` line saying which engine and tone curve
-> were chosen. Settings > "Meter with the phone's auto-exposure" switches to the phone's AE
-> for a comparison (the EV line ends in "· AE" while it is on); switch it off after.
+> were chosen. In a debug build (`flutter run`), Settings > "Meter with the phone's
+> auto-exposure" switches to the phone's AE for a comparison (the EV line ends
+> in "· AE" while it is on); release builds have no such switch.
 
 Reference: a camera's meter or a known handheld meter, same ISO, same
 aperture, read as EV at ISO 100. Take both readings at the same spot, within a
@@ -120,7 +121,7 @@ Calibration offset used: ______ EV
 | 2.10a | Look at the bottom left of the viewfinder; tap SPOT, tap the picture somewhere else, tap AVG, then SPOT again | AVG is highlighted at first; SPOT meters the centre, a tap on the picture moves the spot and highlights SPOT; AVG returns to average; SPOT goes back to where the spot was. The EV reading sits in the same pill, without a SPOT/AVG/HELD tag; the top right has only the lock. With TalkBack it reads "Average metering, selected" | |
 | 2.11 | On a phone that reports no aperture (if available), read the EV line | It reads "EV ≈..." (f/1.8 assumed) | |
 | 2.12 | Manual engine, against the reference, same calibration: sun ____ / ____, open shade ____ / ____, dim room ____ / ____, very dark room ____ / ____ (reference / Grain average) | Each within 2/3 stop; the dim and very dark rooms no longer read ~3 stops bright | |
-| 2.13 | Same four scenes with the AE engine (Settings > "Meter with the phone's auto-exposure" on; the EV line ends in "· AE"): sun ____, shade ____, dim ____, very dark ____ | Recorded for comparison; the manual engine is the closer one | |
+| 2.13 | Same four scenes with the AE engine (debug build only: Settings > "Meter with the phone's auto-exposure" on; the EV line ends in "· AE"): sun ____, shade ____, dim ____, very dark ____ | Recorded for comparison; the manual engine is the closer one | |
 | 2.13a | Meter indoors, then force-stop Grain (`adb shell am force-stop io.github.wladikrin.grain`), walk into sunlight and open it with a stopwatch | A reading (not "EV —") within 1.5 s of tapping the icon; first launch after install, from 1/60 s, may take one step longer. Time ____ s | |
 | 2.13b | Long-press the EV pill | Nothing happens (the engine is only switched in Settings) | |
 | 2.14 | Hold the phone still on a steady scene in normal light for 10 s | The preview does not flicker or pulse; the stats line stays `loop=steady` with the same `req=` | |

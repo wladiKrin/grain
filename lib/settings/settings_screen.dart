@@ -37,6 +37,7 @@ class SettingsScreen extends StatelessWidget {
     this.location,
     this.now = DateTime.now,
     this.openSettings = openAppSettings,
+    this.engineSwitch = false,
   });
 
   final Settings settings;
@@ -58,6 +59,9 @@ class SettingsScreen extends StatelessWidget {
 
   /// The backup's date (file name, share subject).
   final DateTime Function() now;
+
+  /// Shows the phone-AE comparison switch (debug builds).
+  final bool engineSwitch;
 
   /// The permission is requested only here, on turning the switch on.
   Future<void> _setLocation(BuildContext context, bool on) async {
@@ -187,13 +191,15 @@ class SettingsScreen extends StatelessWidget {
             const _Divider(),
             _ThemeRow(value: settings.theme, onChanged: settings.setTheme),
             const _Divider(),
-            _SwitchRow(
-              label: 'Meter with the phone\u2019s auto-exposure',
-              subtitle: 'For comparison only: reads brighter than Grain\u2019s own metering in dim light. The EV line shows AE while it is on.',
-              value: settings.phoneAe,
-              onChanged: settings.setPhoneAe,
-            ),
-            const _Divider(),
+            if (engineSwitch) ...[
+              _SwitchRow(
+                label: 'Meter with the phone\u2019s auto-exposure',
+                subtitle: 'For comparison only: reads brighter than Grain\u2019s own metering in dim light. The EV line shows AE while it is on.',
+                value: settings.phoneAe,
+                onChanged: settings.setPhoneAe,
+              ),
+              const _Divider(),
+            ],
             BackupSection(
               gear: gear,
               rolls: rolls,

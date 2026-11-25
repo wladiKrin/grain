@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -121,6 +122,7 @@ class GrainApp extends StatefulWidget {
     GearPlatform? platform,
     LocationSource? location,
     this.rolls,
+    this.engineSwitch = kDebugMode,
   }) : source = source ?? MeterChannel(),
        platform = platform ?? const SystemGearPlatform(),
        settings = settings ?? Settings.inMemory(),
@@ -143,12 +145,20 @@ class GrainApp extends StatefulWidget {
   /// Defaults to an in-memory controller owned by the app (tests).
   final RollController? rolls;
 
+  /// Whether the phone-AE setting is offered and obeyed: debug builds only,
+  /// for comparing the engines. Release builds always meter with Grain's
+  /// own engine where the camera allows it.
+  final bool engineSwitch;
+
   @override
   State<GrainApp> createState() => _GrainAppState();
 }
 
 class _GrainAppState extends State<GrainApp> {
   Settings get _settings => widget.settings;
+
+  /// The phone-AE setting where it applies (see [GrainApp.engineSwitch]).
+  bool get _phoneAe => widget.engineSwitch && _settings.phoneAe;
   GearController get _gear => widget.gear;
   late final MeterController _controller = MeterController(
     source: widget.source,
@@ -196,7 +206,7 @@ class _GrainAppState extends State<GrainApp> {
       onPause: _controller.enterBackground,
     );
     _settings.addListener(_onSettings);
-    if (_settings.phoneAe) unawaited(_controller.setPhoneAe(true));
+    if (_phoneAe) unawaited(_controller.setPhoneAe(true));
     _controller.shakeWarning = _settings.shakeWarning;
     _controller.addListener(_onController);
     _gear.addListener(_onGear);
@@ -219,8 +229,8 @@ class _GrainAppState extends State<GrainApp> {
     if (_controller.frameLandscape != _settings.frameLandscape) {
       _controller.toggleFrameOrientation();
     }
-    if (_controller.phoneAe != _settings.phoneAe) {
-      unawaited(_controller.setPhoneAe(_settings.phoneAe));
+    if (_controller.phoneAe != _phoneAe) {
+      unawaited(_controller.setPhoneAe(_phoneAe));
     }
   }
 
@@ -401,6 +411,7 @@ class _GrainAppState extends State<GrainApp> {
         gear: _gear,
         rolls: _rolls,
         platform: widget.platform,
+        engineSwitch: widget.engineSwitch,
       ),
     ),
   );
