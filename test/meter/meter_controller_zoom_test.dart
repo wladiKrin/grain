@@ -181,6 +181,71 @@ void main() {
     expectFrameFills();
   });
 
+  group('the spot stays on its subject', () {
+    test('when the camera zooms in and out again', () async {
+      make();
+      await c.resume();
+      c.tapSpot(const Offset(.52, .49));
+      c.setFocal(idx(c.focalValues, '200'));
+      await settle();
+      final z = c.preview!.phoneEqFocal / 25;
+      expect(z, greaterThan(2));
+      expect(c.spot.dx, closeTo(.5 + .02 * z, 1e-9));
+      expect(c.spot.dy, closeTo(.5 - .01 * z, 1e-9));
+      expect(src.regions.last.$2, c.spot);
+      c.setFocal(idx(c.focalValues, '50'));
+      await settle();
+      expect(c.spot.dx, closeTo(.52, 1e-9));
+      expect(c.spot.dy, closeTo(.49, 1e-9));
+    });
+
+    test('and on the ultra-wide', () async {
+      make();
+      await c.resume();
+      c.tapSpot(const Offset(.6, .4));
+      c.setFocal(idx(c.focalValues, '20'));
+      await settle();
+      expect(c.preview!.wide, isTrue);
+      expect(c.spot.dx, closeTo(.5 + .1 * 13 / 25, 1e-9));
+      expect(c.spot.dy, closeTo(.5 - .1 * 13 / 25, 1e-9));
+    });
+
+    test('a spot pushed out of the frame stops at its edge', () async {
+      make();
+      await c.resume();
+      c.tapSpot(const Offset(.9, .5));
+      c.setFocal(idx(c.focalValues, '200'));
+      await settle();
+      expect(c.spot.dx, closeTo(c.cropRect!.right, 1e-9));
+      expect(c.spot.dy, closeTo(.5, 1e-9));
+    });
+
+    test('the last spot useSpot returns to follows too', () async {
+      make();
+      await c.resume();
+      c.tapSpot(const Offset(.52, .5));
+      c.clearSpot();
+      c.setFocal(idx(c.focalValues, '200'));
+      await settle();
+      final z = c.preview!.phoneEqFocal / 25;
+      expect(c.spot, const Offset(.5, .5));
+      c.useSpot();
+      expect(c.spot.dx, closeTo(.5 + .02 * z, 1e-9));
+    });
+
+    test('through a pause and resume', () async {
+      make();
+      c.setFocal(idx(c.focalValues, '200'));
+      await c.resume();
+      await settle();
+      c.tapSpot(const Offset(.55, .5));
+      await c.pause();
+      await c.resume();
+      await settle();
+      expect(c.spot.dx, closeTo(.55, 1e-9));
+    });
+  });
+
   test('the last of quick focal changes wins', () async {
     make();
     await c.resume();

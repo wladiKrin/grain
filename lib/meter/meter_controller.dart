@@ -316,6 +316,7 @@ class MeterController extends ChangeNotifier {
         final info = await _source.start();
         if (_mayRun) {
           preview = info;
+          _followZoom();
           _running = true;
           _session++;
           _zoomFailed = false;
@@ -633,6 +634,30 @@ class MeterController extends ChangeNotifier {
     }
   }
 
+  /// The camera focal [spot] and [_lastSpot] were placed at; null before
+  /// the first preview.
+  double? _spotEqFocal;
+
+  /// Keeps the spot on its subject when the camera's field changes (a zoom,
+  /// the ultra-wide, a reopen): a point at offset d from the centre moves to
+  /// d × new / old focal, the camera zooming about the centre. A spot pushed
+  /// off the preview stops at its edge; [_reframe] then keeps it in the lens
+  /// frame.
+  void _followZoom() {
+    final eq = preview?.phoneEqFocal;
+    if (eq == null || !eq.isFinite || eq <= 0) return;
+    final old = _spotEqFocal;
+    _spotEqFocal = eq;
+    if (old == null || old == eq) return;
+    Offset scaled(Offset p) {
+      final q = _centre + (p - _centre) * (eq / old);
+      return Offset(q.dx.clamp(0, 1).toDouble(), q.dy.clamp(0, 1).toDouble());
+    }
+
+    spot = scaled(spot);
+    _lastSpot = scaled(_lastSpot);
+  }
+
   /// Whether the lens sees more than the camera in use (the crop cannot
   /// show all of its field).
   bool get lensWiderThanCamera {
@@ -764,6 +789,7 @@ class MeterController extends ChangeNotifier {
         // Paused, stopped or restarted meanwhile: the answer is stale.
         if (session != _session || !_running || _disposed) continue;
         preview = next;
+        _followZoom();
         // The camera could not switch (it answered another preview):
         // asking again would loop.
         if (!_zoomed(next, want)) _zoomFailed = true;
