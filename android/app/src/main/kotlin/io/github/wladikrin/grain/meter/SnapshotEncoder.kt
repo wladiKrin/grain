@@ -12,6 +12,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Pixel rectangle, left/top inclusive, right/bottom exclusive. */
@@ -23,7 +24,9 @@ data class PixelRect(val l: Int, val t: Int, val r: Int, val b: Int) {
 /**
  * Turns one YUV frame into the small upright JPEG kept with a logged frame: the lens crop,
  * rotated by the sensor orientation, long edge at most [MAX_EDGE] px, at the highest of
- * [QUALITIES] that fits [MAX_BYTES]. Everything but [encode] is pure and unit-tested.
+ * [QUALITIES] that fits [MAX_BYTES]. A manual-engine frame (flat tone curve, exposed for the
+ * loop's band or the spot) is first [toneMap]ped to look like a photo. Everything but [encode]
+ * and [encodeJpeg] is pure and unit-tested.
  */
 object SnapshotEncoder {
     const val MAX_EDGE = 1000
@@ -84,6 +87,111 @@ object SnapshotEncoder {
             if (bytes.size <= MAX_BYTES) break
         }
         return bytes
+    }
+
+    /** The crop's mean linear luma is brought to this, mid grey, before the display curve. */
+    const val TARGET_GREY = 0.18
+
+    /** The brightness normalisation goes no further than this factor either way. */
+    const val MAX_GAIN = 16.0
+
+    /** Scales linear light into [filmic] so mid grey comes out near sRGB's 0.46. */
+    private const val FILMIC_EXPOSURE = 0.6
+
+    /**
+     * The [filmic] input shown as white: 2.9 stops over mid grey, so a frame's own clipped
+     * white is white once its crop was lifted at all, and near it (0.95) when not.
+     */
+    private const val FILMIC_WHITE = 0.8
+
+    /** Chroma follows the luma change, within these factors, so colour neither fades nor glows. */
+    private const val MIN_CHROMA_GAIN = 0.5
+    private const val MAX_CHROMA_GAIN = 2.0
+
+    /** Every this many pixels each way are sampled for the crop's mean. */
+    private const val MEAN_STEP = 4
+
+    /**
+     * A filmic display curve, linear scene light (any value ≥ 0) to display-linear 0..1: a toe
+     * that deepens the shadows, a steeper middle and a soft shoulder instead of a hard clip
+     * (Narkowicz's ACES fit).
+     */
+    fun filmic(x: Double): Double {
+        val v = max(0.0, x)
+        return (v * (2.51 * v + 0.03) / (v * (2.43 * v + 0.59) + 0.14)).coerceIn(0.0, 1.0)
+    }
+
+    /** Mean linear luma of [crop] of the NV21 frame's Y (row stride [width]), through [linear]. */
+    fun cropMeanLinear(nv21: ByteArray, width: Int, crop: PixelRect, linear: DoubleArray): Double {
+        var sum = 0.0
+        var n = 0
+        var y = crop.t
+        while (y < crop.b) {
+            var x = crop.l
+            val row = y * width
+            while (x < crop.r) {
+                sum += linear[nv21[row + x].toInt() and 0xFF]
+                n++
+                x += MEAN_STEP
+            }
+            y += MEAN_STEP
+        }
+        return if (n > 0) sum / n else 0.0
+    }
+
+    /**
+     * The 8-bit Y lookup for a frame encoded with [curve] whose crop averages [mean] linear:
+     * linearised, scaled so the mean lands on [TARGET_GREY] (within [MAX_GAIN]), through
+     * [filmic] up to [FILMIC_WHITE] and encoded as sRGB.
+     */
+    fun displayLut(curve: ToneCurve, mean: Double): IntArray {
+        val gain = if (mean > 0 && mean.isFinite()) (TARGET_GREY / mean).coerceIn(1 / MAX_GAIN, MAX_GAIN) else MAX_GAIN
+        val white = filmic(FILMIC_WHITE)
+        return IntArray(256) { y ->
+            val display = min(1.0, filmic(curve.lut[y] * gain * FILMIC_EXPOSURE) / white)
+            (ToneCurve.SRGB.encode(display) * 255).roundToInt().coerceIn(0, 255)
+        }
+    }
+
+    /**
+     * Rewrites [crop] of the NV21 frame in place through [lut]: Y directly, each V,U pair scaled
+     * about neutral by its block's luma change (within [MIN_CHROMA_GAIN]..[MAX_CHROMA_GAIN]).
+     * Pixels outside [crop] are left alone; [crop] edges are even, as [cropPixels] gives them.
+     */
+    fun applyLut(nv21: ByteArray, width: Int, height: Int, crop: PixelRect, lut: IntArray) {
+        val chromaGain = DoubleArray(256) { y ->
+            ((lut[y] + 1.0) / (y + 1.0)).coerceIn(MIN_CHROMA_GAIN, MAX_CHROMA_GAIN)
+        }
+        val uv = width * height
+        val b = min(crop.b, height)
+        val r = min(crop.r, width)
+        for (y in crop.t until b) {
+            val row = y * width
+            val chromaRow = uv + (y / 2) * width
+            for (x in crop.l until r) {
+                val i = row + x
+                val old = nv21[i].toInt() and 0xFF
+                if (y % 2 == 0 && x % 2 == 0) {
+                    val k = chromaGain[old]
+                    val c = chromaRow + x
+                    nv21[c] = scaleChroma(nv21[c], k)
+                    nv21[c + 1] = scaleChroma(nv21[c + 1], k)
+                }
+                nv21[i] = lut[old].toByte()
+            }
+        }
+    }
+
+    private fun scaleChroma(c: Byte, k: Double): Byte =
+        (128 + ((c.toInt() and 0xFF) - 128) * k).roundToInt().coerceIn(0, 255).toByte()
+
+    /**
+     * A manual-engine frame, encoded with [curve], made to look like a photo: [crop]'s own mean
+     * normalised to mid grey and a contrasty display curve ([displayLut], [applyLut]). In place.
+     */
+    fun toneMap(nv21: ByteArray, width: Int, height: Int, crop: PixelRect, curve: ToneCurve) {
+        val mean = cropMeanLinear(nv21, width, crop, curve.lut)
+        applyLut(nv21, width, height, crop, displayLut(curve, mean))
     }
 
     /**

@@ -3,10 +3,12 @@ package io.github.wladikrin.grain.meter
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import kotlin.math.roundToInt
 
 class SnapshotEncoderTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -73,6 +75,108 @@ class SnapshotEncoderTest {
     @Test(expected = IllegalArgumentException::class)
     fun yuvToNv21RejectsOddSizes() {
         SnapshotEncoder.yuvToNv21(3, 2, ByteArray(6), 3, ByteArray(2), ByteArray(2), 2, 1)
+    }
+
+    private val gamma = ToneCurve.gamma(ToneCurve.GAMMA)
+
+    /** The 8-bit code [curve] encodes linear [lin] as. */
+    private fun code(curve: ToneCurve, lin: Double) = (curve.encode(lin) * 255).roundToInt()
+
+    @Test fun midGreyComesOutAsAPhotoMidTone() {
+        val lut = SnapshotEncoder.displayLut(gamma, 0.18)
+        // sRGB puts mid grey at 0.46 (118); the display curve lands close.
+        assertEquals(118.0, lut[code(gamma, 0.18)].toDouble(), 8.0)
+        assertTrue(lut[0] <= 2)
+        assertTrue(lut[255] >= 240)
+        for (y in 1..255) assertTrue("at $y", lut[y] >= lut[y - 1])
+    }
+
+    @Test fun theCropIsNormalisedWhereverTheLoopExposedIt() {
+        // The same scene exposed for the band's bottom, mid grey and its top: mid grey in the
+        // scene comes out the same.
+        val want = SnapshotEncoder.displayLut(gamma, 0.18)[code(gamma, 0.18)]
+        for (scale in listOf(0.3, 2.5)) {
+            val lut = SnapshotEncoder.displayLut(gamma, 0.18 * scale)
+            assertEquals("scale $scale", want.toDouble(), lut[code(gamma, 0.18 * scale)].toDouble(), 3.0)
+        }
+        // A black crop is lifted at most MAX_GAIN.
+        val dark = SnapshotEncoder.displayLut(gamma, 0.0)
+        assertEquals(SnapshotEncoder.displayLut(gamma, 0.18 / SnapshotEncoder.MAX_GAIN)[40], dark[40])
+    }
+
+    @Test fun theDisplayCurveIsContrastier() {
+        // A stop either side of mid grey spreads further than a plain sRGB encode.
+        val lut = SnapshotEncoder.displayLut(gamma, 0.18)
+        val filmic = lut[code(gamma, 0.36)] - lut[code(gamma, 0.09)]
+        val srgb = code(ToneCurve.SRGB, 0.36) - code(ToneCurve.SRGB, 0.09)
+        assertTrue("$filmic vs $srgb", filmic > srgb + 10)
+        // Highlights roll off: two stops over is not yet white, three stops over is.
+        assertTrue(lut[code(gamma, 0.18 * 4)] in 200..254)
+        assertEquals(255, SnapshotEncoder.displayLut(gamma, 0.09)[code(gamma, 0.09 * 8)])
+    }
+
+    @Test fun filmicIsBoundedAndMonotonic() {
+        assertEquals(0.0, SnapshotEncoder.filmic(0.0), 1e-3)
+        assertEquals(0.0, SnapshotEncoder.filmic(-1.0), 1e-3)
+        assertEquals(1.0, SnapshotEncoder.filmic(100.0), 1e-9)
+        var last = 0.0
+        for (i in 1..400) {
+            val v = SnapshotEncoder.filmic(i / 100.0)
+            assertTrue(v >= last)
+            last = v
+        }
+    }
+
+    @Test fun cropMeanSamplesOnlyTheCrop() {
+        // 8×8 frame: 64 at the left half, 200 at the right; the crop is the right half.
+        val nv21 = ByteArray(8 * 8 + 32) { i -> if (i < 64 && i % 8 >= 4) 200.toByte() else 64.toByte() }
+        val mean = SnapshotEncoder.cropMeanLinear(nv21, 8, PixelRect(4, 0, 8, 8), gamma.lut)
+        assertEquals(gamma.lut[200], mean, 1e-12)
+        assertEquals(gamma.lut[64], SnapshotEncoder.cropMeanLinear(nv21, 8, PixelRect(0, 0, 4, 8), gamma.lut), 1e-12)
+    }
+
+    @Test fun applyLutMapsLumaAndScalesChromaInsideTheCropOnly() {
+        // 4×4 frame, crop the right 2×4; chroma pairs (V,U) per 2×2 block.
+        val w = 4
+        val h = 4
+        val nv21 = ByteArray(w * h + w * h / 2) { 50 }
+        for (i in w * h until nv21.size) nv21[i] = if (i % 2 == 0) 148.toByte() else 108.toByte()
+        val lut = IntArray(256) { minOf(255, it * 2) } // doubles luma
+        SnapshotEncoder.applyLut(nv21, w, h, PixelRect(2, 0, 4, 4), lut)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                assertEquals("($x,$y)", if (x >= 2) 100 else 50, nv21[y * w + x].toInt() and 0xFF)
+            }
+        }
+        // Chroma of the crop's blocks: 20 off neutral becomes about 40; outside it stays.
+        for (row in 0 until h / 2) {
+            val base = w * h + row * w
+            assertEquals(148, nv21[base].toInt() and 0xFF)
+            assertEquals(108, nv21[base + 1].toInt() and 0xFF)
+            assertEquals(168.0, (nv21[base + 2].toInt() and 0xFF).toDouble(), 1.0)
+            assertEquals(88.0, (nv21[base + 3].toInt() and 0xFF).toDouble(), 1.0)
+        }
+    }
+
+    @Test fun neutralGreyStaysNeutralAndChromaGainIsBounded() {
+        val w = 2
+        val h = 2
+        val nv21 = byteArrayOf(2, 2, 2, 2, 128.toByte(), 200.toByte())
+        // A huge lift of a near-black pixel: chroma at most doubles.
+        SnapshotEncoder.applyLut(nv21, w, h, PixelRect(0, 0, 2, 2), IntArray(256) { 200 })
+        assertEquals(128, nv21[4].toInt() and 0xFF)
+        assertEquals(255, nv21[5].toInt() and 0xFF) // 128 + 72 × 2, clamped
+    }
+
+    @Test fun toneMapBringsADarkFrameToAPhotoMidTone() {
+        // A uniform crop exposed 2 stops under mid grey comes out near 118, like a mid grey.
+        val w = 8
+        val h = 8
+        val y = code(gamma, 0.045).toByte()
+        val nv21 = ByteArray(w * h + w * h / 2) { i -> if (i < w * h) y else 128.toByte() }
+        SnapshotEncoder.toneMap(nv21, w, h, PixelRect(0, 0, 8, 8), gamma)
+        assertEquals(118.0, (nv21[0].toInt() and 0xFF).toDouble(), 8.0)
+        assertEquals(128, nv21[w * h].toInt() and 0xFF)
     }
 
     @Test fun writeAtomicallyLeavesOnlyTheFinalFile() {

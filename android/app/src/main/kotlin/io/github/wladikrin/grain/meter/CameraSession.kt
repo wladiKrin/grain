@@ -277,7 +277,8 @@ class CameraSession(
      * METER mode: the next frame's lens crop, upright, as a JPEG at [out]; [onDone] gets the
      * path, or null (other mode, no frame within [SNAPSHOT_TIMEOUT_MS], session closed before a
      * frame arrived, encode failed). Once a frame is captured it is delivered even if the session
-     * closes meanwhile. The camera thread only copies the planes; encoding runs on a background thread.
+     * closes meanwhile. The camera thread only copies the planes; tone mapping (manual engine) and
+     * encoding run on a background thread.
      * [onDone] runs on the main thread.
      */
     fun requestSnapshot(out: File, onDone: (String?) -> Unit) {
@@ -317,11 +318,14 @@ class CameraSession(
         val uvPixelStride = up.pixelStride
         val crop = SnapshotEncoder.cropPixels(regions.crop, w, h)
         val orientation = sensorOrientation
+        // The manual engine's frames are flat and exposed for the loop, not for a picture.
+        val tone = if (loop != null) curve else null
         // The planes are private copies now, so the encode no longer depends on the session:
         // a close (Home, camera switch) during it still delivers the snapshot of the logged frame.
         encoder.execute {
             val jpeg = try {
                 val nv21 = SnapshotEncoder.yuvToNv21(w, h, y, yRowStride, u, v, uvRowStride, uvPixelStride)
+                tone?.let { SnapshotEncoder.toneMap(nv21, w, h, crop, it) }
                 SnapshotEncoder.encodeJpeg(nv21, w, h, crop, orientation)
             } catch (e: Exception) {
                 Log.w(TAG, "snapshot encode failed", e)
