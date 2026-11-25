@@ -299,7 +299,7 @@ void main() {
     expect(map.last.style.style, OpenFreeMapStyle.positron.url);
     await t.pumpWidget(app(Brightness.dark));
     await settle(t);
-    expect(map.last.style.style, OpenFreeMapStyle.dark.url);
+    expect(map.last.style.style, minimalDarkStyle);
     expect(pin('Roll 1, frame 1'), findsOneWidget);
     expect(
       map.props(map.features.single)['fill'],

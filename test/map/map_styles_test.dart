@@ -1,3 +1,5 @@
+import 'package:grain/map/openfreemap_dark.g.dart';
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -305,15 +307,85 @@ void main() {
       ).style,
       'https://tiles.openfreemap.org/styles/positron',
     );
-    expect(
-      mapStyleFor(
-        MapStyle.minimal,
-        Brightness.dark,
-        _colors(Brightness.dark),
-        _offline,
-      ).style,
-      'https://tiles.openfreemap.org/styles/dark',
+    final dark = mapStyleFor(
+      MapStyle.minimal,
+      Brightness.dark,
+      _colors(Brightness.dark),
+      _offline,
     );
+    // The bundled Dark with stronger contrast, still from OpenFreeMap.
+    expect(dark.style, minimalDarkStyle);
+    expect(dark.url, isNull);
+    expect(dark.hosts, {'tiles.openfreemap.org'});
+    expect(dark.attribution, openFreeMapAttribution);
+  });
+
+  group('Minimal in dark mode', () {
+    final upstream = jsonDecode(openFreeMapDarkJson) as Map<String, Object?>;
+    final lifted = jsonDecode(minimalDarkStyle) as Map<String, Object?>;
+    List<Map<String, Object?>> layers(Map<String, Object?> s) =>
+        (s['layers'] as List).cast<Map<String, Object?>>();
+    Map<String, Object?> paintOf(String id) =>
+        layers(lifted).firstWhere((l) => l['id'] == id)['paint']
+            as Map<String, Object?>;
+
+    test('keeps OpenFreeMap\'s sources, sprite, glyphs and layer order', () {
+      expect(lifted['sources'], upstream['sources']);
+      expect(lifted['sprite'], upstream['sprite']);
+      expect(lifted['glyphs'], upstream['glyphs']);
+      expect(
+        layers(lifted).map((l) => l['id']),
+        layers(upstream).map((l) => l['id']),
+      );
+      // Only paint changes: layout (fonts, sizes, fields) stays theirs.
+      for (final (i, l) in layers(lifted).indexed) {
+        expect(
+          l['layout'],
+          layers(upstream)[i]['layout'],
+          reason: '${l['id']}',
+        );
+      }
+    });
+
+    test('every recoloured layer is in the style', () {
+      final ids = layers(upstream).map((l) => l['id']).toSet();
+      expect(darkPaint.keys.where((k) => !ids.contains(k)), isEmpty);
+    });
+
+    test('labels, roads and the sea stand out from the ground', () {
+      Color c(Object v) =>
+          Color(0xFF000000 | int.parse((v as String).substring(1), radix: 16));
+      double contrast(Color a, Color b) {
+        final (x, y) = (a.computeLuminance(), b.computeLuminance());
+        return (math.max(x, y) + .05) / (math.min(x, y) + .05);
+      }
+
+      final ground = c(paintOf('background')['background-color']!);
+      expect(
+        contrast(c(paintOf('place_city')['text-color']!), ground),
+        greaterThan(12),
+      );
+      expect(
+        contrast(c(paintOf('place_town')['text-color']!), ground),
+        greaterThan(10),
+      );
+      expect(
+        contrast(c(paintOf('highway_name_other')['text-color']!), ground),
+        greaterThan(6),
+      );
+      expect(
+        contrast(c(paintOf('highway_major_inner')['line-color']!), ground),
+        greaterThan(1.8),
+      );
+      expect(
+        contrast(c(paintOf('water')['fill-color']!), ground),
+        greaterThan(1.05),
+      );
+      // OpenFreeMap's own place labels were about 3:1.
+      final before = layers(upstream)
+          .firstWhere((l) => l['id'] == 'place_city');
+      expect((before['paint'] as Map)['text-color'], 'rgb(101,101,101)');
+    });
   });
 
   test('every style but Offline is online; each is its own per palette', () {

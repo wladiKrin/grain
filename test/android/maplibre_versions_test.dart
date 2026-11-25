@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// The maplibre_gl package's own directory, from the package config.
 Directory _plugin() {
-  final config =
-      jsonDecode(File('.dart_tool/package_config.json').readAsStringSync())
-          as Map<String, Object?>;
+  final config = jsonDecode(
+    File('.dart_tool/package_config.json').readAsStringSync(),
+  ) as Map<String, Object?>;
   final entry = (config['packages']! as List)
       .cast<Map<String, Object?>>()
       .firstWhere((p) => p['name'] == 'maplibre_gl');
@@ -23,9 +23,8 @@ String? _version(String gradle, String artifact) =>
 void main() {
   test('the app builds MapNetPlugin against the MapLibre and OkHttp '
       'maplibre_gl brings', () {
-    final plugin = File(
-      '${_plugin().path}/android/build.gradle',
-    ).readAsStringSync();
+    final plugin = File('${_plugin().path}/android/build.gradle')
+        .readAsStringSync();
     final app = File('android/app/build.gradle.kts').readAsStringSync();
     for (final a in [
       'org.maplibre.gl:android-sdk-opengl',
