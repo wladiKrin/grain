@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_map/flutter_map.dart';
@@ -122,6 +123,7 @@ void main() {
     WidgetTester t, {
     String? rollId,
     Brightness brightness = Brightness.light,
+    Future<Basemap>? basemap,
   }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
@@ -134,7 +136,7 @@ void main() {
           gear: gear,
           settings: settings,
           rollId: rollId,
-          basemap: Future.value(_tinyMap),
+          basemap: basemap ?? Future.value(_tinyMap),
           tileProvider: () => tiles,
         ),
       ),
@@ -183,9 +185,9 @@ void main() {
     expect(pin('Roll 1, frame 3'), findsOneWidget);
     expect(pin('Roll 1, frame 2'), findsNothing);
     expect(pin('Saved reading'), findsOneWidget);
-    expect(find.byType(PolygonLayer), findsNWidgets(2));
-    expect(find.byType(PolylineLayer), findsOneWidget);
+    expect(find.byType(BasemapLayer), findsOneWidget);
     expect(find.byType(PlaceLabels), findsOneWidget);
+    expect(find.byType(PolygonLayer), findsNothing);
     expect(find.byType(TileLayer), findsNothing);
     expect(find.text(osmAttribution), findsNothing);
     expect(find.text('Natural Earth'), findsOneWidget);
@@ -196,6 +198,32 @@ void main() {
     expect(pin('Roll 1, frame 1'), findsOneWidget);
   });
 
+  testWidgets('a basemap that fails to load is said, not left blank', (
+    t,
+  ) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    final failing = Completer<Basemap>();
+    await pump(t, brightness: Brightness.dark, basemap: failing.future);
+    failing.completeError(const FormatException('Basemap: truncated'));
+    await settle(t);
+    expect(find.byType(FlutterMap), findsOneWidget);
+    expect(find.byType(BasemapLayer), findsNothing);
+    expect(pin('Roll 1, frame 1'), findsOneWidget);
+    expect(
+      find.textContaining('offline map could not be loaded'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('one located frame opens at a finite zoom', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(t, brightness: Brightness.dark);
+    final camera = MapCamera.of(t.element(find.byType(BasemapLayer)));
+    expect(camera.zoom, 13);
+    expect(camera.center.longitude, closeTo(_munich.longitude, 1e-6));
+    expect(find.byType(BasemapLayer), findsOneWidget);
+  });
+
   testWidgets('with the online map on, OSM tiles draw over the offline '
       'layers with the attribution', (t) async {
     await settings.setOnlineMap(true);
@@ -204,7 +232,17 @@ void main() {
     final layer = t.widget<TileLayer>(find.byType(TileLayer));
     expect(layer.urlTemplate, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
     expect(layer.panBuffer, 0);
-    expect(find.byType(PolygonLayer), findsNWidgets(2));
+    expect(find.byType(BasemapLayer), findsOneWidget);
+    // The tiles draw over the basemap, the markers over the tiles.
+    final children = t.widget<FlutterMap>(find.byType(FlutterMap)).children;
+    expect(
+      children.indexWhere((w) => w is BasemapLayer),
+      lessThan(children.indexWhere((w) => w is TileLayer)),
+    );
+    expect(
+      children.indexWhere((w) => w is TileLayer),
+      lessThan(children.indexWhere((w) => w is MarkerLayer)),
+    );
     expect(find.text('© OpenStreetMap contributors'), findsOneWidget);
     expect(tiles.requests, greaterThan(0));
     await settings.setOnlineMap(false);

@@ -1,4 +1,5 @@
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../gear/gear_controller.dart';
@@ -63,7 +64,9 @@ class _MapScreenState extends State<MapScreen> {
   List<MapPoint> _selected = const [];
   TileProvider? _tiles;
   Basemap? _basemap;
-  BasemapLayers? _layers;
+
+  /// The basemap could not be read: said over the map, not left blank.
+  bool _basemapFailed = false;
 
   @override
   void initState() {
@@ -75,7 +78,9 @@ class _MapScreenState extends State<MapScreen> {
         if (mounted) setState(() => _basemap = b);
       },
       onError: (Object _) {
-        // No basemap: the markers still show on the water colour.
+        // No basemap: the markers still show on the water colour, with a
+        // note saying why.
+        if (mounted) setState(() => _basemapFailed = true);
       },
     );
     _load();
@@ -139,11 +144,8 @@ class _MapScreenState extends State<MapScreen> {
     if (points.any((p) => p.isReading)) _readingsFilter: 'Saved readings',
   };
 
-  CameraFit _fit(List<MapPoint> points) => CameraFit.coordinates(
-    coordinates: [for (final p in points) p.position],
-    padding: const EdgeInsets.fromLTRB(48, 48, 48, 160),
-    maxZoom: 13,
-  );
+  CameraFit _fit(List<MapPoint> points) =>
+      cameraFitFor([for (final p in points) p.position]);
 
   void _recentre() {
     final shown = _shown;
@@ -197,13 +199,6 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
     Navigator.push(context, MaterialPageRoute<void>(builder: (_) => screen));
-  }
-
-  BasemapLayers? _layersFor(Basemap? b, MapColors c) {
-    if (b == null) return null;
-    final l = _layers;
-    if (l != null && l.map == b && l.colors.land == c.land) return l;
-    return _layers = BasemapLayers(b, c);
   }
 
   String get _title {
@@ -270,7 +265,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget _mapView() {
     final brightness = Theme.of(context).brightness;
     final colors = MapColors.of(g, brightness);
-    final layers = _layersFor(_basemap, colors);
+    final basemap = _basemap;
     final online = widget.settings.onlineMap;
     if (!online) _tiles = null;
     final shown = _shown;
@@ -284,6 +279,7 @@ class _MapScreenState extends State<MapScreen> {
             backgroundColor: colors.water,
             minZoom: 1,
             maxZoom: 19,
+            cameraConstraint: const _ContainLatitude(),
             interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
@@ -292,7 +288,7 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
           children: [
-            ...?layers?.layers,
+            if (basemap != null) ...basemapLayers(basemap, colors),
             if (online)
               TileLayer(
                 urlTemplate: osmUrlTemplate,
@@ -323,6 +319,17 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
+        if (_basemapFailed)
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Center(
+              child: _Attribution(
+                'The offline map could not be loaded: only the markers show.',
+              ),
+            ),
+          ),
         Positioned(
           left: 8,
           bottom: inset.bottom + 6,
@@ -361,6 +368,43 @@ class _MapScreenState extends State<MapScreen> {
     for (final p in shown)
       if (_selected.contains(p)) p,
   ];
+}
+
+/// The camera for [positions]: all in view above the card, at most zoom
+/// 13. A single spot (or several at one place) is fitted as a small area
+/// around it, so the zoom stays finite whatever the map's size.
+CameraFit cameraFitFor(List<LatLng> positions) {
+  var coordinates = positions;
+  if (positions.isNotEmpty) {
+    final b = LatLngBounds.fromPoints(positions);
+    if (b.north - b.south < 1e-4 && b.east - b.west < 1e-4) {
+      final c = b.center;
+      coordinates = [
+        LatLng(c.latitude - .005, c.longitude - .005),
+        LatLng(c.latitude + .005, c.longitude + .005),
+      ];
+    }
+  }
+  return CameraFit.coordinates(
+    coordinates: coordinates,
+    padding: const EdgeInsets.fromLTRB(48, 48, 48, 160),
+    maxZoom: 13,
+  );
+}
+
+/// Keeps the map's centre between the Mercator edges; east and west it
+/// goes round and round (the basemap draws as many copies as show).
+class _ContainLatitude extends CameraConstraint {
+  const _ContainLatitude();
+
+  @override
+  MapCamera constrain(MapCamera camera) {
+    final lat = camera.center.latitude;
+    if (lat.abs() <= 80) return camera;
+    return camera.withPosition(
+      center: LatLng(lat.clamp(-80, 80), camera.center.longitude),
+    );
+  }
 }
 
 /// A frame is a filled dot in the accent, a saved reading a ring.
