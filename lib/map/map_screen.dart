@@ -1,13 +1,9 @@
 import 'dart:async';
-import 'dart:math' as math;
 
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:flutter/foundation.dart' show listEquals, setEquals;
 import 'package:material_ui/material_ui.dart';
 import 'package:permission_handler/permission_handler.dart'
     show openAppSettings;
-import 'package:vector_map_tiles/vector_map_tiles.dart'
-    show Style, VectorTileLayer, VectorTileLayerMode;
 
 import '../gear/gear_controller.dart';
 import '../gear/model.dart';
@@ -18,21 +14,23 @@ import '../settings/settings.dart';
 import '../ui/permissions.dart';
 import '../ui/round_button.dart';
 import '../ui/theme.dart';
-import 'basemap.dart';
-import 'map_layers.dart';
+import 'basemap_files.dart';
+import 'geo.dart';
+import 'map_markers.dart';
+import 'map_network.dart';
 import 'map_points.dart';
 import 'map_style_sheet.dart';
-import 'tile_loading.dart';
-import 'vector_map.dart';
+import 'map_styles.dart';
+import 'map_view.dart';
+import 'maplibre_view.dart';
 
 /// The all-rolls map's filter: everything, saved readings only, or a roll.
 const _allFilter = '';
 const _readingsFilter = '\u0000readings';
 
 /// Logged locations on a map: every located frame and saved reading, or
-/// only the frames of [rollId]. The basemap is the bundled one; with an
-/// online map style chosen, that style's raster tiles or vector map are
-/// drawn over it.
+/// only the frames of [rollId]. MapLibre draws it, in the style chosen in
+/// [settings]: the bundled offline basemap, or an online one.
 class MapScreen extends StatefulWidget {
   MapScreen({
     super.key,
@@ -40,11 +38,12 @@ class MapScreen extends StatefulWidget {
     required this.gear,
     required this.settings,
     this.rollId,
-    Future<Basemap>? basemap,
-    this.tileProvider = onlineTileProvider,
-    this.vectorStyles = openFreeMap,
+    Future<OfflineSources>? offline,
+    MapNetwork? network,
+    this.mapView = mapLibreView,
     this.openSettings = openAppSettings,
-  }) : basemap = basemap ?? loadBasemap();
+  }) : offline = offline ?? loadOfflineSources(),
+       network = network ?? PlatformMapNetwork.instance;
 
   final RollController rolls;
 
@@ -54,23 +53,21 @@ class MapScreen extends StatefulWidget {
   /// The map style ([Settings.mapStyle]).
   final Settings settings;
 
-  /// Opened from the note shown when online tiles do not load.
+  /// Opened from the note shown when the online map does not load.
   final OpenSettings openSettings;
-
-  /// Tiles that fail with none loading in between before the note shows.
-  static const failuresBeforeNote = 3;
 
   /// Only this roll's frames; null shows every roll and the saved readings.
   final String? rollId;
-  final Future<Basemap> basemap;
 
-  /// Makes the online tile provider, once each time the tiles are turned on
-  /// (tests pass one that never goes to the network).
-  final TileProvider Function() tileProvider;
+  /// The offline basemap's files.
+  final Future<OfflineSources> offline;
 
-  /// Where the vector styles come from, asked for the first time one is
-  /// drawn (tests pass one that never goes to the network).
-  final VectorStyleSource Function() vectorStyles;
+  /// The map's HTTP client: the User-Agent, Offline's no-network switch,
+  /// and the requests that fail.
+  final MapNetwork network;
+
+  /// The map itself (tests pass a fake: MapLibre needs the platform).
+  final MapViewBuilder mapView;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -79,72 +76,70 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   GrainPalette get g => context.grain;
 
-  final _map = MapController();
   List<MapPoint>? _points;
   int _generation = 0;
   String _filter = _allFilter;
 
   /// The marker tapped and the points under it, shown in the card.
   List<MapPoint> _selected = const [];
-  TileProvider? _tiles;
 
-  /// The raster tile layer last built, to load failed tiles again as it
-  /// would.
-  TileLayer? _tileLayerShown;
-  final _retries = TileRetries();
+  OfflineSources? _offline;
 
-  late final VectorStyleSource _vectors = widget.vectorStyles();
+  /// Done reading the offline basemap, and whether that failed (said over
+  /// the map, not left blank).
+  bool _offlineDone = false;
+  bool _offlineFailed = false;
 
-  /// The vector style asked for, and once read, the style drawn (its
-  /// providers reporting to the failure note).
-  OpenFreeMapStyle? _vectorWanted;
-  Style? _vectorStyle;
-  bool _vectorStyleFailed = false;
+  /// The style the map shows: the one in the settings once the map's HTTP
+  /// client is set for it (online or not), so that Offline never goes
+  /// online, not even for a request of the style before.
+  MapStyle? _style;
+  int _configuring = 0;
 
-  /// Vector tiles failed since the vector layer was last built: on the
-  /// next move it is built again, asking for them afresh.
-  bool _vectorTilesFailed = false;
-  int _vectorGeneration = 0;
-  DateTime? _lastRetry;
-
-  Basemap? _basemap;
-
-  /// The basemap could not be read: said over the map, not left blank.
-  bool _basemapFailed = false;
-
-  /// The style the tiles are drawn in, to notice a change.
-  late MapStyle _style = widget.settings.mapStyle;
-
-  /// Online tiles that failed since one last loaded. From
-  /// [MapScreen.failuresBeforeNote] on, a note says the map is not loading
-  /// (no network, or the network permission off) until a tile loads.
-  int _tileFailures = 0;
-  bool _noteDismissed = false;
-  bool _okPending = false;
-
-  bool get _tilesFailing =>
-      _tileFailures >= MapScreen.failuresBeforeNote && !_noteDismissed;
-
-  /// Reloads the tiles in view, as on coming back from the system settings.
-  final _resetTiles = StreamController<void>.broadcast();
+  final _failures = MapFailures();
+  StreamSubscription<MapRequest>? _requests;
   late final AppLifecycleListener _lifecycle;
+
+  MapViewController? _map;
+  CameraView? _initialCamera;
+  Size _size = Size.zero;
+
+  /// The markers last built, and what from.
+  Map<String, Object?>? _markers;
+  List<MapPoint>? _markersShown;
+  Set<String>? _markersSelected;
+  GrainPalette? _markersPalette;
 
   @override
   void initState() {
     super.initState();
-    _lifecycle = AppLifecycleListener(onResume: _retryTiles);
+    _lifecycle = AppLifecycleListener(onResume: _retry);
     widget.rolls.addListener(_load);
     widget.settings.addListener(_settingsChanged);
-    widget.basemap.then(
-      (b) {
-        if (mounted) setState(() => _basemap = b);
+    _failures.addListener(_failuresChanged);
+    _requests = widget.network.requests.listen(_failures.request);
+    widget.offline.then(
+      (o) {
+        if (mounted) {
+          setState(() {
+            _offline = o;
+            _offlineDone = true;
+          });
+        }
       },
-      onError: (Object _) {
+      onError: (Object e) {
+        debugPrint('Offline map not loaded: $e');
         // No basemap: the markers still show on the water colour, with a
         // note saying why.
-        if (mounted) setState(() => _basemapFailed = true);
+        if (mounted) {
+          setState(() {
+            _offlineFailed = true;
+            _offlineDone = true;
+          });
+        }
       },
     );
+    _configure();
     _load();
   }
 
@@ -152,183 +147,44 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     widget.rolls.removeListener(_load);
     widget.settings.removeListener(_settingsChanged);
+    _failures
+      ..removeListener(_failuresChanged)
+      ..dispose();
+    unawaited(_requests?.cancel());
     _lifecycle.dispose();
-    _resetTiles.close();
-    _map.dispose();
     super.dispose();
   }
 
+  void _failuresChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _settingsChanged() {
-    if (!mounted) return;
-    setState(() {
-      if (widget.settings.mapStyle != _style) {
-        _style = widget.settings.mapStyle;
-        _tileFailures = 0;
-        _lastFailure = null;
-        _noteDismissed = false;
-        _retries.clear();
-        _vectorTilesFailed = false;
-      }
-    });
+    if (mounted && widget.settings.mapStyle != _style) _configure();
   }
 
-  void _tileFailed(TileImage tile, Object error, StackTrace? stack) {
-    // A load given up as its tile left the map is no failure.
-    if (!mounted || isTileCancellation(error)) return;
-    _retries.failed(tile);
-    _failed(tile.loadFinishedAt ?? DateTime.now());
-  }
-
-  void _failed(DateTime at) {
-    _tileFailures++;
-    _lastFailure = at;
-    // Reported while building too (an error already known): redrawn after.
-    if (_tileFailures == MapScreen.failuresBeforeNote) {
-      scheduleMicrotask(() {
-        if (mounted) setState(() {});
-      });
-    }
-  }
-
-  /// When the last tile failed: only a tile loaded since clears the note,
-  /// not one loaded before (from the cache, say) and drawn again.
-  DateTime? _lastFailure;
-
-  /// Called as tiles are drawn: one that loaded since the last failure
-  /// clears the failures (after the frame, as this runs while building).
-  Widget _watchTile(BuildContext context, Widget tile, TileImage image) {
-    final loaded = image.loadFinishedAt;
-    final failed = _lastFailure;
-    if (_tileFailures > 0 &&
-        !_okPending &&
-        loaded != null &&
-        !image.loadError &&
-        (failed == null || !loaded.isBefore(failed))) {
-      _okPending = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _okPending = false;
-        if (!mounted) return;
-        setState(() {
-          _tileFailures = 0;
-          _lastFailure = null;
-          _noteDismissed = false;
-        });
-      });
-    }
-    return tile;
-  }
-
-  /// A vector tile that failed (reported as it happens, from the tile
-  /// provider).
-  void _vectorTileFailed(Object error) {
-    if (!mounted) return;
-    _vectorTilesFailed = true;
-    _failed(DateTime.now());
-  }
-
-  /// A vector tile loaded: the online map works, the failures so far go.
-  void _vectorTileLoaded() {
-    if (!mounted || _tileFailures == 0 || _okPending) return;
-    _okPending = true;
-    scheduleMicrotask(() {
-      _okPending = false;
-      if (!mounted) return;
-      setState(() {
-        _tileFailures = 0;
-        _lastFailure = null;
-        _noteDismissed = false;
-      });
-    });
-  }
-
-  /// Reads [style], unless it is the one already read or being read (or,
-  /// but for a [retry], that failed); a style that cannot be read shows the
-  /// note at once.
-  void _wantVectorStyle(OpenFreeMapStyle style, {bool retry = false}) {
-    if (_vectorWanted == style && !(retry && _vectorStyleFailed)) return;
-    _vectorWanted = style;
-    _vectorStyle = null;
-    _vectorStyleFailed = false;
-    _vectors
-        .load(style)
-        .then(
-          (s) {
-            if (!mounted || _vectorWanted != style) return;
-            setState(
-              () => _vectorStyle = reportingStyle(
-                s,
-                onLoaded: _vectorTileLoaded,
-                onFailed: _vectorTileFailed,
-              ),
-            );
-          },
-          onError: (Object _) {
-            if (!mounted || _vectorWanted != style) return;
-            setState(() {
-              _vectorStyleFailed = true;
-              _tileFailures = math.max(
-                _tileFailures,
-                MapScreen.failuresBeforeNote,
-              );
-              _lastFailure = DateTime.now();
-            });
-          },
-        );
-  }
-
-  /// Asks for the tiles in view again if any failed: the network may be
-  /// back, or allowed in the system settings.
-  void _retryTiles() {
-    if (!mounted || !widget.settings.onlineMap) return;
-    final online = OnlineMap.of(
-      widget.settings.mapStyle,
-      Theme.of(context).brightness,
+  /// Sets the map's HTTP client for the style in the settings, then shows
+  /// that style.
+  void _configure() {
+    final style = widget.settings.mapStyle;
+    final call = ++_configuring;
+    unawaited(
+      widget.network
+          .configure(userAgent: osmUserAgent, offline: !style.online)
+          .catchError((Object e) => debugPrint('Map client not set: $e'))
+          .whenComplete(() {
+            if (!mounted || call != _configuring) return;
+            setState(() => _style = style);
+          }),
     );
-    if (online is VectorMap) {
-      if (_vectorStyleFailed) {
-        setState(() => _wantVectorStyle(online.style, retry: true));
-      } else if (_vectorTilesFailed) {
-        setState(() {
-          _vectorTilesFailed = false;
-          _vectorGeneration++;
-        });
-      }
-    } else if (_tileFailures > 0 || _retries.length > 0) {
-      _retries.clear();
-      _resetTiles.add(null);
-    }
   }
 
-  /// When the map comes to rest, the failed tiles in view are asked for
-  /// again (at most every few seconds, so a map with no network is not
-  /// asked for over and over).
-  void _mapEvent(MapEvent event) {
-    if (event is! MapEventMoveEnd &&
-        event is! MapEventFlingAnimationEnd &&
-        event is! MapEventDoubleTapZoomEnd) {
-      return;
-    }
-    final now = DateTime.now();
-    final last = _lastRetry;
-    if (last != null && now.difference(last) < retryInterval) return;
-    final tiles = _tiles, layer = _tileLayerShown;
-    if (tiles != null && layer != null && _retries.length > 0) {
-      _lastRetry = now;
-      _retries.retry(tiles, layer);
-    } else if (_vectorTilesFailed && _vectorStyle != null) {
-      _lastRetry = now;
-      setState(() {
-        _vectorTilesFailed = false;
-        _vectorGeneration++;
-      });
-    } else if (_vectorStyleFailed && _vectorWanted != null) {
-      _lastRetry = now;
-      setState(() => _wantVectorStyle(_vectorWanted!, retry: true));
-    }
+  /// Asks for the map again if it failed: the network may be back, or
+  /// allowed in the system settings.
+  void _retry() {
+    if (!mounted || !_failures.failing) return;
+    unawaited(_map?.reload());
   }
-
-  /// Failed tiles are asked for again on a move at most this often.
-  static const retryInterval = Duration(seconds: 3);
 
   Future<void> _load() async {
     final generation = ++_generation;
@@ -376,12 +232,16 @@ class _MapScreenState extends State<MapScreen> {
     if (points.any((p) => p.isReading)) _readingsFilter: 'Saved readings',
   };
 
-  CameraFit _fit(List<MapPoint> points) =>
-      cameraFitFor([for (final p in points) p.position]);
+  /// All of [points] in view above the card, at most zoom 13.
+  CameraView _fit(List<MapPoint> points, Size size) => fitCamera(
+    [for (final p in points) p.position],
+    width: size.width,
+    height: size.height,
+  );
 
   void _recentre() {
     final shown = _shown;
-    if (shown.isNotEmpty) _map.fitCamera(_fit(shown));
+    if (shown.isNotEmpty) unawaited(_map?.moveTo(_fit(shown, _size)));
   }
 
   void _setFilter(String f) {
@@ -392,26 +252,19 @@ class _MapScreenState extends State<MapScreen> {
     _recentre();
   }
 
-  /// The points drawn within a marker's reach of [p] at this zoom: the card
-  /// lists them all, so frames logged at one spot can each be opened.
-  void _tap(MapPoint p) {
-    final camera = _map.camera;
-    final at = camera.latLngToScreenOffset(p.position);
-    final near = [
-      for (final q in _shown)
-        if ((camera.latLngToScreenOffset(q.position) - at).distance <= 16) q,
-    ]..sort(_byTime);
-    setState(() => _selected = near.isEmpty ? [p] : near);
+  Future<void> _tapMarker(String id) async {
+    final camera = await _map?.camera();
+    if (!mounted) return;
+    final shown = _shown;
+    final p = shown.where((q) => q.id == id).firstOrNull;
+    if (p == null) return;
+    final zoom = camera?.zoom ?? _initialCamera?.zoom ?? 13;
+    setState(() => _selected = pointsNear(p, shown, zoom));
   }
 
-  /// Oldest first; undated (blank) frames last.
-  static int _byTime(MapPoint a, MapPoint b) =>
-      switch ((a.takenAt, b.takenAt)) {
-        (final x?, final y?) => x.compareTo(y),
-        (null, null) => 0,
-        (null, _) => 1,
-        (_, null) => -1,
-      };
+  void _tapMap() {
+    if (_selected.isNotEmpty) setState(() => _selected = const []);
+  }
 
   void _open(MapPoint p) {
     final Widget screen;
@@ -439,6 +292,21 @@ class _MapScreenState extends State<MapScreen> {
       if (r != null) return 'Roll ${r.number} · Map';
     }
     return 'Map';
+  }
+
+  /// The markers' GeoJSON, built again only when what it shows changes.
+  Map<String, Object?> _markersFor(List<MapPoint> shown) {
+    final selected = {for (final p in _selected) p.id};
+    if (_markers case final m?
+        when listEquals(_markersShown, shown) &&
+            setEquals(_markersSelected, selected) &&
+            _markersPalette == g) {
+      return m;
+    }
+    _markersShown = shown;
+    _markersSelected = selected;
+    _markersPalette = g;
+    return _markers = markerGeoJson(shown, selected, g);
   }
 
   @override
@@ -504,63 +372,34 @@ class _MapScreenState extends State<MapScreen> {
   Widget _mapView() {
     final brightness = Theme.of(context).brightness;
     final colors = MapColors.of(g, brightness);
-    final basemap = _basemap;
-    final online = OnlineMap.of(widget.settings.mapStyle, brightness);
-    if (online is! OnlineTiles) {
-      _tiles = null;
-      _tileLayerShown = null;
+    final style = _style;
+    if (style == null || !_offlineDone) {
+      return ColoredBox(color: colors.water, child: const SizedBox.expand());
     }
-    if (online is VectorMap) {
-      _wantVectorStyle(online.style);
-    } else {
-      _vectorWanted = null;
-      _vectorStyle = null;
-      _vectorStyleFailed = false;
-    }
-    final vectorStyle = _vectorStyle;
+    final doc = mapStyleFor(style, brightness, colors, _offline);
+    _failures.watch(doc);
     final shown = _shown;
     final inset = MediaQuery.paddingOf(context);
     return Stack(
       children: [
-        FlutterMap(
-          mapController: _map,
-          options: MapOptions(
-            initialCameraFit: _fit(shown),
-            backgroundColor: colors.water,
-            minZoom: 1,
-            maxZoom: 19,
-            cameraConstraint: const _ContainLatitude(),
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-            ),
-            onTap: (_, _) {
-              if (_selected.isNotEmpty) setState(() => _selected = const []);
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              _size = box.biggest;
+              final camera = _initialCamera ??= _fit(shown, _size);
+              return widget.mapView(
+                MapViewOptions(
+                  style: doc,
+                  initialCamera: camera,
+                  markers: _markersFor(shown),
+                  background: colors.water,
+                  onMarkerTap: (id) => unawaited(_tapMarker(id)),
+                  onMapTap: _tapMap,
+                  onCreated: (c) => _map = c,
+                ),
+              );
             },
-            onMapEvent: _mapEvent,
           ),
-          children: [
-            if (basemap != null) ...basemapLayers(basemap, colors),
-            if (online is OnlineTiles) _tileLayer(online),
-            if (online is VectorMap && vectorStyle != null)
-              _vectorLayer(vectorStyle),
-            MarkerLayer(
-              markers: [
-                // Frames over readings; the selected ones on top.
-                for (final p in _ordered(shown))
-                  Marker(
-                    key: ValueKey('map-point-${p.id}'),
-                    point: p.position,
-                    width: 44,
-                    height: 44,
-                    child: _Pin(
-                      point: p,
-                      selected: _selected.contains(p),
-                      onTap: () => _tap(p),
-                    ),
-                  ),
-              ],
-            ),
-          ],
         ),
         Positioned(
           top: 12,
@@ -569,17 +408,17 @@ class _MapScreenState extends State<MapScreen> {
           child: Column(
             spacing: 8,
             children: [
-              if (_basemapFailed)
+              if (_offlineFailed && style == MapStyle.offline)
                 Center(
                   child: _Attribution(
                     'The offline map could not be loaded: only the markers '
                     'show.',
                   ),
                 ),
-              if (online != null && _tilesFailing)
+              if (doc.online && _failures.showing)
                 _TilesNote(
                   onOpenSettings: widget.openSettings,
-                  onDismiss: () => setState(() => _noteDismissed = true),
+                  onDismiss: _failures.dismiss,
                 ),
             ],
           ),
@@ -590,7 +429,7 @@ class _MapScreenState extends State<MapScreen> {
           bottom: inset.bottom + 6,
           child: Align(
             alignment: Alignment.centerLeft,
-            child: _Attribution(online?.attribution ?? naturalEarthAttribution),
+            child: _Attribution(doc.attribution),
           ),
         ),
         Positioned(
@@ -615,146 +454,6 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
       ],
-    );
-  }
-
-  /// [online]'s tiles over the basemap, with its colour filter if it has
-  /// one. Only what is on screen is asked for, no further in than the
-  /// server draws.
-  Widget _tileLayer(OnlineTiles online) {
-    final layer = TileLayer(
-      key: const ValueKey('online-tiles'),
-      urlTemplate: online.urlTemplate,
-      subdomains: online.subdomains,
-      retinaMode: online.retina && RetinaMode.isHighDensity(context),
-      tileProvider: _tiles ??= widget.tileProvider(),
-      maxNativeZoom: online.maxNativeZoom,
-      // No tiles fetched ahead.
-      panBuffer: 0,
-      // A failed tile is let go once it is off the map (beyond the margin
-      // kept), so it is asked for afresh when it comes back.
-      evictErrorTileStrategy: EvictErrorTileStrategy.notVisibleRespectMargin,
-      errorTileCallback: _tileFailed,
-      tileBuilder: _watchTile,
-      reset: _resetTiles.stream,
-    );
-    _tileLayerShown = layer;
-    final filter = online.colorFilter;
-    return filter == null
-        ? layer
-        : ColorFiltered(colorFilter: filter, child: layer);
-  }
-
-  /// [style] drawn with vector_map_tiles as it recommends for speed: each
-  /// tile rendered once to an image (in raster mode, so a pan or zoom only
-  /// moves images), tiles decoded in background isolates, and the tiles
-  /// kept on disk within [vectorCacheBytes]. Only tiles on screen (and the
-  /// ring around them the layer keeps) are asked for.
-  Widget _vectorLayer(Style style) => VectorTileLayer(
-    key: ValueKey('vector-tiles-${style.name}-$_vectorGeneration'),
-    theme: style.theme,
-    sprites: style.sprites,
-    tileProviders: style.providers,
-    layerMode: VectorTileLayerMode.raster,
-    maximumZoom: 19,
-    fileCacheMaximumSizeInBytes: vectorCacheBytes,
-    // The package types this with its own `Directory`, which the analyser
-    // takes for its web stand-in; on Android it is dart:io's.
-    cacheFolder: _vectors.cacheFolder as dynamic,
-  );
-
-  Iterable<MapPoint> _ordered(List<MapPoint> shown) => [
-    for (final p in shown)
-      if (p.isReading && !_selected.contains(p)) p,
-    for (final p in shown)
-      if (!p.isReading && !_selected.contains(p)) p,
-    for (final p in shown)
-      if (_selected.contains(p)) p,
-  ];
-}
-
-/// The camera for [positions]: all in view above the card, at most zoom
-/// 13. A single spot (or several at one place) is fitted as a small area
-/// around it, so the zoom stays finite whatever the map's size.
-CameraFit cameraFitFor(List<LatLng> positions) {
-  var coordinates = positions;
-  if (positions.isNotEmpty) {
-    final b = LatLngBounds.fromPoints(positions);
-    if (b.north - b.south < 1e-4 && b.east - b.west < 1e-4) {
-      final c = b.center;
-      coordinates = [
-        LatLng(c.latitude - .005, c.longitude - .005),
-        LatLng(c.latitude + .005, c.longitude + .005),
-      ];
-    }
-  }
-  return CameraFit.coordinates(
-    coordinates: coordinates,
-    padding: const EdgeInsets.fromLTRB(48, 48, 48, 160),
-    maxZoom: 13,
-  );
-}
-
-/// Keeps the map's centre between the Mercator edges; east and west it
-/// goes round and round (the basemap draws as many copies as show).
-class _ContainLatitude extends CameraConstraint {
-  const _ContainLatitude();
-
-  @override
-  MapCamera constrain(MapCamera camera) {
-    final lat = camera.center.latitude;
-    if (lat.abs() <= 80) return camera;
-    return camera.withPosition(
-      center: LatLng(lat.clamp(-80, 80), camera.center.longitude),
-    );
-  }
-}
-
-/// A frame is a filled dot in the accent, a saved reading a ring.
-class _Pin extends StatelessWidget {
-  const _Pin({
-    required this.point,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final MapPoint point;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final g = context.grain;
-    final p = point;
-    final label = p.isReading
-        ? 'Saved reading'
-        : 'Roll ${p.roll!.number}, frame ${p.frame!.label}';
-    final size = selected ? 20.0 : 16.0;
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Center(
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: p.isReading ? g.ground : g.accent,
-              border: Border.all(
-                color: p.isReading ? g.accent : g.ground,
-                width: p.isReading ? 3 : 2,
-              ),
-              boxShadow: selected
-                  ? [BoxShadow(color: g.ink, spreadRadius: 1.5)]
-                  : null,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

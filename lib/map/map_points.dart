@@ -1,25 +1,24 @@
-import 'package:latlong2/latlong.dart';
-
 import '../rolls/model.dart';
+import 'geo.dart';
 
 /// A logged location on the map: a roll's frame or a saved reading.
 class MapPoint {
   MapPoint._frame(Roll this.roll, Frame this.frame, GeoFix fix)
     : reading = null,
       _fix = fix,
-      position = LatLng(fix.latitude, fix.longitude);
+      position = GeoPoint(fix.latitude, fix.longitude);
 
   MapPoint._reading(SavedReading this.reading, GeoFix fix)
     : roll = null,
       frame = null,
       _fix = fix,
-      position = LatLng(fix.latitude, fix.longitude);
+      position = GeoPoint(fix.latitude, fix.longitude);
 
   /// Null for a saved reading.
   final Roll? roll;
   final Frame? frame;
   final SavedReading? reading;
-  final LatLng position;
+  final GeoPoint position;
   final GeoFix _fix;
 
   bool get isReading => reading != null;

@@ -41,13 +41,9 @@ dependencies:
   qr_flutter: ^4.1.0
   uuid: ^4.6.0
   archive: ^4.7.1
-  flutter_map: ^8.3.2
-  latlong2: ^0.10.1
-  # Vector tiles (OpenFreeMap) drawn in the FlutterMap; pinned, as the
-  # flutter_map 8 line is a beta.
-  vector_map_tiles: 9.0.0-beta.13
-  vector_tile_renderer: 6.1.0
-  http: ^1.6.0
+  # The map: the official MapLibre plugin (BSD-3) and MapLibre Native
+  # (BSD-2); no Mapbox SDK, no key. Its Android side needs JDK 21.
+  maplibre_gl: ^0.28.1
 
 dev_dependencies:
   flutter_test:
@@ -60,8 +56,6 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   json_schema: ^5.2.2
-  # Builds the vector tiles the map tests draw.
-  vector_tile: 2.0.1
   drift_dev: ^2.35.3
   build_runner: ^2.17.1
 
@@ -100,6 +94,9 @@ flutter:
   assets:
     - assets/licenses/
     - assets/map/
+    # Read by MapLibre itself (asset://flutter_assets/...), see glyphs.dart.
+    - assets/map/glyphs/grain-regular/
+    - assets/map/glyphs/grain-bold/
     - library/bodies/canon/
     - library/bodies/leica/
     - library/bodies/minolta/

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:latlong2/latlong.dart';
+import 'geo.dart';
 
 /// The offline basemap: Natural Earth land, lakes, country borders and
 /// populated places, as drawn under the logged locations.
@@ -36,7 +36,7 @@ class Basemap {
 
   final List<MapPolygon> land;
   final List<MapPolygon> lakes;
-  final List<List<LatLng>> borders;
+  final List<List<GeoPoint>> borders;
 
   /// Most prominent first: drawn in this order, a label that would overlap
   /// one already drawn is left out.
@@ -78,8 +78,8 @@ int _fixed(double deg) => (deg * Basemap.scale).round();
 class MapPolygon {
   const MapPolygon(this.outline, [this.holes = const []]);
 
-  final List<LatLng> outline;
-  final List<List<LatLng>> holes;
+  final List<GeoPoint> outline;
+  final List<List<GeoPoint>> holes;
 }
 
 /// A named place, labelled from [minZoom] on.
@@ -92,7 +92,7 @@ class Place {
   });
 
   final String name;
-  final LatLng position;
+  final GeoPoint position;
   final double minZoom;
 
   /// A country's capital.
@@ -117,7 +117,7 @@ class _Writer {
 
   void sint(int v) => uint(v >= 0 ? v << 1 : ((-v) << 1) - 1);
 
-  void ring(List<LatLng> points) {
+  void ring(List<GeoPoint> points) {
     uint(points.length);
     var lat = 0, lon = 0;
     for (final p in points) {
@@ -170,13 +170,13 @@ class _Reader {
     return (v & 1) == 0 ? v >> 1 : -((v + 1) >> 1);
   }
 
-  List<LatLng> ring() {
+  List<GeoPoint> ring() {
     final n = uint();
     var lat = 0, lon = 0;
     return List.generate(n, (_) {
       lat += sint();
       lon += sint();
-      return LatLng(lat / Basemap.scale, lon / Basemap.scale);
+      return GeoPoint(lat / Basemap.scale, lon / Basemap.scale);
     }, growable: false);
   }
 
@@ -211,7 +211,7 @@ class _Reader {
       _i += len;
       return Place(
         name: name,
-        position: LatLng(lat, lon),
+        position: GeoPoint(lat, lon),
         minZoom: minZoom,
         capital: flags & 1 != 0,
       );

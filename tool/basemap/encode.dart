@@ -12,7 +12,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:grain/map/basemap.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:grain/map/geo.dart';
 
 void main(List<String> args) {
   if (args.length != 2) {
@@ -49,9 +49,9 @@ void main(List<String> args) {
 Map<String, Object?> _geometry(Map<String, Object?> f) =>
     f['geometry']! as Map<String, Object?>;
 
-List<LatLng> _ring(Object? coords) => [
+List<GeoPoint> _ring(Object? coords) => [
   for (final c in coords! as List)
-    LatLng(
+    GeoPoint(
       ((c as List)[1] as num).toDouble().clamp(-90, 90),
       (c[0] as num).toDouble().clamp(-180, 180),
     ),
@@ -73,7 +73,7 @@ List<MapPolygon> _polygons(List<Map<String, Object?>> fs) => [
     },
 ];
 
-List<List<LatLng>> _lines(List<Map<String, Object?>> fs) => [
+List<List<GeoPoint>> _lines(List<Map<String, Object?>> fs) => [
   for (final f in fs)
     ...switch (_geometry(f)) {
       {'type': 'LineString', 'coordinates': final c} => [_ring(c)],

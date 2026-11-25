@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/map/basemap.dart';
-import 'package:grain/map/map_layers.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:grain/map/basemap_files.dart';
+import 'package:grain/map/geo.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,33 +12,45 @@ void main() {
   const sample = Basemap(
     land: [
       MapPolygon(
-        [LatLng(0, 0), LatLng(10, 0), LatLng(10, 10), LatLng(0, 0)],
+        [GeoPoint(0, 0), GeoPoint(10, 0), GeoPoint(10, 10), GeoPoint(0, 0)],
         [
-          [LatLng(2, 2), LatLng(3, 2), LatLng(3, 3)],
+          [GeoPoint(2, 2), GeoPoint(3, 2), GeoPoint(3, 3)],
         ],
       ),
-      MapPolygon([LatLng(-89.9, -179.99), LatLng(-60, 179.99), LatLng(-70, 0)]),
+      MapPolygon([
+        GeoPoint(-89.9, -179.99),
+        GeoPoint(-60, 179.99),
+        GeoPoint(-70, 0),
+      ]),
     ],
     lakes: [
-      MapPolygon([LatLng(46.5, 6.2), LatLng(46.3, 6.9), LatLng(46.2, 6.1)]),
+      MapPolygon([
+        GeoPoint(46.5, 6.2),
+        GeoPoint(46.3, 6.9),
+        GeoPoint(46.2, 6.1),
+      ]),
     ],
     borders: [
-      [LatLng(47.6, 7.6), LatLng(47.5, 9.6), LatLng(47.27, 10.17)],
+      [GeoPoint(47.6, 7.6), GeoPoint(47.5, 9.6), GeoPoint(47.27, 10.17)],
       [],
     ],
     places: [
       Place(
         name: 'Berlin',
-        position: LatLng(52.5218, 13.4015),
+        position: GeoPoint(52.5218, 13.4015),
         minZoom: 1.7,
         capital: true,
       ),
-      Place(name: 'São Paulo', position: LatLng(-23.5587, -46.625), minZoom: 2),
-      Place(name: '東京', position: LatLng(35.685, 139.7514), minZoom: 1.7),
+      Place(
+        name: 'São Paulo',
+        position: GeoPoint(-23.5587, -46.625),
+        minZoom: 2,
+      ),
+      Place(name: '東京', position: GeoPoint(35.685, 139.7514), minZoom: 1.7),
     ],
   );
 
-  void expectNear(LatLng a, LatLng b) {
+  void expectNear(GeoPoint a, GeoPoint b) {
     expect(a.latitude, closeTo(b.latitude, 1e-4));
     expect(a.longitude, closeTo(b.longitude, 1e-4));
   }
@@ -52,13 +64,13 @@ void main() {
     for (var i = 0; i < 3; i++) {
       expectNear(back.land[1].outline[i], sample.land[1].outline[i]);
     }
-    expectNear(back.lakes.single.outline[1], const LatLng(46.3, 6.9));
+    expectNear(back.lakes.single.outline[1], const GeoPoint(46.3, 6.9));
     expect(back.borders.map((b) => b.length), [3, 0]);
-    expectNear(back.borders[0][2], const LatLng(47.27, 10.17));
+    expectNear(back.borders[0][2], const GeoPoint(47.27, 10.17));
     expect(back.places.map((p) => p.name), ['Berlin', 'São Paulo', '東京']);
     expect(back.places.map((p) => p.capital), [true, false, false]);
     expect(back.places.map((p) => p.minZoom), [1.7, 2, 1.7]);
-    expectNear(back.places[1].position, const LatLng(-23.5587, -46.625));
+    expectNear(back.places[1].position, const GeoPoint(-23.5587, -46.625));
   });
 
   test('an empty basemap is 9 bytes', () {
@@ -89,7 +101,10 @@ void main() {
 
   group('the bundled asset', () {
     late Basemap map;
-    setUpAll(() async => map = await loadBasemap(rootBundle));
+    setUpAll(() async {
+      final data = await rootBundle.load(basemapAsset);
+      map = Basemap.decode(data.buffer.asUint8List());
+    });
 
     test('stays small', () {
       expect(File(basemapAsset).lengthSync(), lessThan(1024 * 1024));
@@ -106,11 +121,11 @@ void main() {
       final berlin = map.places.firstWhere((p) => p.name == 'Berlin');
       expect(berlin.capital, isTrue);
       expectNear(
-        LatLng(
+        GeoPoint(
           (berlin.position.latitude * 10).roundToDouble() / 10,
           (berlin.position.longitude * 10).roundToDouble() / 10,
         ),
-        const LatLng(52.5, 13.4),
+        const GeoPoint(52.5, 13.4),
       );
       for (var i = 1; i < map.places.length; i++) {
         expect(
@@ -118,11 +133,6 @@ void main() {
           greaterThanOrEqualTo(map.places[i - 1].minZoom),
         );
       }
-    });
-
-    test('the app bundle is read once', () async {
-      expect(identical(loadBasemap(), loadBasemap()), isTrue);
-      expect((await loadBasemap()).land, hasLength(map.land.length));
     });
   });
 }

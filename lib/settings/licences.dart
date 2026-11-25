@@ -5,8 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../version.dart';
 
 /// A notice Flutter does not collect from the pub packages: the Kotlin side,
-/// the font, the vendored C library, the gear library and the map data
-/// (bundled, and the online OpenFreeMap styles').
+/// the fonts, the vendored C library, the gear library, the map engine and
+/// the map data (bundled, and the online OpenFreeMap styles').
 typedef _Notice = ({String package, String? header, String asset});
 
 const List<_Notice> _notices = [
@@ -19,6 +19,27 @@ const List<_Notice> _notices = [
   ),
   (package: 'Inter Tight', header: null, asset: 'assets/licenses/ofl-1.1.txt'),
   (package: 'SQLite', header: null, asset: 'assets/licenses/sqlite.txt'),
+  (
+    package: 'MapLibre Native',
+    header:
+        'MapLibre Native for Android 13.7.1 draws the map (through the '
+        'maplibre_gl plugin). BSD 2-Clause License.',
+    asset: 'assets/licenses/maplibre-native.txt',
+  ),
+  (
+    package: 'OkHttp',
+    header:
+        'OkHttp 5 (the map’s HTTP client), Copyright Square, Inc. Licensed '
+        'under the Apache License, Version 2.0.',
+    asset: 'assets/licenses/apache-2.0.txt',
+  ),
+  (
+    package: 'Noto Sans',
+    header:
+        'The offline map’s place names are drawn with Noto Sans Regular and '
+        'Bold (glyphs from openmaptiles/fonts, cut to the characters used).',
+    asset: 'assets/licenses/noto-sans.txt',
+  ),
   (
     package: 'Grain gear library',
     header:
@@ -48,10 +69,10 @@ List<String> get licencePackages => [for (final n in _notices) n.package];
 
 bool _registered = false;
 
-/// Adds the notices for ZXing core, Inter Tight, SQLite, the gear library,
-/// Natural Earth and OpenFreeMap to Flutter's [LicenseRegistry], beside the
-/// pub packages' own (vector_map_tiles and its renderer among them). Safe
-/// to call more than once.
+/// Adds the notices for ZXing core, Inter Tight, SQLite, MapLibre Native,
+/// OkHttp, Noto Sans, the gear library, Natural Earth and OpenFreeMap to
+/// Flutter's [LicenseRegistry], beside the pub packages' own (maplibre_gl
+/// among them). Safe to call more than once.
 void registerLicences([AssetBundle? bundle]) {
   if (_registered) return;
   _registered = true;

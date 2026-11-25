@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/gear/model.dart';
 import 'package:grain/map/map_points.dart';
 import 'package:grain/rolls/model.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:grain/map/geo.dart';
 
 import '../rolls/support.dart';
 
@@ -39,7 +39,7 @@ void main() {
       [_reading('s1', null), _reading('s2', _there)],
     );
     expect(points.map((p) => p.id), ['f0', 'f2', 's2']);
-    expect(points[0].position, const LatLng(48.137, 11.575));
+    expect(points[0].position, const GeoPoint(48.137, 11.575));
     expect(points[0].roll, r1);
     expect(points[0].frame!.number, 1);
     expect(points[0].isReading, isFalse);
@@ -49,7 +49,7 @@ void main() {
     expect(points[2].camera, 'Nikon FM2');
     expect(points[2].takenAt, t0);
     expect(points[2].utcOffsetMinutes, 60);
-    expect(points[2].position, const LatLng(-33.86, 151.21));
+    expect(points[2].position, const GeoPoint(-33.86, 151.21));
   });
 
   test('nothing located gives no points', () {

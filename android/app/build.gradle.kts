@@ -88,5 +88,9 @@ flutter {
 
 dependencies {
     implementation("com.google.zxing:core:3.5.4")
+    // MapNetPlugin sets the HTTP client MapLibre loads the map with: the
+    // versions maplibre_gl brings (test/android/maplibre_versions_test.dart).
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
     testImplementation("junit:junit:4.13.2")
 }

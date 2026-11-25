@@ -1,12 +1,20 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <!-- Only for the map's online tiles (tiles.openfreemap.org,
-         tile.openstreetmap.org, opentopomap.org), and only with an online
-         map style chosen (Offline by default). The meter never uses the
-         network. -->
+    <!-- Only for the map's online styles (tiles.openfreemap.org,
+         tile.openstreetmap.org, opentopomap.org), and only with one chosen
+         (Offline by default). The meter never uses the network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- MapLibre's own manifest asks for these; Grain does not need them.
+         MapLibre is told whether it may go online (MapNetPlugin.kt) instead
+         of asking Android for the network state. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"
+        tools:node="remove"/>
+    <uses-feature android:name="android.hardware.wifi" tools:node="remove"/>
     <uses-feature android:name="android.hardware.camera" android:required="true"/>
     <application
         android:label="Grain"
