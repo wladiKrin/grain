@@ -132,9 +132,36 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.containsKey('onlineMap'), isFalse);
     expect((await Settings.load()).mapStyle, MapStyle.offline);
-    // An unknown name falls back to the old switch, then to Offline.
+    // An unknown name is Offline, even with the old switch on.
     SharedPreferences.setMockInitialValues({'mapStyle': 'satellite'});
     expect((await Settings.load()).mapStyle, MapStyle.offline);
+    SharedPreferences.setMockInitialValues({
+      'onlineMap': true,
+      'mapStyle': 'carto',
+    });
+    expect((await Settings.load()).mapStyle, MapStyle.offline);
+  });
+
+  test('a saved Minimal stays Minimal, and Streets is a style of its own, '
+      'saved under its name', () async {
+    expect(MapStyle.values.map((s) => s.name), [
+      'offline',
+      'streets',
+      'minimal',
+      'muted',
+      'standard',
+      'topographic',
+    ]);
+    SharedPreferences.setMockInitialValues({'mapStyle': 'minimal'});
+    final s = await Settings.load();
+    expect(s.mapStyle, MapStyle.minimal);
+    expect(s.onlineMap, isTrue);
+    await s.setMapStyle(MapStyle.streets);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('mapStyle'), 'streets');
+    final r = await Settings.load();
+    expect(r.mapStyle, MapStyle.streets);
+    expect(r.onlineMap, isTrue);
   });
 
   test(

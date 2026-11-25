@@ -5,12 +5,15 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../settings/settings.dart';
 import '../ui/theme.dart';
 import '../version.dart';
 import 'basemap.dart';
 import 'basemap_geometry.dart';
+import 'tile_loading.dart';
+import 'vector_map.dart';
 
 /// The bundled basemap (see `tool/basemap/`).
 const basemapAsset = 'assets/map/basemap.bin';
@@ -54,18 +57,61 @@ Future<Basemap> loadBasemap([AssetBundle? bundle]) {
 const osmUserAgent = 'Grain/$appVersion (+https://github.com/wladiKrin/grain)';
 
 const osmAttribution = '© OpenStreetMap contributors';
-const cartoAttribution = '© OpenStreetMap contributors © CARTO';
 const topoAttribution =
     '© OpenStreetMap contributors, SRTM · © OpenTopoMap (CC-BY-SA)';
 
 /// The attribution of the bundled basemap.
 const naturalEarthAttribution = 'Natural Earth';
 
-/// Where an online [MapStyle]'s tiles come from and how they are drawn.
-/// Each server is used as its usage policy asks: an identifying
-/// User-Agent, visible attribution, nothing fetched ahead, and no zoom
-/// asked for past its own (closer in, its tiles are scaled up).
-class OnlineTiles {
+/// What an online [MapStyle] draws over the basemap: raster tiles
+/// ([OnlineTiles]) or a vector style drawn in the app ([VectorMap]).
+sealed class OnlineMap {
+  const OnlineMap();
+
+  /// What the map has to credit, shown on it.
+  String get attribution;
+
+  /// The online map for [style] in [brightness]; null for
+  /// [MapStyle.offline].
+  static OnlineMap? of(MapStyle style, Brightness brightness) =>
+      VectorMap.of(style, brightness) ?? OnlineTiles.of(style, brightness);
+}
+
+/// An OpenFreeMap vector style: Streets is Liberty, Minimal is Positron
+/// in the light palette and OpenFreeMap's Dark in the dark one.
+class VectorMap extends OnlineMap {
+  const VectorMap(this.style);
+
+  /// The vector style for [style] in [brightness]; null for the others.
+  static VectorMap? of(MapStyle style, Brightness brightness) =>
+      switch (style) {
+        MapStyle.streets => const VectorMap(OpenFreeMapStyle.liberty),
+        MapStyle.minimal => VectorMap(
+          brightness == Brightness.dark
+              ? OpenFreeMapStyle.dark
+              : OpenFreeMapStyle.positron,
+        ),
+        _ => null,
+      };
+
+  final OpenFreeMapStyle style;
+
+  @override
+  String get attribution => openFreeMapAttribution;
+
+  @override
+  bool operator ==(Object other) => other is VectorMap && other.style == style;
+
+  @override
+  int get hashCode => style.hashCode;
+}
+
+/// Where an online raster [MapStyle]'s tiles come from and how they are
+/// drawn. Each server is used as its usage policy asks: an identifying
+/// User-Agent, visible attribution, nothing fetched ahead, at most two
+/// connections at a time, and no zoom asked for past its own (closer in,
+/// its tiles are scaled up).
+class OnlineTiles extends OnlineMap {
   const OnlineTiles({
     required this.urlTemplate,
     required this.attribution,
@@ -75,20 +121,12 @@ class OnlineTiles {
     this.colorFilter,
   });
 
-  /// The tiles for [style] in [brightness]; null for [MapStyle.offline].
+  /// The tiles for [style] in [brightness]; null for [MapStyle.offline]
+  /// and the vector styles.
   static OnlineTiles? of(MapStyle style, Brightness brightness) {
     final dark = brightness == Brightness.dark;
     return switch (style) {
-      MapStyle.offline => null,
-      MapStyle.minimal => OnlineTiles(
-        urlTemplate:
-            'https://{s}.basemaps.cartocdn.com/'
-            '${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png',
-        subdomains: const ['a', 'b', 'c', 'd'],
-        retina: true,
-        maxNativeZoom: 20,
-        attribution: cartoAttribution,
-      ),
+      MapStyle.offline || MapStyle.streets || MapStyle.minimal => null,
       MapStyle.muted => OnlineTiles(
         urlTemplate: osmUrlTemplate,
         maxNativeZoom: 19,
@@ -116,6 +154,7 @@ class OnlineTiles {
   /// asked for on a high-density screen.
   final bool retina;
   final int maxNativeZoom;
+  @override
   final String attribution;
 
   /// Drawn over the whole tile layer; null: the tiles as served.
@@ -147,15 +186,31 @@ class OnlineTiles {
   ]);
 }
 
-/// The tile provider for every online style: a modest disk cache in the
-/// app's cache directory. A tile that fails to load (no network, the
-/// network permission off) is reported to the tile layer's error callback
-/// and draws nothing, leaving the offline layers under it in view.
-TileProvider onlineTileProvider() => NetworkTileProvider(
-  headers: {'User-Agent': osmUserAgent},
-  cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(
+/// The tile provider for every online raster style ([GrainTileProvider]):
+/// at most two connections to a server, failed loads tried again, and a
+/// modest disk cache in the app's cache directory. A tile that fails to
+/// load (no network, the network permission off) is reported to the tile
+/// layer's error callback and draws nothing, leaving the offline layers
+/// under it in view.
+TileProvider onlineTileProvider() => GrainTileProvider(
+  fetcher: TileFetcher(userAgent: osmUserAgent),
+  ownsFetcher: true,
+  cache: BuiltInMapCachingProvider.getOrCreateInstance(
     maxCacheSize: 50 * 1024 * 1024,
   ),
+);
+
+/// The vector styles' tiles on disk at most (the raster tiles keep 50 MB
+/// of their own).
+const vectorCacheBytes = 40 * 1024 * 1024;
+
+VectorStyleSource? _openFreeMap;
+
+/// OpenFreeMap, one for the run (each style is read once): four
+/// connections at most, as OpenFreeMap asks of apps.
+VectorStyleSource openFreeMap() => _openFreeMap ??= OpenFreeMap(
+  fetcher: TileFetcher(userAgent: osmUserAgent, connectionsPerHost: 4),
+  cacheRoot: getApplicationCacheDirectory,
 );
 
 /// Water and the other basemap colours, from the Grain palette: the paper

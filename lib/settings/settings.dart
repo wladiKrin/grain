@@ -8,6 +8,7 @@ enum ThemeChoice { system, light, dark }
 /// alone, or one of the online tile styles over it.
 enum MapStyle {
   offline,
+  streets,
   minimal,
   muted,
   standard,
@@ -76,11 +77,15 @@ class Settings extends ChangeNotifier {
       theme:
           ThemeChoice.values.asNameMap()[p.getString(_kTheme)] ??
           ThemeChoice.system,
-      mapStyle:
-          MapStyle.values.asNameMap()[p.getString(_kMapStyle)] ??
-          (p.getBool(_kOnlineMap) ?? false
+      mapStyle: switch (p.getString(_kMapStyle)) {
+        // Saved before there were styles: the old switch.
+        null =>
+          p.getBool(_kOnlineMap) ?? false
               ? MapStyle.standard
-              : MapStyle.offline),
+              : MapStyle.offline,
+        // A style this version does not know: nothing goes online.
+        final name => MapStyle.values.asNameMap()[name] ?? MapStyle.offline,
+      },
     );
   }
 

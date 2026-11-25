@@ -1,0 +1,22 @@
+OpenFreeMap © OpenMapTiles Data from OpenStreetMap
+
+The Streets and Minimal map styles are drawn from vector tiles and styles
+served by OpenFreeMap (openfreemap.org). They are fetched over the network
+only while one of these styles is chosen; nothing of them is bundled.
+
+Map data: © OpenStreetMap contributors, available under the Open Database
+License (ODbL) 1.0, opendatacommons.org/licenses/odbl/1-0/. See
+openstreetmap.org/copyright.
+
+Tile schema: OpenMapTiles (openmaptiles.org), licensed under the Creative
+Commons Attribution 4.0 International licence (CC-BY 4.0),
+creativecommons.org/licenses/by/4.0/.
+
+Styles: OpenFreeMap's Liberty, Positron and Dark, forked from the
+OpenMapTiles and OSM Liberty styles; the OpenFreeMap project is under the
+MIT licence (github.com/hyperknot/openfreemap).
+
+The other online styles credit their own sources on the map:
+© OpenStreetMap contributors (openstreetmap.org, tiles under CC-BY-SA 2.0
+and data under the ODbL), and OpenTopoMap (CC-BY-SA 3.0) with SRTM
+elevation data.

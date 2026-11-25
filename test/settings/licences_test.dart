@@ -41,5 +41,9 @@ void main() {
     expect(ours['SQLite'], contains('May you do good and not evil.'));
     expect(ours['Grain gear library'], contains('CC0 1.0 Universal'));
     expect(ours['Natural Earth'], contains('in the public domain'));
+    final ofm = ours['OpenFreeMap and OpenMapTiles']!;
+    expect(ofm, contains('OpenFreeMap © OpenMapTiles Data from OpenStreetMap'));
+    expect(ofm, contains('CC-BY 4.0'));
+    expect(ofm, contains('Open Database License (ODbL)'));
   });
 }

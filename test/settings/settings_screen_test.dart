@@ -172,6 +172,7 @@ void main() {
     expect(find.text('MAP STYLE'), findsOneWidget);
     for (final name in [
       'Offline',
+      'Streets',
       'Minimal',
       'Muted',
       'Standard',
@@ -184,7 +185,10 @@ void main() {
     expect(s.mapStyle, MapStyle.minimal);
     expect(find.text('MAP STYLE'), findsNothing);
     expect(find.text('Map: Minimal'), findsOneWidget);
-    expect(find.textContaining('basemaps.cartocdn.com'), findsOneWidget);
+    expect(
+      find.text('Quiet light or dark map from openfreemap.org'),
+      findsOneWidget,
+    );
     expect(loc.permissionRequests, 0);
     await tester.tap(find.text('Map: Minimal'));
     await tester.pumpAndSettle();
@@ -423,6 +427,7 @@ void main() {
       'SQLite',
       'Grain gear library',
       'Natural Earth',
+      'OpenFreeMap and OpenMapTiles',
     ]);
   });
 }

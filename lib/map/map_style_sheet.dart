@@ -6,6 +6,7 @@ import '../ui/theme.dart';
 /// The name of each map style, as the sheet and Settings show it.
 const mapStyleLabels = {
   MapStyle.offline: 'Offline',
+  MapStyle.streets: 'Streets',
   MapStyle.minimal: 'Minimal',
   MapStyle.muted: 'Muted',
   MapStyle.standard: 'Standard',
@@ -15,7 +16,8 @@ const mapStyleLabels = {
 /// What each style is, and where its tiles come from.
 const mapStyleSubtitles = {
   MapStyle.offline: 'Built into Grain; nothing goes online',
-  MapStyle.minimal: 'Quiet light or dark map from basemaps.cartocdn.com',
+  MapStyle.streets: 'Clean street map from openfreemap.org',
+  MapStyle.minimal: 'Quiet light or dark map from openfreemap.org',
   MapStyle.muted: 'OpenStreetMap in soft grey, from openstreetmap.org',
   MapStyle.standard: 'OpenStreetMap in full colour, from openstreetmap.org',
   MapStyle.topographic: 'Contour lines and relief, from opentopomap.org',

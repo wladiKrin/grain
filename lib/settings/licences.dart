@@ -5,7 +5,8 @@ import 'package:material_ui/material_ui.dart';
 import '../version.dart';
 
 /// A notice Flutter does not collect from the pub packages: the Kotlin side,
-/// the font, the vendored C library, the gear library and the map data.
+/// the font, the vendored C library, the gear library and the map data
+/// (bundled, and the online OpenFreeMap styles').
 typedef _Notice = ({String package, String? header, String asset});
 
 const List<_Notice> _notices = [
@@ -32,6 +33,14 @@ const List<_Notice> _notices = [
         'and places), which is in the public domain.',
     asset: 'assets/licenses/natural-earth.txt',
   ),
+  (
+    package: 'OpenFreeMap and OpenMapTiles',
+    header:
+        'The Streets and Minimal map styles: OpenFreeMap styles and vector '
+        'tiles in the OpenMapTiles schema (CC-BY 4.0), with OpenStreetMap '
+        'data (ODbL).',
+    asset: 'assets/licenses/openfreemap.txt',
+  ),
 ];
 
 /// The package names [registerLicences] adds to the licence page.
@@ -39,9 +48,10 @@ List<String> get licencePackages => [for (final n in _notices) n.package];
 
 bool _registered = false;
 
-/// Adds the notices for ZXing core, Inter Tight, SQLite, the gear library and
-/// Natural Earth to Flutter's [LicenseRegistry], beside the pub packages'
-/// own. Safe to call more than once.
+/// Adds the notices for ZXing core, Inter Tight, SQLite, the gear library,
+/// Natural Earth and OpenFreeMap to Flutter's [LicenseRegistry], beside the
+/// pub packages' own (vector_map_tiles and its renderer among them). Safe
+/// to call more than once.
 void registerLicences([AssetBundle? bundle]) {
   if (_registered) return;
   _registered = true;

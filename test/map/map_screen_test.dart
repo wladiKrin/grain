@@ -4,12 +4,15 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/map/basemap.dart';
 import 'package:grain/map/map_layers.dart';
 import 'package:grain/map/map_screen.dart';
 import 'package:grain/map/map_style_sheet.dart';
+import 'package:grain/map/tile_loading.dart';
+import 'package:grain/map/vector_map.dart';
 import 'package:grain/rolls/model.dart';
 import 'package:grain/rolls/roll_controller.dart';
 import 'package:grain/rolls/ui/frame_editor.dart';
@@ -18,13 +21,17 @@ import 'package:grain/settings/settings.dart';
 import 'package:grain/ui/theme.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart'
+    show VectorTileLayer, VectorTileLayerMode;
 
 import '../support/fake_location.dart';
 import '../support/gear_fixtures.dart';
 import '../support/rolls_fixtures.dart';
+import 'tile_fixtures.dart';
+import 'vector_fixtures.dart';
 
 /// A 1×1 transparent PNG.
-final _png = base64Decode(
+final _tinyPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA'
   '60e6kgAAAABJRU5ErkJggg==',
 );
@@ -41,7 +48,7 @@ class _FakeTiles extends TileProvider {
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     requests++;
     if (fail || requests <= failFirst) return _FailingImage(requests);
-    return MemoryImage(_png);
+    return MemoryImage(_tinyPng);
   }
 }
 
@@ -92,6 +99,8 @@ void main() {
   late RollController rolls;
   late GearController gear;
   late _FakeTiles tiles;
+  late FakeVectorTiles vectorTiles;
+  late FakeVectorStyles vectors;
   final a1 = libBody('canon-a1');
 
   setUp(() async {
@@ -102,6 +111,8 @@ void main() {
     gear = GearController.inMemory(library: fixtureLibrary());
     rolls = inMemoryRolls(settings: settings, location: location);
     tiles = _FakeTiles();
+    vectorTiles = FakeVectorTiles();
+    vectors = FakeVectorStyles(vectorTiles);
   });
   tearDown(() {
     rolls.dispose();
@@ -114,6 +125,18 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 5)),
       );
       await t.pumpAndSettle();
+    }
+  }
+
+  /// Lets the vector layer start (its background isolates take a moment
+  /// of real time) and draw: a layer taken down before it has started
+  /// leaves a cancelled job the package does not catch.
+  Future<void> vectorSettle(WidgetTester t) async {
+    for (var i = 0; i < 12; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 25)),
+      );
+      await t.pump(const Duration(milliseconds: 100));
     }
   }
 
@@ -158,6 +181,7 @@ void main() {
     Brightness brightness = Brightness.light,
     Future<Basemap>? basemap,
     Future<bool> Function()? openSettings,
+    TileProvider? tileProvider,
   }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
@@ -171,7 +195,8 @@ void main() {
           settings: settings,
           rollId: rollId,
           basemap: basemap ?? Future.value(_tinyMap),
-          tileProvider: () => tiles,
+          tileProvider: () => tileProvider ?? tiles,
+          vectorStyles: () => vectors,
           openSettings: openSettings ?? () async => true,
         ),
       ),
@@ -303,22 +328,38 @@ void main() {
     for (final b in Brightness.values) {
       expect(OnlineTiles.of(MapStyle.offline, b), isNull);
     }
-    final light = OnlineTiles.of(MapStyle.minimal, Brightness.light)!;
-    final dark = OnlineTiles.of(MapStyle.minimal, Brightness.dark)!;
-    expect(
-      light.urlTemplate,
-      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    );
-    expect(
-      dark.urlTemplate,
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    );
-    for (final m in [light, dark]) {
-      expect(m.subdomains, ['a', 'b', 'c', 'd']);
-      expect(m.retina, isTrue);
-      expect(m.colorFilter, isNull);
-      expect(m.attribution, '© OpenStreetMap contributors © CARTO');
+    // Streets and Minimal are OpenFreeMap vector styles, not raster tiles.
+    for (final b in Brightness.values) {
+      expect(OnlineTiles.of(MapStyle.streets, b), isNull);
+      expect(OnlineTiles.of(MapStyle.minimal, b), isNull);
+      expect(OnlineMap.of(MapStyle.offline, b), isNull);
+      expect(
+        OnlineMap.of(MapStyle.streets, b),
+        const VectorMap(OpenFreeMapStyle.liberty),
+      );
+      expect(
+        OnlineMap.of(MapStyle.streets, b)!.attribution,
+        'OpenFreeMap © OpenMapTiles Data from OpenStreetMap',
+      );
+      for (final s in [
+        MapStyle.muted,
+        MapStyle.standard,
+        MapStyle.topographic,
+      ]) {
+        expect(
+          OnlineMap.of(s, b),
+          OnlineTiles.of(s, b) == null ? isNull : isA<OnlineTiles>(),
+        );
+      }
     }
+    expect(
+      OnlineMap.of(MapStyle.minimal, Brightness.light),
+      const VectorMap(OpenFreeMapStyle.positron),
+    );
+    expect(
+      OnlineMap.of(MapStyle.minimal, Brightness.dark),
+      const VectorMap(OpenFreeMapStyle.dark),
+    );
 
     final mutedLight = OnlineTiles.of(MapStyle.muted, Brightness.light)!;
     final mutedDark = OnlineTiles.of(MapStyle.muted, Brightness.dark)!;
@@ -352,6 +393,9 @@ void main() {
     }
   });
 
+  /// The raster tile layer of an online raster style.
+  final rasterTiles = find.byKey(const ValueKey('online-tiles'));
+
   /// The filter drawn over the tile layer, or null.
   ColorFilter? tileFilter(WidgetTester t) {
     final f = find.ancestor(
@@ -370,13 +414,33 @@ void main() {
       for (final style in MapStyle.values) {
         await settings.setMapStyle(style);
         await pump(t, brightness: brightness);
-        final want = OnlineTiles.of(style, brightness);
-        if (want == null) {
+        final online = OnlineMap.of(style, brightness);
+        if (online == null) {
           expect(find.byType(TileLayer), findsNothing, reason: style.name);
           expect(find.text('Natural Earth'), findsOneWidget);
           continue;
         }
-        final layer = t.widget<TileLayer>(find.byType(TileLayer));
+        if (online case VectorMap(style: final vector)) {
+          await vectorSettle(t);
+          expect(vectorTiles.requests, greaterThan(0));
+          expect(rasterTiles, findsNothing, reason: style.name);
+          final layer = t.widget<VectorTileLayer>(find.byType(VectorTileLayer));
+          expect(layer.theme.id, 'openfreemap-${vector.name}');
+          expect(layer.layerMode, VectorTileLayerMode.raster);
+          expect(layer.fileCacheMaximumSizeInBytes, vectorCacheBytes);
+          expect(vectors.loaded.last, vector);
+          expect(vector, switch ((style, brightness)) {
+            (MapStyle.streets, _) => OpenFreeMapStyle.liberty,
+            (_, Brightness.dark) => OpenFreeMapStyle.dark,
+            _ => OpenFreeMapStyle.positron,
+          });
+          expect(find.text(openFreeMapAttribution), findsOneWidget);
+          expect(find.byType(BasemapLayer), findsOneWidget);
+          continue;
+        }
+        final want = online as OnlineTiles;
+        expect(find.byType(VectorTileLayer), findsNothing);
+        final layer = t.widget<TileLayer>(rasterTiles);
         expect(layer.urlTemplate, want.urlTemplate, reason: style.name);
         expect(layer.maxNativeZoom, want.maxNativeZoom, reason: style.name);
         expect(layer.panBuffer, 0);
@@ -385,10 +449,16 @@ void main() {
           want.retina ? RetinaMode.server : RetinaMode.disabled,
           reason: style.name,
         );
+        expect(
+          layer.evictErrorTileStrategy,
+          EvictErrorTileStrategy.notVisibleRespectMargin,
+        );
+        expect(layer.tileProvider, same(tiles));
         expect(tileFilter(t), want.colorFilter, reason: style.name);
         expect(find.text(want.attribution), findsOneWidget);
         expect(find.byType(BasemapLayer), findsOneWidget);
       }
+      await t.pump(const Duration(seconds: 4));
     });
   }
 
@@ -437,7 +507,7 @@ void main() {
   testWidgets('tiles that fail say so over the offline map; Open settings '
       'opens them, and a tile that loads later clears the note', (t) async {
     var opened = 0;
-    await settings.setMapStyle(MapStyle.minimal);
+    await settings.setMapStyle(MapStyle.muted);
     tiles.fail = true;
     await roll(t, 'Ilford HP5 Plus', [_munich]);
     await pump(
@@ -496,6 +566,168 @@ void main() {
     await pump(t);
     expect(tiles.requests, greaterThan(MapScreen.failuresBeforeNote));
     expect(find.textContaining('load the online map'), findsNothing);
+  });
+
+  /// Each raster tile on the map.
+  List<TileImage> shown(WidgetTester t) => [
+    for (final e
+        in find
+            .descendant(
+              of: rasterTiles,
+              matching: find.byWidgetPredicate(
+                (w) => w.runtimeType.toString() == 'Tile',
+              ),
+            )
+            .evaluate())
+      (e.widget as dynamic).tileImage as TileImage,
+  ];
+
+  testWidgets('raster tiles that failed load again when the map comes to '
+      'rest, and the note goes', (t) async {
+    final server = FakeServer(
+      failFirst: 1,
+      failure: () => http.Response('busy', 503),
+    );
+    await settings.setMapStyle(MapStyle.standard);
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(
+      t,
+      tileProvider: GrainTileProvider(fetcher: server.fetcher(attempts: 1)),
+    );
+    final failed = shown(t).where((i) => i.loadError).length;
+    expect(failed, greaterThanOrEqualTo(MapScreen.failuresBeforeNote));
+    expect(find.textContaining('load the online map'), findsOneWidget);
+
+    // The server answers now: a small move, and every tile loads.
+    server.failFirst = 0;
+    await t.drag(find.byType(FlutterMap), const Offset(40, 30));
+    await settle(t);
+    expect(shown(t), isNotEmpty);
+    expect(notLoaded(shown(t)), isEmpty);
+    expect(server.agents, {'Grain/test'});
+    expect(find.textContaining('load the online map'), findsNothing);
+  });
+
+  testWidgets('tiles given up as they leave the map are no failures: no '
+      'note, and the tiles in view load', (t) async {
+    final server = FakeServer()..gate = Completer<void>();
+    await settings.setMapStyle(MapStyle.topographic);
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(t, tileProvider: GrainTileProvider(fetcher: server.fetcher()));
+    // Far away before anything loads, and back.
+    for (final d in const [
+      Offset(-900, 0),
+      Offset(0, -900),
+      Offset(900, 900),
+    ]) {
+      await t.drag(find.byType(FlutterMap), d);
+      await t.pump(const Duration(milliseconds: 50));
+      await t.runAsync(pumpEventQueue);
+    }
+    server.gate!.complete();
+    server.gate = null;
+    await settle(t);
+    expect(server.aborted, greaterThan(0));
+    expect(notLoaded(shown(t)), isEmpty);
+    expect(find.textContaining('load the online map'), findsNothing);
+  });
+
+  testWidgets('Streets draws OpenFreeMap’s vector map between the offline '
+      'map and the markers, credited as OpenFreeMap asks', (t) async {
+    await settings.setMapStyle(MapStyle.streets);
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(t);
+    await vectorSettle(t);
+    expect(vectors.loaded, [OpenFreeMapStyle.liberty]);
+    expect(rasterTiles, findsNothing);
+    final children = t.widget<FlutterMap>(find.byType(FlutterMap)).children;
+    final at = children.indexWhere((w) => w is VectorTileLayer);
+    expect(children.indexWhere((w) => w is BasemapLayer), lessThan(at));
+    expect(at, lessThan(children.indexWhere((w) => w is MarkerLayer)));
+    expect(
+      find.text('OpenFreeMap © OpenMapTiles Data from OpenStreetMap'),
+      findsOneWidget,
+    );
+    expect(vectorTiles.requests, greaterThan(0));
+    expect(pin('Roll 1, frame 1'), findsOneWidget);
+    await settings.setMapStyle(MapStyle.offline);
+    await settle(t);
+    expect(find.byType(VectorTileLayer), findsNothing);
+    expect(find.text('Natural Earth'), findsOneWidget);
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('vector tiles that fail say so; after a move they are asked '
+      'for again, load, and the note goes', (t) async {
+    vectorTiles.fail = true;
+    await settings.setMapStyle(MapStyle.minimal);
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(t);
+    await vectorSettle(t);
+    expect(
+      vectorTiles.requests,
+      greaterThanOrEqualTo(MapScreen.failuresBeforeNote),
+    );
+    expect(find.textContaining('load the online map'), findsOneWidget);
+    expect(find.byType(BasemapLayer), findsOneWidget);
+
+    vectorTiles.fail = false;
+    final before = vectorTiles.requests;
+    await t.drag(find.byType(FlutterMap), const Offset(40, 30));
+    await settle(t);
+    await vectorSettle(t);
+    expect(vectorTiles.requests, greaterThan(before));
+    expect(find.textContaining('load the online map'), findsNothing);
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('a vector style that cannot be read shows the note at once, '
+      'and is read again on coming back to the app', (t) async {
+    vectors.fail = true;
+    await settings.setMapStyle(MapStyle.streets);
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await pump(t);
+    expect(find.byType(VectorTileLayer), findsNothing);
+    expect(find.textContaining('load the online map'), findsOneWidget);
+    expect(find.text(openFreeMapAttribution), findsOneWidget);
+
+    vectors.fail = false;
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await settle(t);
+    await vectorSettle(t);
+    expect(vectors.loaded, [OpenFreeMapStyle.liberty]);
+    expect(find.byType(VectorTileLayer), findsOneWidget);
+    expect(find.textContaining('load the online map'), findsNothing);
+    await t.pump(const Duration(seconds: 4));
+  });
+
+  test('CARTO is gone: no style, server or credit names it', () {
+    final strings = [
+      ...mapStyleLabels.values,
+      ...mapStyleSubtitles.values,
+      for (final s in MapStyle.values)
+        for (final b in Brightness.values) ?OnlineMap.of(s, b)?.attribution,
+      for (final s in MapStyle.values)
+        for (final b in Brightness.values) ?OnlineTiles.of(s, b)?.urlTemplate,
+    ];
+    for (final s in strings) {
+      expect(s.toLowerCase(), isNot(contains('carto')));
+    }
+    for (final dir in ['lib', 'docs', 'fastlane', 'android/app/src/main']) {
+      for (final f in Directory(dir).listSync(recursive: true)) {
+        if (f is! File) continue;
+        expect(
+          utf8.decode(f.readAsBytesSync(), allowMalformed: true).toLowerCase(),
+          isNot(contains('carto')),
+          reason: f.path,
+        );
+      }
+    }
+    expect(
+      File('README.md').readAsStringSync().toLowerCase(),
+      isNot(contains('carto')),
+    );
   });
 
   testWidgets('the roll filter shows one roll or the readings', (t) async {
