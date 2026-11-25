@@ -4,3 +4,4 @@ First release.
 - Histogram with film latitude, viewfinder crop
 - Gear library, QR sharing, rolls with a frame log and snapshots
 - CSV, JSON and zip export, backup and restore
+- A map of logged locations, offline by default; optional online styles from openstreetmap.org, basemaps.cartocdn.com or opentopomap.org

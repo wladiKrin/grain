@@ -14,7 +14,7 @@ void main() {
       'android.permission.CAMERA',
       'android.permission.ACCESS_COARSE_LOCATION',
       'android.permission.ACCESS_FINE_LOCATION',
-      // The map's opt-in OpenStreetMap tiles only (Settings > Online map).
+      // The map's opt-in online tiles only (Settings > Map).
       'android.permission.INTERNET',
     ]);
   });

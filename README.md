@@ -23,8 +23,11 @@ of each roll. There is no paywall, no ads and no tracking.
   drawn from bundled Natural Earth outlines.
 - Works offline: no ads, no tracking, no Google Play Services. The meter never
   uses the network. The app holds the INTERNET permission only for the map's
-  optional OpenStreetMap tiles, and goes online only with Settings > Online
-  map (OpenStreetMap) turned on; it is off by default.
+  optional online tiles, and goes online only with an online map style
+  chosen (Settings > Map, or the map's layers button); the default style is
+  Offline. The styles load tiles from one of tile.openstreetmap.org
+  (Standard, Muted), basemaps.cartocdn.com (Minimal) or opentopomap.org
+  (Topographic), and nothing else.
 
 ## Screenshots
 

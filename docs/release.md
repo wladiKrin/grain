@@ -100,8 +100,10 @@ same options as the release command,
   `changelogs/<versionCode>.txt`, `images/icon.png`).
 - Build the unsigned release with `GRAIN_UNSIGNED=1` as above.
 - The app has no ads, no tracking and no Google Play Services.
-- The app requests `INTERNET` only for the map's OpenStreetMap tiles, shown
-  only with Settings > Online map (OpenStreetMap) on (off by default). The
+- The app requests `INTERNET` only for the map's online tiles, loaded only
+  with an online map style chosen in Settings > Map or on the map (the
+  default style is Offline): tile.openstreetmap.org (Standard, Muted),
+  basemaps.cartocdn.com (Minimal) or opentopomap.org (Topographic). The
   meter and everything else work without the network; the offline map is
   drawn from bundled Natural Earth data (public domain, `assets/map/`,
   reproduced by `tool/basemap/`).
