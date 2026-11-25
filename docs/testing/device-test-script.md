@@ -59,7 +59,7 @@ Package name: `io.github.wladikrin.grain`.
 | 1.6 | Check which lens is chosen | The ~26 mm main camera | |
 | 1.7 | Cold start, five times: `adb shell am force-stop io.github.wladikrin.grain && adb logcat -c && adb shell am start -W io.github.wladikrin.grain/.MainActivity`; read `TotalTime`, then `adb logcat -d -v time \| grep -E "ActivityTaskManager.*(START\|Displayed)\|GRAIN first EV"`. Time to first EV = `GRAIN first EV` timestamp minus the `START` timestamp. Record the median | Cold start to first EV value <= 1.5 s; the meter is up in 1.5 s or less with the library and database loaded. Runs (TotalTime / first EV, ms): 1 ____ / ____, 2 ____ / ____, 3 ____ / ____, 4 ____ / ____, 5 ____ / ____, median ____ / ____ | |
 
-The plan-3 build for 1.1 (plan 3 is branch `feat/rolls`, commit `6600de4`).
+The plan-3 build for 1.1 (plan 3 ends at commit `b0391bf` on `main`).
 Plan 3 signs its release build with the debug key. Without
 `android/key.properties` this build does too, so `adb install -r` upgrades in
 place; with a `key.properties`, move it aside for 1.1. If the Setup above
@@ -69,12 +69,12 @@ tree:
 
 ```
 adb uninstall io.github.wladikrin.grain   # only if a Grain build is installed
-git checkout feat/rolls
+git checkout b0391bf
 flutter clean
 flutter build apk --release --split-per-abi --target-platform android-arm64 --split-debug-info=build/symbols-plan3 --obfuscate
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 # on the phone: make the roll, frames, saved reading and own lens
-git checkout feat/polish
+git checkout main
 flutter clean
 flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -114,7 +114,7 @@ Calibration offset used: ______ EV
 | 2.5 | Backlit subject: Reference EV ____, Grain average EV ____, Grain spot EV ____ | Same, <= 2/3 stop (avg diff ____, spot diff ____) | |
 | 2.6 | Change the scene brightness (cover the lens, point at a window) | EV values react when the scene brightness changes | |
 | 2.7 | Count stats events over 10 s in the DevTools timeline (`flutter run --profile`), once in bright light and once in a dim room (the camera picks its own frame rate, usually 30 fps in dim light and up to 60 in bright light; note which it was if DevTools shows it) | <= 15 events/s in both, no stalls. Bright ____ /s, dim ____ /s | |
-| 2.8 | Optional (needs a second phone, or an uninstall, because an older build cannot open this build's database): meter the same scene on this build and on the plan-2 build (branch `feat/gear`, built as in 1.1). The METER reader is now at preview size with sparser luma sampling | Stats still ~15/s; EV unchanged within ±⅙ EV | |
+| 2.8 | Optional (needs a second phone, or an uninstall, because an older build cannot open this build's database): meter the same scene on this build and on the plan-2 build (commit `d0b92fa`, built as in 1.1). The METER reader is now at preview size with sparser luma sampling | Stats still ~15/s; EV unchanged within ±⅙ EV | |
 | 2.9 | Tap a spot in Manual mode with the viewfinder on | The spot lands where tapped; the ring and ticks are clearly visible, not a dot | |
 | 2.10 | Turn the frame upright (frame button), tap in the dimmed area outside the crop | The spot lands on the crop edge | |
 | 2.11 | On a phone that reports no aperture (if available), read the EV line | It reads "EV ≈..." (f/1.8 assumed) | |
