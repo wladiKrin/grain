@@ -49,7 +49,6 @@ class MapNetPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 )
             }
         }
-        MapNet.install()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -71,10 +70,13 @@ class MapNetPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 val offline = call.argument<Boolean>("offline") != false
                 MapNet.offline = offline
                 try {
+                    // MapLibre must be set up before its HTTP classes are touched, so the
+                    // client goes in here (before the first map), not at engine start.
                     MapLibre.getInstance(ctx)
+                    MapNet.install()
                     ConnectivityReceiver.instance(ctx).setConnected(!offline)
                 } catch (e: RuntimeException) {
-                    Log.w(TAG, "MapLibre not told the network state", e)
+                    Log.w(TAG, "MapLibre not set up for the map", e)
                 }
                 result.success(null)
             }
@@ -100,7 +102,7 @@ object MapNet {
     private var installed = false
     private val gates = ConcurrentHashMap<String, Semaphore>()
 
-    /** Makes MapLibre load everything through [client]. */
+    /** Makes MapLibre load everything through [client]; only after `MapLibre.getInstance`. */
     @Synchronized
     fun install() {
         if (installed) return
