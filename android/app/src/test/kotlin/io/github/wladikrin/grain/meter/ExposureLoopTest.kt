@@ -190,6 +190,39 @@ class ExposureLoopTest {
         assertNotNull(loop.requested)
     }
 
+    @Test fun limitsWithinAPhysicalCameraAreTheOverlap() {
+        // A tele that stops at ISO 3200 and 1/2 s, starting at 1/50000 s and ISO 50.
+        val tele = limits.within(20_000L, 500_000_000L, 50, 3200)
+        assertEquals(ExposureLoop.Limits(20_000L, 250_000_000L, 50, 3200), tele)
+        // A wider physical range changes nothing.
+        assertEquals(limits, limits.within(1_000L, 30_000_000_000L, 10, 12800))
+        // No overlap (bad metadata): the logical limits stay.
+        assertEquals(limits, limits.within(500_000_000L, 900_000_000L, 30, 6400))
+        assertEquals(limits, limits.within(10_000L, 1_000_000_000L, 0, 0))
+    }
+
+    @Test fun theTeleLimitsGiveUnderAtItsOwnMaximum() {
+        val loop = ExposureLoop(limits, Settings(250_000_000L, 6400))
+        val tele = limits.within(10_000L, 1_000_000_000L, 30, 3200)
+        // Moving to the tele re-splits the request inside its range.
+        assertEquals(Settings(250_000_000L, 3200), loop.reconfigure(tele, 0))
+        assertEquals(tele, loop.limits)
+        // A black frame at the tele's maximum: under-range, no more requests.
+        val d = loop.onFrame(Settings(250_000_000L, 3200), 0.001, 0.0)
+        assertTrue(d.atMax)
+        assertNull(d.request)
+        // On the logical limits the same frame was not at the maximum.
+        assertFalse(ExposureLoop.decide(Settings(250_000_000L, 3200), 0.001, 0.0, limits).atMax)
+        // Same limits again: nothing to send.
+        assertNull(loop.reconfigure(tele, 0))
+    }
+
+    @Test fun meteredTakesTheFlaggedRegion() {
+        val s = Stats(0.2, 0.18, 0.5, IntArray(64), cropClip = 0.01, spotClip = 0.3)
+        assertEquals(0.5 to 0.3, ExposureLoop.metered(s, spot = true))
+        assertEquals(0.18 to 0.01, ExposureLoop.metered(s, spot = false))
+    }
+
     @Test fun frameDurationCoversTheExposure() {
         assertEquals(33_333_333L, ExposureLoop.frameDuration(1_000_000L))
         assertEquals(250_000_000L, ExposureLoop.frameDuration(250_000_000L))

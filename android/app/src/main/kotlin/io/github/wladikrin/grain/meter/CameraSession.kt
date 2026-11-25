@@ -26,6 +26,7 @@ import android.util.Log
 import android.util.Size
 import android.view.Surface
 import java.io.File
+import java.util.TimeZone
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -124,8 +125,18 @@ class CameraSession(
     private var listedApertures: FloatArray? = null
     private var mainEq = FALLBACK_EQ_FOCAL_MM
 
-    /** Kind ("main", "wide", "tele") and listed apertures of each physical camera seen. */
-    private val physicals = mutableMapOf<String, Pair<String?, FloatArray?>>()
+    /** A physical camera of a logical multi-camera, as far as the phone describes it. */
+    private class Physical(
+        /** "main", "wide", "tele", or null when unknown. */
+        val kind: String?,
+        val apertures: FloatArray?,
+        /** Its SENSOR_INFO exposure-time and sensitivity ranges; null when not listed. */
+        val exposure: android.util.Range<Long>?,
+        val iso: android.util.Range<Int>?,
+    )
+
+    /** Each physical camera seen. */
+    private val physicals = mutableMapOf<String, Physical>()
     private var latest: TotalCaptureResult? = null
     private var wideSupport: Wide? = null
     private var request: CaptureRequest.Builder? = null
@@ -165,8 +176,11 @@ class CameraSession(
     /** The manual engine's last region was white: the first one that is not goes to Dart at once. */
     private var lastWhite = false
 
-    /** A frame's stats waiting for its capture result; [emit] says whether Dart gets them. */
-    private class PendingFrame(val ts: Long, val stats: Stats, val emit: Boolean)
+    /**
+     * A frame's stats waiting for its capture result; [spot] says which region was metered for
+     * them, [emit] whether Dart gets them.
+     */
+    private class PendingFrame(val ts: Long, val stats: Stats, val spot: Boolean, val emit: Boolean)
 
     private var pendingFrame: PendingFrame? = null
 
@@ -555,7 +569,7 @@ class CameraSession(
                 val p = pendingFrame
                 if (p != null && p.ts == ts) {
                     pendingFrame = null
-                    if (!closed) emitStats(p.stats, result, p.emit)
+                    if (!closed) emitStats(p.stats, p.spot, result, p.emit)
                 }
             }
             val w = frameWait ?: return
@@ -610,36 +624,47 @@ class CameraSession(
             val ts = img.timestamp
             val own = results[ts]
             val newest = latest
+            // The spot flag travels with the stats computed for it: setRegions may change both
+            // before the frame's result arrives.
+            val spot = reg.spotMetering
             when {
-                own != null -> emitStats(stats, own, emit)
+                own != null -> emitStats(stats, spot, own, emit)
                 newest != null && (newest.get(CaptureResult.SENSOR_TIMESTAMP) ?: Long.MAX_VALUE) > ts ->
-                    emitStats(stats, newest, emit)
+                    emitStats(stats, spot, newest, emit)
                 // A newer frame replaces one still waiting, and keeps its event.
-                else -> pendingFrame = PendingFrame(ts, stats, emit || pendingFrame?.emit == true)
+                else -> pendingFrame = PendingFrame(ts, stats, spot, emit || pendingFrame?.emit == true)
             }
         }
     }
 
     /**
-     * Camera thread: steps the loop with [stats] and its frame's [result]; when [emit], or when
-     * the region is no longer white (the first frame that reads after a step down), also sends
-     * them to Dart as one stats event.
+     * Camera thread: steps the loop with [stats] (metered for the [spot] or the crop) and its
+     * frame's [result]; when [emit], or when the region is no longer white (the first frame
+     * that reads after a step down), also sends them to Dart as one stats event.
      */
-    private fun emitStats(stats: Stats, result: CaptureResult, emit: Boolean) {
+    private fun emitStats(stats: Stats, spot: Boolean, result: CaptureResult, emit: Boolean) {
         val exposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: return
         val sensitivity = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: return
         val manualFrame = result.get(CaptureResult.CONTROL_AE_MODE)?.let { it == CameraMetadata.CONTROL_AE_MODE_OFF }
             ?: (loop != null)
+        val physical = activePhysical(result)
+        noteFlicker(result)
         val l = loop
         var cleared = false
         val step = if (manualFrame && l != null) {
-            val spot = regions.spotMetering
+            // The lens in use bounds the loop, and the mains frequency rounds its times.
+            manual?.let { m ->
+                l.reconfigure(activeLimits(m.limits, physical), flickerHz)?.let {
+                    Log.i(TAG, "loop limits ${l.limits}, antibanding ${l.flickerHz} Hz: asks $it")
+                    requestExposure(it, flush = false)
+                }
+            }
             val frame = ExposureLoop.Settings(exposure, sensitivity)
-            val luma = if (spot) stats.spot else stats.crop
+            val (luma, clip) = ExposureLoop.metered(stats, spot)
             val white = luma >= ExposureLoop.CLIP_HIGH
             cleared = lastWhite && !white
             lastWhite = white
-            l.onFrame(frame, luma, if (spot) stats.spotClip else stats.cropClip).also { step ->
+            l.onFrame(frame, luma, clip).also { step ->
                 step.request?.let { requestExposure(it, flush = ExposureLoop.flushes(frame, it)) }
                 if (step.state == ExposureLoop.State.STEADY) saveLastManual(prefs, l.requested)
             }
@@ -648,10 +673,9 @@ class CameraSession(
         }
         if (!emit && !cleared) return
         if (!emit) lastEmitMs = SystemClock.elapsedRealtime()
-        val physical = activePhysical(result)
         // Per frame: on a logical multi-camera the aperture changes with the active lens.
         val (aperture, assumed) = ZoomSupport.frameAperture(
-            result.get(CaptureResult.LENS_APERTURE), physical?.second, listedApertures,
+            result.get(CaptureResult.LENS_APERTURE), physical?.apertures, listedApertures,
         )
         val reportedZoom = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             result.get(CaptureResult.CONTROL_ZOOM_RATIO)
@@ -659,7 +683,9 @@ class CameraSession(
             null
         }
         val zoom = reportedZoom ?: current?.zoom ?: 1f
-        val camera = physical?.first ?: if (current?.wide == true) "wide" else "main"
+        val camera = physical?.kind ?: if (current?.wide == true) "wide" else "main"
+        // The ranges of the lens in use: a tele may stop short of the logical camera's.
+        val ranges = activeLimits(ExposureLoop.Limits(minExposureNs, maxExposureNs, minIso, maxIso), physical)
 
         val event = mutableMapOf<String, Any>(
             "exposureNs" to exposure,
@@ -670,10 +696,10 @@ class CameraSession(
             "zoom" to zoom.toDouble(),
             "camera" to camera,
             "aeState" to ZoomSupport.aeStateName(result.get(CaptureResult.CONTROL_AE_STATE)),
-            "minExposureNs" to minExposureNs,
-            "maxExposureNs" to maxExposureNs,
-            "minIso" to minIso,
-            "maxIso" to maxIso,
+            "minExposureNs" to ranges.minExposureNs,
+            "maxExposureNs" to ranges.maxExposureNs,
+            "minIso" to ranges.minIso,
+            "maxIso" to ranges.maxIso,
             "frameLuma" to stats.frame,
             "cropLuma" to stats.crop,
             "spotLuma" to stats.spot,
@@ -687,6 +713,7 @@ class CameraSession(
             curve.gamma?.let { event["toneGamma"] = it }
         }
         if (step != null && l != null) {
+            event["flickerHz"] = l.flickerHz
             event["requestedExposureNs"] = l.requested.exposureNs
             event["requestedSensitivity"] = l.requested.iso
             event["loop"] = step.state.name.lowercase()
@@ -697,22 +724,43 @@ class CameraSession(
     }
 
     /**
-     * Camera thread. Kind and listed apertures of the physical camera behind [result] on a
-     * logical multi-camera; null where the phone does not say. Looked up once per camera.
+     * Camera thread. The physical camera behind [result] on a logical multi-camera; null where
+     * the phone does not say. Looked up once per camera.
      */
-    private fun activePhysical(result: CaptureResult): Pair<String?, FloatArray?>? {
+    private fun activePhysical(result: CaptureResult): Physical? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val id = result.get(CaptureResult.LOGICAL_MULTI_CAMERA_ACTIVE_PHYSICAL_ID) ?: return null
         return physicals.getOrPut(id) {
             try {
                 val ch = manager.getCameraCharacteristics(id)
                 val kind = ZoomSupport.cameraKind(eqFocal(ch), mainEq)
-                Log.i(TAG, "physical camera $id: ${kind ?: "unknown"}")
-                kind to ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+                val exposure = ch.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+                val iso = ch.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+                Log.i(TAG, "physical camera $id: ${kind ?: "unknown"}, t $exposure ns, ISO $iso")
+                Physical(kind, ch.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES), exposure, iso)
             } catch (e: Exception) {
-                null to null
+                Physical(null, null, null, null)
             }
         }
+    }
+
+    /** [limits] within the [physical] camera's ranges, where it lists them; see [ExposureLoop.Limits.within]. */
+    private fun activeLimits(limits: ExposureLoop.Limits, physical: Physical?): ExposureLoop.Limits {
+        val e = physical?.exposure ?: return limits
+        val i = physical.iso ?: return limits
+        return limits.within(e.lower, e.upper, i.lower, i.upper)
+    }
+
+    /** Mains frequency for antibanding: the one a camera last detected, else the time zone's. */
+    private var flickerHz = detectedFlicker ?: Flicker.fromTimeZone(TimeZone.getDefault().id)
+
+    /** Camera thread: takes the mains frequency from [result] when the camera detected one. */
+    private fun noteFlicker(result: CaptureResult) {
+        val hz = Flicker.fromSceneFlicker(result.get(CaptureResult.STATISTICS_SCENE_FLICKER)) ?: return
+        detectedFlicker = hz
+        if (hz == flickerHz) return
+        Log.i(TAG, "scene flicker $hz Hz (was $flickerHz Hz)")
+        flickerHz = hz
     }
 
     /**
@@ -777,7 +825,7 @@ class CameraSession(
             if (log) Log.i(TAG, "engine ae: ${if (m == null) manualWhy else "manual engine turned off"}")
             return
         }
-        val l = ExposureLoop(m.limits, lastManual(prefs) ?: ExposureLoop.DEFAULT_START)
+        val l = ExposureLoop(m.limits, lastManual(prefs) ?: ExposureLoop.DEFAULT_START, flickerHz)
         loop = l
         b.set(CaptureRequest.CONTROL_AE_MODE, CameraMetadata.CONTROL_AE_MODE_OFF)
         m.boostMin?.let { b.set(CaptureRequest.CONTROL_POST_RAW_SENSITIVITY_BOOST, it) }
@@ -803,7 +851,7 @@ class CameraSession(
                 TAG,
                 "engine manual: $manualWhy; tonemap ${m.tone.why}, linearised as $curve; " +
                     "boost ${m.boostMin ?: "unset"}; t ${m.limits.minExposureNs}..${m.limits.maxExposureNs} ns, " +
-                    "ISO ${m.limits.minIso}..${m.limits.maxIso}",
+                    "ISO ${m.limits.minIso}..${m.limits.maxIso}; antibanding $flickerHz Hz",
             )
         }
     }
@@ -845,6 +893,9 @@ class CameraSession(
          * start there. Kept in [PREFS] (not backed up: it belongs to this phone's camera).
          */
         @Volatile private var lastManual: ExposureLoop.Settings? = null
+
+        /** The mains frequency a camera last detected in this process; null until one did. */
+        @Volatile private var detectedFlicker: Int? = null
 
         private const val PREFS = "grain_camera"
         private const val KEY_EXPOSURE = "lastExposureNs"

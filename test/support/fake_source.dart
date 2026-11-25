@@ -173,6 +173,7 @@ MeterStats manualStats({
   bool atMin = false,
   bool atMax = false,
   double? toneGamma = 2.2,
+  int? flickerHz,
 }) => MeterStats.fromMap({
   'engine': 'manual',
   'exposureNs': exposureNs,
@@ -196,4 +197,5 @@ MeterStats manualStats({
   'loop': loop,
   'atMinExposure': atMin,
   'atMaxExposure': atMax,
+  'flickerHz': ?flickerHz,
 });

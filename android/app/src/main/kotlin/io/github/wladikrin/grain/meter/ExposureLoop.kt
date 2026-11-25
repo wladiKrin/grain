@@ -2,19 +2,22 @@ package io.github.wladikrin.grain.meter
 
 import android.hardware.camera2.CameraMetadata
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /**
  * The manual-exposure engine's loop: with AE off, Grain sets exposure time and ISO itself and
  * keeps the metered region near [TARGET] linear luma. Every unclipped frame is a measurement
  * wherever it lands; it re-exposes only when the region leaves [BAND_LOW]..[BAND_HIGH] or is
- * clipped. Pure; no Android objects.
+ * clipped. Under mains flicker ([flickerHz]) times longer than one flicker period are whole
+ * periods (see [antiband]). Pure; no Android objects.
  */
-class ExposureLoop(val limits: Limits, start: Settings) {
+class ExposureLoop(limits: Limits, start: Settings, flickerHz: Int = 0) {
     data class Settings(val exposureNs: Long, val iso: Int) {
         /** Exposure × ISO, the quantity the region's luma is proportional to. */
         val product: Double get() = exposureNs.toDouble() * iso
@@ -24,6 +27,18 @@ class ExposureLoop(val limits: Limits, start: Settings) {
     data class Limits(val minExposureNs: Long, val maxExposureNs: Long, val minIso: Int, val maxIso: Int) {
         val minProduct: Double get() = minExposureNs.toDouble() * minIso
         val maxProduct: Double get() = maxExposureNs.toDouble() * maxIso
+
+        /**
+         * These limits within a physical camera's sensor ranges (the lens a logical
+         * multi-camera is using): the overlap, or these limits where there is none.
+         */
+        fun within(minExposureNs: Long, maxExposureNs: Long, minIso: Int, maxIso: Int): Limits {
+            val t0 = max(this.minExposureNs, minExposureNs)
+            val t1 = min(this.maxExposureNs, maxExposureNs)
+            val i0 = max(this.minIso, minIso)
+            val i1 = min(this.maxIso, maxIso)
+            return if (t0 in 1..t1 && i0 in 1..i1) Limits(t0, t1, i0, i1) else this
+        }
 
         companion object {
             fun of(minExposureNs: Long, deviceMaxExposureNs: Long, minIso: Int, maxIso: Int) =
@@ -36,8 +51,16 @@ class ExposureLoop(val limits: Limits, start: Settings) {
     /** One frame's verdict: [request] is new settings to send, or null to keep the current ones. */
     data class Step(val request: Settings?, val state: State, val atMin: Boolean, val atMax: Boolean)
 
+    /** The exposure limits of the camera in use; see [reconfigure]. */
+    var limits: Limits = limits
+        private set
+
+    /** Mains frequency, 50 or 60 Hz; 0 for no antibanding. */
+    var flickerHz: Int = flickerHz
+        private set
+
     /** The settings last asked for. */
-    var requested: Settings = split(start.product, limits)
+    var requested: Settings = split(start.product, limits, flickerHz)
         private set
 
     /** The frame values the last request was stepped from. */
@@ -53,7 +76,7 @@ class ExposureLoop(val limits: Limits, start: Settings) {
      * can do.
      */
     fun onFrame(frame: Settings, luma: Double, clip: Double): Step {
-        val d = decide(frame, luma, clip, limits)
+        val d = decide(frame, luma, clip, limits, flickerHz)
         if (!shows(frame, requested, from)) {
             if (waited < SETTLE_FRAMES) {
                 waited++
@@ -67,6 +90,23 @@ class ExposureLoop(val limits: Limits, start: Settings) {
             requested = it
         }
         return d
+    }
+
+    /**
+     * The camera in use changed its [limits] (a logical camera moved to another lens) or the
+     * mains frequency [flickerHz] became known: the last request is split again for them, at
+     * the same exposure × ISO. Returns that request to send, or null when nothing changes.
+     */
+    fun reconfigure(limits: Limits, flickerHz: Int): Settings? {
+        if (limits == this.limits && flickerHz == this.flickerHz) return null
+        this.limits = limits
+        this.flickerHz = flickerHz
+        val next = split(requested.product, limits, flickerHz)
+        if (next == requested) return null
+        from = requested
+        requested = next
+        waited = 0
+        return next
     }
 
     companion object {
@@ -141,7 +181,7 @@ class ExposureLoop(val limits: Limits, start: Settings) {
          * The next settings from [frame]'s own values: stepped per [stepEv], split by [split].
          * At the limits the request is null and [Step.atMin] / [Step.atMax] say which.
          */
-        fun decide(frame: Settings, luma: Double, clip: Double, limits: Limits): Step {
+        fun decide(frame: Settings, luma: Double, clip: Double, limits: Limits, flickerHz: Int = 0): Step {
             val p = frame.product
             val atMin = p <= limits.minProduct * 1.05
             val atMax = p >= limits.maxProduct * 0.95
@@ -152,16 +192,20 @@ class ExposureLoop(val limits: Limits, start: Settings) {
                 step == 0.0 -> State.STEADY
                 else -> State.SETTLING
             }
-            val next = split(p * 2.0.pow(step), limits)
+            val next = split(p * 2.0.pow(step), limits, flickerHz)
             val moves = abs(step) >= MIN_STEP_EV && !close(next, frame)
             return Step(if (moves) next else null, if (moves || clipped) state else State.STEADY, atMin, atMax)
         }
 
         /**
          * Exposure × ISO [product] as settings: the lowest ISO up to 1/30 s, then ISO up to its
-         * maximum, then longer times up to the loop's maximum. Clamped to [limits].
+         * maximum, then longer times up to the loop's maximum. Clamped to [limits]; under
+         * [flickerHz] mains, [antiband]ed.
          */
-        fun split(product: Double, limits: Limits): Settings {
+        fun split(product: Double, limits: Limits, flickerHz: Int = 0): Settings =
+            antiband(plainSplit(product, limits), product, limits, flickerHz)
+
+        private fun plainSplit(product: Double, limits: Limits): Settings {
             val smooth = SMOOTH_EXPOSURE_NS.coerceIn(limits.minExposureNs, limits.maxExposureNs)
             val t1 = product / limits.minIso
             if (t1 <= smooth) {
@@ -174,6 +218,48 @@ class ExposureLoop(val limits: Limits, start: Settings) {
             val t = (product / limits.maxIso).toLong().coerceIn(smooth, limits.maxExposureNs)
             return Settings(t, limits.maxIso)
         }
+
+        /** Light under [hz] mains flickers at twice that: 10 ms at 50 Hz, 8.33 ms at 60 Hz. */
+        fun flickerPeriodNs(hz: Int): Double = if (hz > 0) 1e9 / (2.0 * hz) else 0.0
+
+        /**
+         * ISO may land this far outside its range (MIN_STEP_EV / 2) and be clamped back: the
+         * product then moves by less than a step worth taking.
+         */
+        private val ISO_SLACK = 2.0.pow(MIN_STEP_EV / 2)
+
+        /**
+         * [s], for exposure × ISO [product], with a time longer than one flicker period of
+         * [hz] mains moved to a whole number of periods, so every row of the rolling shutter
+         * sees the same light: the nearer of the multiples below and above whose ISO (the
+         * product over that time) fits [limits]. The ISO takes the difference, so the product
+         * stays. Times of one period or less, and times no multiple fits, stay as they are.
+         */
+        fun antiband(s: Settings, product: Double, limits: Limits, hz: Int): Settings {
+            val period = flickerPeriodNs(hz)
+            if (period <= 0.0) return s
+            val t = s.exposureNs.toDouble()
+            val n = floor(t / period)
+            if (n < 1 || (n == 1.0 && t - period < 1.0)) return s
+            var best = s
+            var bestDist = Double.MAX_VALUE
+            for (k in listOf(n, n + 1)) {
+                val tk = (k * period).roundToLong()
+                if (tk < limits.minExposureNs || tk > limits.maxExposureNs) continue
+                val iso = product / tk
+                if (iso < limits.minIso / ISO_SLACK || iso > limits.maxIso * ISO_SLACK) continue
+                val dist = abs(ln(tk / t))
+                if (dist < bestDist) {
+                    best = Settings(tk, iso.roundToInt().coerceIn(limits.minIso, limits.maxIso))
+                    bestDist = dist
+                }
+            }
+            return best
+        }
+
+        /** The metered region's (luma, clipped share) in [stats]: the spot's when [spot], else the crop's. */
+        fun metered(stats: Stats, spot: Boolean): Pair<Double, Double> =
+            if (spot) stats.spot to stats.spotClip else stats.crop to stats.cropClip
 
         /** The frame duration for [exposureNs]: at least 1/30 s and at least the exposure. */
         fun frameDuration(exposureNs: Long): Long = max(exposureNs, SMOOTH_EXPOSURE_NS)

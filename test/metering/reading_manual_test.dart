@@ -278,6 +278,7 @@ void main() {
           requestedIso: 30,
           loop: 'settling',
           atMax: true,
+          flickerHz: 50,
         ),
         null,
       );
@@ -288,6 +289,7 @@ void main() {
         'res=1/125.0,iso30',
         'loop=settling',
         'loopLimit=max',
+        'flicker=50Hz',
       ]) {
         expect(line, contains(part));
       }

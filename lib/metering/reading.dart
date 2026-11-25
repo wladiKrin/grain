@@ -60,6 +60,7 @@ class MeterStats {
     this.atMaxExposure = false,
     this.cropClip = 0,
     this.spotClip = 0,
+    this.flickerHz,
   });
 
   factory MeterStats.fromMap(Map<Object?, Object?> m) {
@@ -101,6 +102,7 @@ class MeterStats {
       atMaxExposure: m['atMaxExposure'] == true,
       cropClip: (m['cropClip'] as num?)?.toDouble() ?? 0,
       spotClip: (m['spotClip'] as num?)?.toDouble() ?? 0,
+      flickerHz: (m['flickerHz'] as num?)?.toInt(),
     );
   }
 
@@ -147,6 +149,10 @@ class MeterStats {
 
   /// Shares of crop and spot pixels at the top code, 0..1.
   final double cropClip, spotClip;
+
+  /// Manual engine: the mains frequency its times are antibanded for (0:
+  /// none); for the stats log only.
+  final int? flickerHz;
 }
 
 enum MeterArea { average, spot }

@@ -918,5 +918,6 @@ String _engineFields(MeterStats s) {
   return 'engine=manual tonemap=${s.tonemap ?? '?'} '
       'req=$req res=$res loop=${s.loop ?? '?'} '
       'clip=${s.cropClip.toStringAsFixed(3)}/${s.spotClip.toStringAsFixed(3)} '
-      'loopLimit=${at.isEmpty ? '-' : at.join(',')}';
+      'loopLimit=${at.isEmpty ? '-' : at.join(',')} '
+      'flicker=${s.flickerHz == null ? '?' : '${s.flickerHz}Hz'}';
 }
