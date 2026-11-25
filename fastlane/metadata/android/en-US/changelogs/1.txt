@@ -1,7 +1,9 @@
 First release.
-- Average and spot metering with one-swipe dials
-- Aperture priority, shutter priority, manual and free modes
-- Histogram with film latitude, viewfinder crop
-- Gear library, QR sharing, rolls with a frame log and snapshots
+- Average and spot metering with swipe dials, haptics
+- Aperture, shutter, manual and free modes
+- Viewfinder with lens crop, histogram, film latitude
+- Gear library with favourites and QR sharing
+- Rolls: frame log, snapshots, skip frame, per-frame camera
 - CSV, JSON and zip export, backup and restore
-- A MapLibre map of logged locations, offline by default; optional online styles from openfreemap.org, openstreetmap.org or opentopomap.org
+- Map of logged locations, offline by default; optional online styles from openfreemap.org, openstreetmap.org, opentopomap.org
+- Light and dark mode

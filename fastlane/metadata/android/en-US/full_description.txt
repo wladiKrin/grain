@@ -1,7 +1,8 @@
 Grain is a free, open-source lightmeter for film photographers. It reads the light through the phone camera and gives you aperture, shutter speed and ISO, with one gesture to change any value: swipe a dial and it moves one value per detent, in the steps your camera uses (full, half or third stops), with haptic feedback.
 
 <b>Metering</b>
-- Average metering over what your lens sees (centre-weighted), or spot metering by tapping the preview.
+- Average metering over what your lens sees (centre-weighted), or spot metering by tapping the preview; an AVG | SPOT switch shows which.
+- Grain sets the camera's exposure itself for its readings, and adjusts quickly from dark to bright light.
 - Aperture priority, shutter priority and manual modes, plus a free mode with no gear restrictions.
 - Viewfinder crop that shows what your lens sees on your camera's film format.
 - Optional histogram overlay with film latitude markers, so you can see where highlights and shadows land.
@@ -12,10 +13,14 @@ Grain is a free, open-source lightmeter for film photographers. It reads the lig
 - Share a profile as a QR code or file, and add new gear to the community library by pull request.
 
 <b>Rolls and frame log</b>
-- Start a roll, log each frame with its settings and notes, and keep a reference snapshot per frame.
+- Start a roll, log each frame with its settings and notes, and keep a reference snapshot per frame. Skip a frame you shot without a reading and fill it in later.
+- Each frame keeps the camera it was taken with, so a roll can continue in another body of the same format.
 - Export a roll as CSV and JSON, optionally with a zip of the snapshots, so the settings can go with your photos when you post them.
 - Back up and restore all your data.
-- See on a map where you logged your frames and readings (when location is on), drawn smoothly by MapLibre: on a built-in offline map or, if you choose one, an online style: Streets, Minimal, Muted, Standard or Topographic.
+- See on a map where you logged your frames and readings (when location is on), drawn smoothly by MapLibre: on a built-in offline map or, if you choose one, an online style: Streets, Minimal, Muted, Standard or Topographic. The same points are also available as a list.
+
+<b>Looks</b>
+- A quiet paper-like design, light or dark, following the system.
 
 <b>Private by design</b>
 - Works fully offline. The meter never uses the network. The only thing that can go online is the optional online map, off by default, which loads maps from openfreemap.org, openstreetmap.org or opentopomap.org; without it Grain makes no network connection. No account, no ads, no tracking and no paywall.

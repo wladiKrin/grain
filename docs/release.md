@@ -100,6 +100,19 @@ same options as the release command,
   `changelogs/<versionCode>.txt`, `images/icon.png`).
 - Build the unsigned release with `GRAIN_UNSIGNED=1` as above.
 - The app has no ads, no tracking and no Google Play Services.
+- Prebuilt binaries: F-Droid's Inclusion Policy allows prebuilt FLOSS
+  binaries from trusted Maven repositories, Maven Central among them
+  (https://f-droid.org/docs/Inclusion_Policy/), which covers MapLibre's
+  AAR and OkHttp; the Flutter SDK's own prebuilts are allowed too. A
+  reviewer may still ask for MapLibre to be built from source: answer by
+  pointing at the policy, or build it as a srclib.
+- No anti-feature is expected: the online map styles use free services
+  (OpenStreetMap, OpenFreeMap, OpenTopoMap), are off by default, and
+  nothing is tracked.
+- `docs/fdroid/io.github.wladikrin.grain.yml` is a draft recipe for
+  fdroiddata: build it with fdroidserver first (it needs a `v1.0.0` tag,
+  JDK 21 on the build server, and the release built unsigned; adjust the
+  `output` path to the unsigned build if F-Droid signs it).
 - The map is drawn by MapLibre Native for Android 13.7.1 (BSD-2, the
   `org.maplibre.gl:android-sdk-opengl` AAR from Maven Central, with a
   prebuilt `libmaplibre.so`) through the official `maplibre_gl` plugin
