@@ -102,11 +102,17 @@ same options as the release command,
 - The app has no ads, no tracking and no Google Play Services.
 - The app requests `INTERNET` only for the map's online tiles, loaded only
   with an online map style chosen in Settings > Map or on the map (the
-  default style is Offline): tile.openstreetmap.org (Standard, Muted),
-  basemaps.cartocdn.com (Minimal) or opentopomap.org (Topographic). The
-  meter and everything else work without the network; the offline map is
-  drawn from bundled Natural Earth data (public domain, `assets/map/`,
-  reproduced by `tool/basemap/`).
+  default style is Offline): tiles.openfreemap.org (Streets, Minimal;
+  vector tiles drawn in the app by `vector_map_tiles`, OpenMapTiles schema
+  under CC-BY 4.0, data © OpenStreetMap contributors under the ODbL),
+  tile.openstreetmap.org (Standard, Muted) or opentopomap.org
+  (Topographic). Every request names Grain in its User-Agent; at most two
+  connections go to a raster server and four to OpenFreeMap. The tiles
+  are cached on the phone (at most 50 MB raster, 40 MB vector, plus the
+  OpenFreeMap style files) and nothing is fetched ahead. The meter and
+  everything else work without the network; the offline map is drawn from
+  bundled Natural Earth data (public domain, `assets/map/`, reproduced by
+  `tool/basemap/`).
 - `tool/icon/icon.svg` is the source of the store icon:
   `rsvg-convert -w 512 -h 512 tool/icon/icon.svg -o fastlane/metadata/android/en-US/images/icon.png`.
 

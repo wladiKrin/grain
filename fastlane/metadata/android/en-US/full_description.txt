@@ -18,7 +18,7 @@ Grain is a free, open-source lightmeter for film photographers. It reads the lig
 - See on a map where you logged your frames and readings (when location is on), on a built-in offline map or, if you choose one, an online style: Minimal, Muted, Standard or Topographic.
 
 <b>Private by design</b>
-- Works fully offline. The meter never uses the network. The only thing that can go online is the optional online map, off by default, which loads tiles from openstreetmap.org, basemaps.cartocdn.com or opentopomap.org; without it Grain makes no network connection. No account, no ads, no tracking and no paywall.
+- Works fully offline. The meter never uses the network. The only thing that can go online is the optional online map, off by default, which loads tiles from openfreemap.org, openstreetmap.org or opentopomap.org; without it Grain makes no network connection. No account, no ads, no tracking and no paywall.
 - No Google Play Services or other proprietary dependencies.
 
 Grain is free software under the GPLv3. The gear library is CC0.

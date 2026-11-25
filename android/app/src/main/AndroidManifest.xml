@@ -2,8 +2,8 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <!-- Only for the map's online tiles (openstreetmap.org,
-         basemaps.cartocdn.com, opentopomap.org), and only with an online
+    <!-- Only for the map's online tiles (tiles.openfreemap.org,
+         tile.openstreetmap.org, opentopomap.org), and only with an online
          map style chosen (Offline by default). The meter never uses the
          network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
