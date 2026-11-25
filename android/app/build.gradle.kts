@@ -25,6 +25,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Native libraries stored compressed: MapLibre's 11 MB library makes the
+    // download about a third smaller. Android extracts them on install, so
+    // the installed size grows by about as much.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     defaultConfig {
         applicationId = "io.github.wladikrin.grain"
         minSdk = 29
