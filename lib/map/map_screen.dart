@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:permission_handler/permission_handler.dart'
+    show openAppSettings;
 
 import '../gear/gear_controller.dart';
 import '../gear/model.dart';
@@ -8,19 +12,21 @@ import '../rolls/roll_controller.dart';
 import '../rolls/ui/frame_editor.dart';
 import '../rolls/ui/reading_screen.dart';
 import '../settings/settings.dart';
+import '../ui/permissions.dart';
 import '../ui/round_button.dart';
 import '../ui/theme.dart';
 import 'basemap.dart';
 import 'map_layers.dart';
 import 'map_points.dart';
+import 'map_style_sheet.dart';
 
 /// The all-rolls map's filter: everything, saved readings only, or a roll.
 const _allFilter = '';
 const _readingsFilter = '\u0000readings';
 
 /// Logged locations on a map: every located frame and saved reading, or
-/// only the frames of [rollId]. The basemap is the bundled one; with the
-/// online map setting on, OpenStreetMap tiles are drawn over it.
+/// only the frames of [rollId]. The basemap is the bundled one; with an
+/// online map style chosen, that style's tiles are drawn over it.
 class MapScreen extends StatefulWidget {
   MapScreen({
     super.key,
@@ -29,7 +35,8 @@ class MapScreen extends StatefulWidget {
     required this.settings,
     this.rollId,
     Future<Basemap>? basemap,
-    this.tileProvider = osmTileProvider,
+    this.tileProvider = onlineTileProvider,
+    this.openSettings = openAppSettings,
   }) : basemap = basemap ?? loadBasemap();
 
   final RollController rolls;
@@ -37,8 +44,14 @@ class MapScreen extends StatefulWidget {
   /// Bodies and lenses for the frame editor.
   final GearController gear;
 
-  /// Whether OpenStreetMap tiles are shown ([Settings.onlineMap]).
+  /// The map style ([Settings.mapStyle]).
   final Settings settings;
+
+  /// Opened from the note shown when online tiles do not load.
+  final OpenSettings openSettings;
+
+  /// Tiles that fail with none loading in between before the note shows.
+  static const failuresBeforeNote = 3;
 
   /// Only this roll's frames; null shows every roll and the saved readings.
   final String? rollId;
@@ -68,9 +81,27 @@ class _MapScreenState extends State<MapScreen> {
   /// The basemap could not be read: said over the map, not left blank.
   bool _basemapFailed = false;
 
+  /// The style the tiles are drawn in, to notice a change.
+  late MapStyle _style = widget.settings.mapStyle;
+
+  /// Online tiles that failed since one last loaded. From
+  /// [MapScreen.failuresBeforeNote] on, a note says the map is not loading
+  /// (no network, or the network permission off) until a tile loads.
+  int _tileFailures = 0;
+  bool _noteDismissed = false;
+  bool _okPending = false;
+
+  bool get _tilesFailing =>
+      _tileFailures >= MapScreen.failuresBeforeNote && !_noteDismissed;
+
+  /// Reloads the tiles in view, as on coming back from the system settings.
+  final _resetTiles = StreamController<void>.broadcast();
+  late final AppLifecycleListener _lifecycle;
+
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _retryTiles);
     widget.rolls.addListener(_load);
     widget.settings.addListener(_settingsChanged);
     widget.basemap.then(
@@ -90,12 +121,68 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     widget.rolls.removeListener(_load);
     widget.settings.removeListener(_settingsChanged);
+    _lifecycle.dispose();
+    _resetTiles.close();
     _map.dispose();
     super.dispose();
   }
 
   void _settingsChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      if (widget.settings.mapStyle != _style) {
+        _style = widget.settings.mapStyle;
+        _tileFailures = 0;
+        _lastFailure = null;
+        _noteDismissed = false;
+      }
+    });
+  }
+
+  void _tileFailed(TileImage tile, Object error, StackTrace? stack) {
+    if (!mounted) return;
+    _tileFailures++;
+    _lastFailure = tile.loadFinishedAt ?? DateTime.now();
+    // Reported while building too (an error already known): redrawn after.
+    if (_tileFailures == MapScreen.failuresBeforeNote) {
+      scheduleMicrotask(() {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  /// When the last tile failed: only a tile loaded since clears the note,
+  /// not one loaded before (from the cache, say) and drawn again.
+  DateTime? _lastFailure;
+
+  /// Called as tiles are drawn: one that loaded since the last failure
+  /// clears the failures (after the frame, as this runs while building).
+  Widget _watchTile(BuildContext context, Widget tile, TileImage image) {
+    final loaded = image.loadFinishedAt;
+    final failed = _lastFailure;
+    if (_tileFailures > 0 &&
+        !_okPending &&
+        loaded != null &&
+        !image.loadError &&
+        (failed == null || !loaded.isBefore(failed))) {
+      _okPending = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _okPending = false;
+        if (!mounted) return;
+        setState(() {
+          _tileFailures = 0;
+          _lastFailure = null;
+          _noteDismissed = false;
+        });
+      });
+    }
+    return tile;
+  }
+
+  /// Asks for the tiles in view again if any failed: the network may be
+  /// back, or allowed in the system settings.
+  void _retryTiles() {
+    if (_tileFailures > 0 && widget.settings.onlineMap) _resetTiles.add(null);
   }
 
   Future<void> _load() async {
@@ -219,6 +306,13 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: Text(_title),
         actions: [
+          if (points != null && points.isNotEmpty)
+            IconButton(
+              tooltip: 'Map style',
+              icon: const Icon(Icons.layers),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              onPressed: () => showMapStyleSheet(context, widget.settings),
+            ),
           if (widget.rollId == null && filters.length > 2)
             PopupMenuButton<String>(
               tooltip: 'Filter by roll',
@@ -266,8 +360,8 @@ class _MapScreenState extends State<MapScreen> {
     final brightness = Theme.of(context).brightness;
     final colors = MapColors.of(g, brightness);
     final basemap = _basemap;
-    final online = widget.settings.onlineMap;
-    if (!online) _tiles = null;
+    final online = OnlineTiles.of(widget.settings.mapStyle, brightness);
+    if (online == null) _tiles = null;
     final shown = _shown;
     final inset = MediaQuery.paddingOf(context);
     return Stack(
@@ -289,17 +383,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
           children: [
             if (basemap != null) ...basemapLayers(basemap, colors),
-            if (online)
-              TileLayer(
-                urlTemplate: osmUrlTemplate,
-                tileProvider: _tiles ??= widget.tileProvider(),
-                maxNativeZoom: 19,
-                // Only what is on screen: no tiles fetched ahead.
-                panBuffer: 0,
-                tileBuilder: brightness == Brightness.dark
-                    ? darkModeTileBuilder
-                    : null,
-              ),
+            if (online != null) _tileLayer(online),
             MarkerLayer(
               markers: [
                 // Frames over readings; the selected ones on top.
@@ -319,21 +403,36 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ],
         ),
-        if (_basemapFailed)
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: Center(
-              child: _Attribution(
-                'The offline map could not be loaded: only the markers show.',
-              ),
-            ),
+        Positioned(
+          top: 12,
+          left: 12,
+          right: 12,
+          child: Column(
+            spacing: 8,
+            children: [
+              if (_basemapFailed)
+                Center(
+                  child: _Attribution(
+                    'The offline map could not be loaded: only the markers '
+                    'show.',
+                  ),
+                ),
+              if (online != null && _tilesFailing)
+                _TilesNote(
+                  onOpenSettings: widget.openSettings,
+                  onDismiss: () => setState(() => _noteDismissed = true),
+                ),
+            ],
           ),
+        ),
         Positioned(
           left: 8,
+          right: 8,
           bottom: inset.bottom + 6,
-          child: _Attribution(online ? osmAttribution : 'Natural Earth'),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _Attribution(online?.attribution ?? naturalEarthAttribution),
+          ),
         ),
         Positioned(
           right: 16,
@@ -358,6 +457,29 @@ class _MapScreenState extends State<MapScreen> {
           ),
       ],
     );
+  }
+
+  /// [online]'s tiles over the basemap, with its colour filter if it has
+  /// one. Only what is on screen is asked for, no further in than the
+  /// server draws.
+  Widget _tileLayer(OnlineTiles online) {
+    final layer = TileLayer(
+      key: const ValueKey('online-tiles'),
+      urlTemplate: online.urlTemplate,
+      subdomains: online.subdomains,
+      retinaMode: online.retina && RetinaMode.isHighDensity(context),
+      tileProvider: _tiles ??= widget.tileProvider(),
+      maxNativeZoom: online.maxNativeZoom,
+      // No tiles fetched ahead.
+      panBuffer: 0,
+      errorTileCallback: _tileFailed,
+      tileBuilder: _watchTile,
+      reset: _resetTiles.stream,
+    );
+    final filter = online.colorFilter;
+    return filter == null
+        ? layer
+        : ColorFiltered(colorFilter: filter, child: layer);
   }
 
   Iterable<MapPoint> _ordered(List<MapPoint> shown) => [
@@ -472,6 +594,61 @@ class _Attribution extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Text(text, style: TextStyle(fontSize: 11, color: g.secondary)),
+      ),
+    );
+  }
+}
+
+/// Online tiles are not loading: most likely no connection, or the network
+/// permission off (GrapheneOS's Network toggle, which an app cannot ask
+/// for). The offline map stays in view under it.
+class _TilesNote extends StatelessWidget {
+  const _TilesNote({required this.onOpenSettings, required this.onDismiss});
+
+  final OpenSettings onOpenSettings;
+  final VoidCallback onDismiss;
+
+  static const text =
+      'Couldn’t load the online map. Check your connection, or allow '
+      'Network for Grain in its app permissions.';
+
+  @override
+  Widget build(BuildContext context) {
+    final g = context.grain;
+    return Container(
+      decoration: BoxDecoration(
+        color: g.ground.withValues(alpha: .94),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: g.border),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 0, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text, style: TextStyle(fontSize: 14, color: g.ink)),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(48, 44),
+                    foregroundColor: g.ink,
+                  ),
+                  onPressed: onOpenSettings,
+                  child: const Text('Open settings'),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            icon: const Icon(Icons.close),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            onPressed: onDismiss,
+          ),
+        ],
       ),
     );
   }

@@ -160,28 +160,38 @@ void main() {
     expect(loc.calls, 0);
   });
 
-  testWidgets('the online map switch starts off and asks nothing', (
-    tester,
-  ) async {
+  testWidgets('the map row starts offline, picks a style from the sheet and '
+      'asks nothing', (tester) async {
     final s = Settings.inMemory();
     final loc = FakeLocation();
     await tester.pumpWidget(_app(s, loc));
-    await _reveal(tester, find.text('Online map (OpenStreetMap)'));
-    expect(
-      find.textContaining('Off: the map uses only the outlines built into'),
-      findsOneWidget,
-    );
-    expect(
-      tester.widget<Switch>(_switchOf('Online map (OpenStreetMap)')).value,
-      isFalse,
-    );
-    await tester.tap(find.text('Online map (OpenStreetMap)'));
-    await tester.pump();
-    expect(s.onlineMap, isTrue);
+    await _reveal(tester, find.text('Map: Offline'));
+    expect(find.text('Built into Grain; nothing goes online'), findsOneWidget);
+    await tester.tap(find.text('Map: Offline'));
+    await tester.pumpAndSettle();
+    expect(find.text('MAP STYLE'), findsOneWidget);
+    for (final name in [
+      'Offline',
+      'Minimal',
+      'Muted',
+      'Standard',
+      'Topographic',
+    ]) {
+      expect(find.text(name), findsOneWidget);
+    }
+    await tester.tap(find.text('Minimal'));
+    await tester.pumpAndSettle();
+    expect(s.mapStyle, MapStyle.minimal);
+    expect(find.text('MAP STYLE'), findsNothing);
+    expect(find.text('Map: Minimal'), findsOneWidget);
+    expect(find.textContaining('basemaps.cartocdn.com'), findsOneWidget);
     expect(loc.permissionRequests, 0);
-    await tester.tap(find.text('Online map (OpenStreetMap)'));
-    await tester.pump();
-    expect(s.onlineMap, isFalse);
+    await tester.tap(find.text('Map: Minimal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Offline'));
+    await tester.pumpAndSettle();
+    expect(s.mapStyle, MapStyle.offline);
+    expect(find.text('Map: Offline'), findsOneWidget);
   });
 
   testWidgets('turning location off does not ask', (tester) async {

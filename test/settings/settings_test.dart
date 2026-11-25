@@ -92,21 +92,49 @@ void main() {
     expect(s.backupMap().containsKey('phoneAe'), isFalse);
   });
 
-  test('the online map defaults off, persists, and stays out of backups and '
-      'off when a backup names it', () async {
+  test('the map style defaults to offline, persists, and stays out of '
+      'backups and offline when a backup names it', () async {
     SharedPreferences.setMockInitialValues({});
     final s = await Settings.load();
+    expect(s.mapStyle, MapStyle.offline);
     expect(s.onlineMap, isFalse);
-    expect(Settings.inMemory().onlineMap, isFalse);
-    await s.setOnlineMap(true);
-    final r = await Settings.load();
-    expect(r.onlineMap, isTrue);
-    expect(r.backupMap().containsKey('onlineMap'), isFalse);
-    await s.setOnlineMap(false);
+    expect(Settings.inMemory().mapStyle, MapStyle.offline);
+    for (final style in MapStyle.values) {
+      await s.setMapStyle(style);
+      final r = await Settings.load();
+      expect(r.mapStyle, style);
+      expect(r.onlineMap, style != MapStyle.offline);
+      expect(r.backupMap().containsKey('mapStyle'), isFalse);
+      expect(r.backupMap().containsKey('onlineMap'), isFalse);
+    }
+    await s.setMapStyle(MapStyle.offline);
     final fresh = await Settings.load();
-    await fresh.applyBackupMap({'onlineMap': true});
-    expect(fresh.onlineMap, isFalse);
-    expect((await Settings.load()).onlineMap, isFalse);
+    await fresh.applyBackupMap({'onlineMap': true, 'mapStyle': 'standard'});
+    expect(fresh.mapStyle, MapStyle.offline);
+    expect((await Settings.load()).mapStyle, MapStyle.offline);
+  });
+
+  test('the old online map switch becomes a style: on is Standard (as it '
+      'drew), off is Offline', () async {
+    SharedPreferences.setMockInitialValues({'onlineMap': true});
+    final on = await Settings.load();
+    expect(on.mapStyle, MapStyle.standard);
+    SharedPreferences.setMockInitialValues({'onlineMap': false});
+    expect((await Settings.load()).mapStyle, MapStyle.offline);
+    // A saved style wins, and saving one drops the old switch.
+    SharedPreferences.setMockInitialValues({
+      'onlineMap': true,
+      'mapStyle': 'minimal',
+    });
+    final both = await Settings.load();
+    expect(both.mapStyle, MapStyle.minimal);
+    await both.setMapStyle(MapStyle.offline);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey('onlineMap'), isFalse);
+    expect((await Settings.load()).mapStyle, MapStyle.offline);
+    // An unknown name falls back to the old switch, then to Offline.
+    SharedPreferences.setMockInitialValues({'mapStyle': 'satellite'});
+    expect((await Settings.load()).mapStyle, MapStyle.offline);
   });
 
   test(

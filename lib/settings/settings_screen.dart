@@ -7,6 +7,7 @@ import '../exposure/scales.dart';
 import '../exposure/stops.dart';
 import '../gear/gear_controller.dart';
 import '../gear/platform.dart';
+import '../map/map_style_sheet.dart';
 import '../rolls/roll_controller.dart';
 import '../rolls/location.dart';
 import '../ui/dial/swipe_dial.dart';
@@ -189,11 +190,10 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (v) => _setLocation(context, v),
             ),
             const _Divider(),
-            _SwitchRow(
-              label: 'Online map (OpenStreetMap)',
-              subtitle: 'Loads map tiles from openstreetmap.org. Off: the map uses only the outlines built into Grain and nothing goes online.',
-              value: settings.onlineMap,
-              onChanged: settings.setOnlineMap,
+            _LinkRow(
+              label: 'Map: ${mapStyleLabels[settings.mapStyle]}',
+              subtitle: mapStyleSubtitles[settings.mapStyle],
+              onTap: () => showMapStyleSheet(context, settings),
             ),
             const _Divider(),
             _ThemeRow(value: settings.theme, onChanged: settings.setTheme),

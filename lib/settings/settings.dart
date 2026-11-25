@@ -4,6 +4,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Which palette the app wears: the system's, or one fixed.
 enum ThemeChoice { system, light, dark }
 
+/// How the map of logged locations is drawn: the basemap built into Grain
+/// alone, or one of the online tile styles over it.
+enum MapStyle {
+  offline,
+  minimal,
+  muted,
+  standard,
+  topographic;
+
+  /// Whether this style loads tiles from the network.
+  bool get online => this != offline;
+}
+
 /// Persisted preferences: calibration offset, haptics and the viewfinder and
 /// histogram defaults (the app opens the way they were left).
 class Settings extends ChangeNotifier {
@@ -20,7 +33,7 @@ class Settings extends ChangeNotifier {
     required this._shakeWarning,
     required this._clickSound,
     required this._theme,
-    required this._onlineMap,
+    required this._mapStyle,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -38,6 +51,9 @@ class Settings extends ChangeNotifier {
   static const _kShake = 'shakeWarning';
   static const _kClick = 'clickSound';
   static const _kTheme = 'themeChoice';
+  static const _kMapStyle = 'mapStyle';
+
+  /// The switch [_kMapStyle] replaced: on was OpenStreetMap as it draws.
   static const _kOnlineMap = 'onlineMap';
 
   /// Calibration range in thirds of a stop (±3 EV).
@@ -60,7 +76,11 @@ class Settings extends ChangeNotifier {
       theme:
           ThemeChoice.values.asNameMap()[p.getString(_kTheme)] ??
           ThemeChoice.system,
-      onlineMap: p.getBool(_kOnlineMap) ?? false,
+      mapStyle:
+          MapStyle.values.asNameMap()[p.getString(_kMapStyle)] ??
+          (p.getBool(_kOnlineMap) ?? false
+              ? MapStyle.standard
+              : MapStyle.offline),
     );
   }
 
@@ -77,7 +97,7 @@ class Settings extends ChangeNotifier {
   bool _shakeWarning = false;
   bool _clickSound = false;
   ThemeChoice _theme = ThemeChoice.system;
-  bool _onlineMap = false;
+  MapStyle _mapStyle = MapStyle.offline;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
@@ -110,9 +130,13 @@ class Settings extends ChangeNotifier {
   /// Light, dark, or follow the system.
   ThemeChoice get theme => _theme;
 
-  /// Draw OpenStreetMap tiles over the built-in basemap. The only thing in
-  /// Grain that goes online; this phone's choice, not in backups.
-  bool get onlineMap => _onlineMap;
+  /// How the map is drawn. Any style but [MapStyle.offline] loads tiles
+  /// over the built-in basemap, the only thing in Grain that goes online;
+  /// this phone's choice, not in backups.
+  MapStyle get mapStyle => _mapStyle;
+
+  /// Whether the map loads online tiles ([mapStyle] is not offline).
+  bool get onlineMap => _mapStyle.online;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -192,11 +216,12 @@ class Settings extends ChangeNotifier {
     await _prefs?.setString(_kTheme, v.name);
   }
 
-  Future<void> setOnlineMap(bool v) async {
-    if (v == _onlineMap) return;
-    _onlineMap = v;
+  Future<void> setMapStyle(MapStyle v) async {
+    if (v == _mapStyle) return;
+    _mapStyle = v;
     notifyListeners();
-    await _prefs?.setBool(_kOnlineMap, v);
+    await _prefs?.setString(_kMapStyle, v.name);
+    await _prefs?.remove(_kOnlineMap);
   }
 
   /// The settings a backup carries. Calibration belongs to this phone's

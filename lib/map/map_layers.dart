@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../settings/settings.dart';
 import '../ui/theme.dart';
 import '../version.dart';
 import 'basemap.dart';
@@ -49,22 +50,109 @@ Future<Basemap> loadBasemap([AssetBundle? bundle]) {
   });
 }
 
-/// Where the online tiles come from: OpenStreetMap's own servers, used as
-/// their tile usage policy asks (an identifying User-Agent, visible
-/// attribution, no prefetching).
-const osmUrlTemplate = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-/// Names Grain and where it lives, as the OSM tile policy asks.
+/// Names Grain and where it lives, as the tile servers' usage policies ask.
 const osmUserAgent = 'Grain/$appVersion (+https://github.com/wladiKrin/grain)';
 
 const osmAttribution = '© OpenStreetMap contributors';
+const cartoAttribution = '© OpenStreetMap contributors © CARTO';
+const topoAttribution =
+    '© OpenStreetMap contributors, SRTM · © OpenTopoMap (CC-BY-SA)';
 
-/// A tile provider for [osmUrlTemplate]: a modest disk cache in the app's
-/// cache directory, and failures (no network, network permission revoked)
-/// shown as empty tiles over the offline layers, never as errors.
-TileProvider osmTileProvider() => NetworkTileProvider(
+/// The attribution of the bundled basemap.
+const naturalEarthAttribution = 'Natural Earth';
+
+/// Where an online [MapStyle]'s tiles come from and how they are drawn.
+/// Each server is used as its usage policy asks: an identifying
+/// User-Agent, visible attribution, nothing fetched ahead, and no zoom
+/// asked for past its own (closer in, its tiles are scaled up).
+class OnlineTiles {
+  const OnlineTiles({
+    required this.urlTemplate,
+    required this.attribution,
+    required this.maxNativeZoom,
+    this.subdomains = const [],
+    this.retina = false,
+    this.colorFilter,
+  });
+
+  /// The tiles for [style] in [brightness]; null for [MapStyle.offline].
+  static OnlineTiles? of(MapStyle style, Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    return switch (style) {
+      MapStyle.offline => null,
+      MapStyle.minimal => OnlineTiles(
+        urlTemplate:
+            'https://{s}.basemaps.cartocdn.com/'
+            '${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png',
+        subdomains: const ['a', 'b', 'c', 'd'],
+        retina: true,
+        maxNativeZoom: 20,
+        attribution: cartoAttribution,
+      ),
+      MapStyle.muted => OnlineTiles(
+        urlTemplate: osmUrlTemplate,
+        maxNativeZoom: 19,
+        attribution: osmAttribution,
+        colorFilter: dark ? mutedDarkFilter : mutedLightFilter,
+      ),
+      MapStyle.standard => const OnlineTiles(
+        urlTemplate: osmUrlTemplate,
+        maxNativeZoom: 19,
+        attribution: osmAttribution,
+      ),
+      MapStyle.topographic => const OnlineTiles(
+        urlTemplate: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        subdomains: ['a', 'b', 'c'],
+        maxNativeZoom: 17,
+        attribution: topoAttribution,
+      ),
+    };
+  }
+
+  final String urlTemplate;
+  final List<String> subdomains;
+
+  /// Whether the server has high-density tiles (`{r}` in the template),
+  /// asked for on a high-density screen.
+  final bool retina;
+  final int maxNativeZoom;
+  final String attribution;
+
+  /// Drawn over the whole tile layer; null: the tiles as served.
+  final ColorFilter? colorFilter;
+
+  /// OpenStreetMap's own servers (no subdomains, as their policy asks).
+  static const osmUrlTemplate =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  /// Rec. 709 luma weights.
+  static const _r = .2126, _g = .7152, _b = .0722;
+
+  /// OSM in soft grey: luma at 60 % contrast, lifted towards the paper,
+  /// a touch warm.
+  static const mutedLightFilter = ColorFilter.matrix([
+    .6 * _r, .6 * _g, .6 * _b, 0, 98, //
+    .6 * _r, .6 * _g, .6 * _b, 0, 95, //
+    .6 * _r, .6 * _g, .6 * _b, 0, 90, //
+    0, 0, 0, 1, 0, //
+  ]);
+
+  /// The dark palette's version: luma inverted at 55 % contrast, so white
+  /// land turns a warm near-black and black text a light grey.
+  static const mutedDarkFilter = ColorFilter.matrix([
+    -.55 * _r, -.55 * _g, -.55 * _b, 0, 190, //
+    -.55 * _r, -.55 * _g, -.55 * _b, 0, 186, //
+    -.55 * _r, -.55 * _g, -.55 * _b, 0, 182, //
+    0, 0, 0, 1, 0, //
+  ]);
+}
+
+/// The tile provider for every online style: a modest disk cache in the
+/// app's cache directory. A tile that fails to load (no network, the
+/// network permission off) is reported to the tile layer's error callback
+/// and draws nothing, leaving the offline layers under it in view.
+TileProvider onlineTileProvider() => NetworkTileProvider(
   headers: {'User-Agent': osmUserAgent},
-  silenceExceptions: true,
   cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(
     maxCacheSize: 50 * 1024 * 1024,
   ),
