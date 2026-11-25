@@ -79,6 +79,7 @@ class _FakeMapWidgetState extends State<_FakeMapWidget> {
           children: [
             for (final f in map.features)
               Semantics(
+                container: true,
                 button: true,
                 label: map.props(f)['label']! as String,
                 excludeSemantics: true,

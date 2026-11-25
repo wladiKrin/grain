@@ -31,6 +31,11 @@ const _readingsFilter = '\u0000readings';
 /// Logged locations on a map: every located frame and saved reading, or
 /// only the frames of [rollId]. MapLibre draws it, in the style chosen in
 /// [settings]: the bundled offline basemap, or an online one.
+///
+/// The same points show as a list too (the app bar's list button), newest
+/// first: MapLibre draws the markers inside its own view, out of a screen
+/// reader's reach, so the list is how TalkBack gets to them. With a screen
+/// reader on, the screen opens on the list.
 class MapScreen extends StatefulWidget {
   MapScreen({
     super.key,
@@ -79,6 +84,10 @@ class _MapScreenState extends State<MapScreen> {
   List<MapPoint>? _points;
   int _generation = 0;
   String _filter = _allFilter;
+
+  /// The points show as a list, not on the map. Null until the screen
+  /// first builds: then the list if a screen reader is on.
+  bool? _asList;
 
   /// The marker tapped and the points under it, shown in the card.
   List<MapPoint> _selected = const [];
@@ -141,6 +150,14 @@ class _MapScreenState extends State<MapScreen> {
     );
     _configure();
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Decided once: a screen reader turned on later does not swap the
+    // view under the user.
+    _asList ??= MediaQuery.accessibleNavigationOf(context);
   }
 
   @override
@@ -262,6 +279,19 @@ class _MapScreenState extends State<MapScreen> {
     setState(() => _selected = pointsNear(p, shown, zoom));
   }
 
+  /// Between the map and the list. The map goes when the list shows; back
+  /// on the map, it opens fitted to the points shown then.
+  void _toggleList() {
+    setState(() {
+      _asList = !(_asList ?? false);
+      _selected = const [];
+      if (_asList!) {
+        _map = null;
+        _initialCamera = null;
+      }
+    });
+  }
+
   void _tapMap() {
     if (_selected.isNotEmpty) setState(() => _selected = const []);
   }
@@ -315,11 +345,19 @@ class _MapScreenState extends State<MapScreen> {
     final filters = points == null
         ? const <String, String>{}
         : _filters(points);
+    final asList = _asList ?? false;
     return Scaffold(
       appBar: AppBar(
         title: Text(_title),
         actions: [
           if (points != null && points.isNotEmpty)
+            IconButton(
+              tooltip: asList ? 'Show as map' : 'Show as list',
+              icon: Icon(asList ? Icons.map_outlined : Icons.list),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              onPressed: _toggleList,
+            ),
+          if (points != null && points.isNotEmpty && !asList)
             IconButton(
               tooltip: 'Map style',
               icon: const Icon(Icons.layers),
@@ -350,6 +388,8 @@ class _MapScreenState extends State<MapScreen> {
           ? const SizedBox.shrink()
           : points.isEmpty
           ? _empty()
+          : asList
+          ? _listView()
           : _mapView(),
     );
   }
@@ -369,6 +409,23 @@ class _MapScreenState extends State<MapScreen> {
     ),
   );
 
+  /// The points shown, newest first; a row opens what a marker's card does.
+  Widget _listView() {
+    final shown = [..._shown]..sort(newestFirst);
+    final inset = MediaQuery.paddingOf(context);
+    return ListView.separated(
+      padding: EdgeInsets.only(top: 4, bottom: inset.bottom + 8),
+      itemCount: shown.length,
+      separatorBuilder: (_, _) =>
+          Divider(height: 1, thickness: 1, color: g.border),
+      itemBuilder: (_, i) => _PointRow(
+        point: shown[i],
+        onOpen: _open,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      ),
+    );
+  }
+
   Widget _mapView() {
     final brightness = Theme.of(context).brightness;
     final colors = MapColors.of(g, brightness);
@@ -387,15 +444,23 @@ class _MapScreenState extends State<MapScreen> {
             builder: (context, box) {
               _size = box.biggest;
               final camera = _initialCamera ??= _fit(shown, _size);
-              return widget.mapView(
-                MapViewOptions(
-                  style: doc,
-                  initialCamera: camera,
-                  markers: _markersFor(shown),
-                  background: colors.water,
-                  onMarkerTap: (id) => unawaited(_tapMarker(id)),
-                  onMapTap: _tapMap,
-                  onCreated: (c) => _map = c,
+              // The markers inside are out of a screen reader's reach: the
+              // map says what it holds, and the list has them one by one.
+              return Semantics(
+                container: true,
+                label: shown.length == 1
+                    ? 'Map with 1 point'
+                    : 'Map with ${shown.length} points',
+                child: widget.mapView(
+                  MapViewOptions(
+                    style: doc,
+                    initialCamera: camera,
+                    markers: _markersFor(shown),
+                    background: colors.water,
+                    onMarkerTap: (id) => unawaited(_tapMarker(id)),
+                    onMapTap: _tapMap,
+                    onCreated: (c) => _map = c,
+                  ),
                 ),
               );
             },
@@ -547,18 +612,9 @@ class _PointCard extends StatelessWidget {
   final void Function(MapPoint p) onOpen;
   final VoidCallback onClose;
 
-  String _when(MaterialLocalizations loc, MapPoint p) {
-    final t = p.takenAt;
-    if (t == null) return '';
-    final w = t.toUtc().add(Duration(minutes: p.utcOffsetMinutes));
-    return '${loc.formatShortDate(w)} · '
-        '${loc.formatTimeOfDay(TimeOfDay(hour: w.hour, minute: w.minute), alwaysUse24HourFormat: true)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final g = context.grain;
-    final loc = MaterialLocalizations.of(context);
     return Container(
       constraints: const BoxConstraints(maxHeight: 232),
       decoration: BoxDecoration(
@@ -574,43 +630,7 @@ class _PointCard extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 4),
               children: [
-                for (final p in points)
-                  InkWell(
-                    onTap: () => onOpen(p),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            p.isReading
-                                ? 'Saved reading'
-                                : 'Roll ${p.roll!.number} · Frame ${p.frame!.label}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: g.ink,
-                            ),
-                          ),
-                          Text(
-                            [
-                              if (p.roll case final r?) r.filmStock,
-                              p.camera,
-                            ].join(' · '),
-                            style: TextStyle(fontSize: 14, color: g.secondary),
-                          ),
-                          if (_when(loc, p) case final w when w.isNotEmpty)
-                            Text(
-                              w,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: g.secondary,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+                for (final p in points) _PointRow(point: p, onOpen: onOpen),
               ],
             ),
           ),
@@ -621,6 +641,63 @@ class _PointCard extends StatelessWidget {
             onPressed: onClose,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A point as the card and the list show it: "Roll N · Frame M" or "Saved
+/// reading", film and camera, then the date and time where it was taken.
+/// A tap opens the frame editor or the reading.
+class _PointRow extends StatelessWidget {
+  const _PointRow({
+    required this.point,
+    required this.onOpen,
+    this.padding = const EdgeInsets.fromLTRB(16, 8, 8, 8),
+  });
+
+  final MapPoint point;
+  final void Function(MapPoint p) onOpen;
+  final EdgeInsets padding;
+
+  String _when(MaterialLocalizations loc) {
+    final t = point.takenAt;
+    if (t == null) return '';
+    final w = t.toUtc().add(Duration(minutes: point.utcOffsetMinutes));
+    return '${loc.formatShortDate(w)} · '
+        '${loc.formatTimeOfDay(TimeOfDay(hour: w.hour, minute: w.minute), alwaysUse24HourFormat: true)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final g = context.grain;
+    final p = point;
+    final when = _when(MaterialLocalizations.of(context));
+    return InkWell(
+      onTap: () => onOpen(p),
+      child: Padding(
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              p.isReading
+                  ? 'Saved reading'
+                  : 'Roll ${p.roll!.number} · Frame ${p.frame!.label}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: g.ink,
+              ),
+            ),
+            Text(
+              [if (p.roll case final r?) r.filmStock, p.camera].join(' · '),
+              style: TextStyle(fontSize: 14, color: g.secondary),
+            ),
+            if (when.isNotEmpty)
+              Text(when, style: TextStyle(fontSize: 13, color: g.secondary)),
+          ],
+        ),
       ),
     );
   }

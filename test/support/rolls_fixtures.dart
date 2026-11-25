@@ -12,6 +12,7 @@ RollController inMemoryRolls({
   Settings? settings,
   TakeSnapshot? takeSnapshot,
   LocationSource? location,
+  DateTime Function()? now,
 }) {
   final dir = Directory.systemTemp.createTempSync('grain-test');
   addTearDown(() {
@@ -22,5 +23,6 @@ RollController inMemoryRolls({
     snapshots: SnapshotStore(dir),
     takeSnapshot: takeSnapshot,
     location: location,
+    now: now,
   );
 }

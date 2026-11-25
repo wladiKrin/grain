@@ -109,4 +109,9 @@ void main() {
     // At the world view, everything is at one spot.
     expect(pointsNear(f3, points, 0), hasLength(4));
   });
+
+  test('the list order: newest first, undated last', () {
+    final sorted = [...points]..sort(newestFirst);
+    expect(sorted.map((p) => p.id), ['s1', 'f1', 'f3', 'f2']);
+  });
 }

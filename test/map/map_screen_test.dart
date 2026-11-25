@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/gear/gear_controller.dart';
@@ -52,7 +53,13 @@ void main() {
     await settings.setSnapshots(false);
     location = FakeLocation(_munich);
     gear = GearController.inMemory(library: fixtureLibrary());
-    rolls = inMemoryRolls(settings: settings, location: location);
+    // A minute passes between records, so the list's order is plain.
+    var clock = DateTime.utc(2026, 6, 1, 9);
+    rolls = inMemoryRolls(
+      settings: settings,
+      location: location,
+      now: () => clock = clock.add(const Duration(minutes: 1)),
+    );
     map = FakeMap();
     network = FakeNetwork();
   });
@@ -110,8 +117,13 @@ void main() {
     String? rollId,
     Future<OfflineSources>? offline,
     Future<bool> Function()? openSettings,
+    bool screenReader = false,
   }) => MaterialApp(
     theme: grainTheme(brightness),
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(accessibleNavigation: screenReader),
+      child: child!,
+    ),
     home: MapScreen(
       rolls: rolls,
       gear: gear,
@@ -130,6 +142,7 @@ void main() {
     Brightness brightness = Brightness.light,
     Future<OfflineSources>? offline,
     Future<bool> Function()? openSettings,
+    bool screenReader = false,
   }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
@@ -140,6 +153,7 @@ void main() {
         rollId: rollId,
         offline: offline,
         openSettings: openSettings,
+        screenReader: screenReader,
       ),
     );
     await settle(t);
@@ -542,5 +556,178 @@ void main() {
     await settle(t);
     expect(pin('Roll 1, frame 1'), findsNothing);
     expect(pin('Roll 1, frame 2'), findsOneWidget);
+  });
+
+  /// The list's rows, top to bottom, by their first line.
+  List<String> rows() {
+    final titles = find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          (w.data == 'Saved reading' ||
+              (w.data?.startsWith('Roll ') ?? false) &&
+                  w.data!.contains(' · Frame ')),
+    );
+    double top(Element e) =>
+        (e.renderObject! as RenderBox).localToGlobal(Offset.zero).dy;
+    final found = titles.evaluate().toList()
+      ..sort((a, b) => top(a).compareTo(top(b)));
+    return [for (final e in found) (e.widget as Text).data!];
+  }
+
+  testWidgets('the list button swaps the map for a list of the same points, '
+      'newest first, and back', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich, null, _berlin]);
+    await reading(t, _berlin);
+    await pump(t);
+    expect(find.byKey(const ValueKey('fake-map')), findsOneWidget);
+    expect(find.byTooltip('Map style'), findsOneWidget);
+    final builds = map.builds.length;
+
+    await t.tap(find.byTooltip('Show as list'));
+    await settle(t);
+    expect(find.byKey(const ValueKey('fake-map')), findsNothing);
+    expect(map.builds, hasLength(builds));
+    expect(find.byTooltip('Show as map'), findsOneWidget);
+    expect(find.byTooltip('Map style'), findsNothing);
+    expect(rows(), ['Saved reading', 'Roll 1 · Frame 3', 'Roll 1 · Frame 1']);
+    expect(find.text('Ilford HP5 Plus · Canon A-1'), findsNWidgets(2));
+    expect(find.text('Canon A-1'), findsOneWidget);
+    final f = rolls.activeFrames.first;
+    final w = f.takenAt!.toUtc().add(Duration(minutes: f.utcOffsetMinutes!));
+    expect(find.textContaining('${w.year}'), findsNWidgets(3));
+
+    await t.tap(find.byTooltip('Show as map'));
+    await settle(t);
+    expect(find.byKey(const ValueKey('fake-map')), findsOneWidget);
+    expect(pin('Roll 1, frame 1'), findsOneWidget);
+    expect(find.text('Roll 1 · Frame 1'), findsNothing);
+  });
+
+  testWidgets('the list follows the roll filter', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich]);
+    await t.runAsync(() => rolls.finishRoll(rolls.active!.id));
+    await roll(t, 'Kodak Portra 400', [_berlin, _berlin]);
+    await reading(t, _munich);
+    await pump(t);
+    await t.tap(find.byTooltip('Show as list'));
+    await settle(t);
+    expect(rows(), [
+      'Saved reading',
+      'Roll 2 · Frame 2',
+      'Roll 2 · Frame 1',
+      'Roll 1 · Frame 1',
+    ]);
+
+    await t.tap(find.byTooltip('Filter by roll'));
+    await settle(t);
+    await t.tap(item('Roll 2 · Kodak Portra 400'));
+    await settle(t);
+    expect(rows(), ['Roll 2 · Frame 2', 'Roll 2 · Frame 1']);
+
+    await t.tap(find.byTooltip('Filter by roll'));
+    await settle(t);
+    await t.tap(item('Saved readings'));
+    await settle(t);
+    expect(rows(), ['Saved reading']);
+
+    // The map, shown again, has the filtered points.
+    await t.tap(find.byTooltip('Show as map'));
+    await settle(t);
+    expect(pin('Saved reading'), findsOneWidget);
+    expect(pin('Roll 2, frame 1'), findsNothing);
+    expect(find.bySemanticsLabel('Map with 1 point'), findsOneWidget);
+  });
+
+  testWidgets('a roll map lists only that roll', (t) async {
+    final first = await roll(t, 'Ilford HP5 Plus', [_munich, _berlin]);
+    await t.runAsync(() => rolls.finishRoll(first.id));
+    await roll(t, 'Kodak Portra 400', [_berlin]);
+    await reading(t, _munich);
+    await pump(t, rollId: first.id);
+    await t.tap(find.byTooltip('Show as list'));
+    await settle(t);
+    expect(rows(), ['Roll 1 · Frame 2', 'Roll 1 · Frame 1']);
+  });
+
+  testWidgets('a row opens the frame editor or the reading', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich, _berlin]);
+    await reading(t, _berlin);
+    await pump(t);
+    await t.tap(find.byTooltip('Show as list'));
+    await settle(t);
+    await t.tap(find.text('Roll 1 · Frame 1'));
+    await settle(t);
+    expect(find.byType(FrameEditorScreen), findsOneWidget);
+    expect(
+      t.widget<FrameEditorScreen>(find.byType(FrameEditorScreen)).frame.id,
+      rolls.activeFrames.first.id,
+    );
+    await t.pageBack();
+    await settle(t);
+    expect(rows(), ['Saved reading', 'Roll 1 · Frame 2', 'Roll 1 · Frame 1']);
+    await t.tap(find.text('Saved reading'));
+    await settle(t);
+    expect(find.byType(ReadingScreen), findsOneWidget);
+  });
+
+  testWidgets('the map and the list button are labelled for a screen '
+      'reader', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich, _berlin]);
+    await reading(t, _berlin);
+    await pump(t);
+    expect(find.bySemanticsLabel('Map with 3 points'), findsOneWidget);
+    expect(
+      t.getSemantics(find.byTooltip('Show as list')).tooltip,
+      'Show as list',
+    );
+    await t.tap(find.byTooltip('Show as list'));
+    await settle(t);
+    expect(
+      t.getSemantics(find.byTooltip('Show as map')).tooltip,
+      'Show as map',
+    );
+    expect(find.bySemanticsLabel(RegExp('^Map with')), findsNothing);
+    // Each row reads as one button with all it shows.
+    final row = t.getSemantics(find.text('Roll 1 · Frame 2'));
+    expect(
+      row.label,
+      startsWith('Roll 1 · Frame 2\nIlford HP5 Plus · Canon A-1\n'),
+    );
+    expect(row.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+  });
+
+  testWidgets('with a screen reader on, the screen opens on the list; the '
+      'map is a tap away', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [_munich, _berlin]);
+    await reading(t, _berlin);
+    await pump(t, screenReader: true);
+    // Nothing of the map: the points are the body, first after the app bar.
+    expect(map.builds, isEmpty);
+    expect(rows(), ['Saved reading', 'Roll 1 · Frame 2', 'Roll 1 · Frame 1']);
+    expect(
+      t.getSemantics(find.byTooltip('Show as map')).tooltip,
+      'Show as map',
+    );
+    expect(
+      t.getSemantics(find.text('Saved reading')).label,
+      startsWith('Saved reading'),
+    );
+
+    await t.tap(find.byTooltip('Show as map'));
+    await settle(t);
+    expect(find.bySemanticsLabel('Map with 3 points'), findsOneWidget);
+    expect(pin('Roll 1, frame 1'), findsOneWidget);
+  });
+
+  testWidgets('with nothing located, a screen reader hears why, and there is '
+      'no list button', (t) async {
+    await roll(t, 'Ilford HP5 Plus', [null]);
+    await pump(t, screenReader: true);
+    expect(
+      find.textContaining('Turn on Settings > Save location'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Show as list'), findsNothing);
+    expect(find.byTooltip('Show as map'), findsNothing);
   });
 }

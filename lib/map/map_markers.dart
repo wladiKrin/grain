@@ -89,3 +89,12 @@ int byTime(MapPoint a, MapPoint b) => switch ((a.takenAt, b.takenAt)) {
   (null, _) => 1,
   (_, null) => -1,
 };
+
+/// Newest first, as the list of points shows them; undated (blank) frames
+/// last.
+int newestFirst(MapPoint a, MapPoint b) => switch ((a.takenAt, b.takenAt)) {
+  (final x?, final y?) => y.compareTo(x),
+  (null, null) => 0,
+  (null, _) => 1,
+  (_, null) => -1,
+};
