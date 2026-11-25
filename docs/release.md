@@ -100,6 +100,11 @@ same options as the release command,
   `changelogs/<versionCode>.txt`, `images/icon.png`).
 - Build the unsigned release with `GRAIN_UNSIGNED=1` as above.
 - The app has no ads, no tracking and no Google Play Services.
+- The app requests `INTERNET` only for the map's OpenStreetMap tiles, shown
+  only with Settings > Online map (OpenStreetMap) on (off by default). The
+  meter and everything else work without the network; the offline map is
+  drawn from bundled Natural Earth data (public domain, `assets/map/`,
+  reproduced by `tool/basemap/`).
 - `tool/icon/icon.svg` is the source of the store icon:
   `rsvg-convert -w 512 -h 512 tool/icon/icon.svg -o fastlane/metadata/android/en-US/images/icon.png`.
 

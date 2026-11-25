@@ -15,6 +15,7 @@ import 'gear/ui/body_picker.dart';
 import 'gear/ui/import_flow.dart';
 import 'gear/ui/lens_picker.dart';
 import 'gear/ui/share_sheet.dart';
+import 'map/map_screen.dart';
 import 'meter/meter_controller.dart';
 import 'meter/meter_screen.dart';
 import 'metering/meter_channel.dart';
@@ -398,6 +399,19 @@ class _GrainAppState extends State<GrainApp> {
         gear: _gear,
         haptics: _haptics,
         onExport: _export,
+        onOpenMap: _openMap,
+      ),
+    ),
+  );
+
+  /// The map of logged locations, from the rolls list or one roll.
+  void _openMap({String? rollId}) => unawaited(
+    _pushLent<void>(
+      (_) => MapScreen(
+        rolls: _rolls,
+        gear: _gear,
+        settings: _settings,
+        rollId: rollId,
       ),
     ),
   );

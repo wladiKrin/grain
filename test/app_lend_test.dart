@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/gear/gear_controller.dart';
 import 'package:grain/gear/ui/scan_screen.dart';
 import 'package:grain/main.dart';
+import 'package:grain/map/map_screen.dart';
 import 'package:grain/ui/haptics.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -90,6 +91,25 @@ void main() {
     await settle(t);
     expect(src.calls, ['start', 'stop']);
     await t.tap(find.byIcon(Icons.arrow_back).last);
+    await settle(t);
+    expect(src.calls, ['start', 'stop', 'start']);
+  });
+
+  testWidgets('the map from the rolls keeps the camera released; the meter '
+      'resumes once, back on the meter', (t) async {
+    await pumpApp(t);
+    await t.tap(find.bySemanticsLabel('Rolls and saved readings'));
+    await settle(t);
+    expect(src.calls, ['start', 'stop']);
+    await t.tap(find.byTooltip('Map'));
+    await settle(t);
+    expect(find.byType(MapScreen), findsOneWidget);
+    expect(src.calls, ['start', 'stop']);
+    await t.tap(find.byType(BackButton));
+    await settle(t);
+    expect(find.byType(MapScreen), findsNothing);
+    expect(src.calls, ['start', 'stop']);
+    await t.tap(find.byType(BackButton));
     await settle(t);
     expect(src.calls, ['start', 'stop', 'start']);
   });

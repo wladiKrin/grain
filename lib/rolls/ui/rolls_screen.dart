@@ -20,12 +20,18 @@ class RollsScreen extends StatefulWidget {
     required this.gear,
     required this.haptics,
     this.onExport,
+    this.onOpenMap,
   });
 
   final RollController rolls;
   final GearController gear;
   final Haptics haptics;
   final void Function(Roll roll)? onExport;
+
+  /// Opens the map of logged locations: every roll and reading when
+  /// [rollId] is null, otherwise that roll's frames. Without it there is no
+  /// map entry.
+  final void Function({String? rollId})? onOpenMap;
 
   @override
   State<RollsScreen> createState() => _RollsScreenState();
@@ -82,6 +88,7 @@ class _RollsScreenState extends State<RollsScreen> {
         haptics: widget.haptics,
         rollId: r.id,
         onExport: widget.onExport,
+        onOpenMap: widget.onOpenMap,
       ),
     ),
   );
@@ -210,6 +217,13 @@ class _RollsScreenState extends State<RollsScreen> {
         appBar: AppBar(
           title: const Text('Rolls'),
           actions: [
+            if (widget.onOpenMap case final open?)
+              IconButton(
+                tooltip: 'Map',
+                icon: const Icon(Icons.map_outlined),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                onPressed: () => open(),
+              ),
             IconButton(
               tooltip: 'New roll',
               icon: const Icon(Icons.add),

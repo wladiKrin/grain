@@ -33,6 +33,7 @@ class RollScreen extends StatefulWidget {
     required this.haptics,
     required this.rollId,
     this.onExport,
+    this.onOpenMap,
   });
 
   final RollController rolls;
@@ -40,6 +41,9 @@ class RollScreen extends StatefulWidget {
   final Haptics haptics;
   final String rollId;
   final void Function(Roll roll)? onExport;
+
+  /// Opens the map (see [RollsScreen.onOpenMap]); here with this roll.
+  final void Function({String? rollId})? onOpenMap;
 
   @override
   State<RollScreen> createState() => _RollScreenState();
@@ -429,6 +433,13 @@ class _RollScreenState extends State<RollScreen> {
       appBar: AppBar(
         title: Text('Roll ${roll.number}'),
         actions: [
+          if (widget.onOpenMap case final open?)
+            IconButton(
+              tooltip: 'Map of this roll',
+              icon: const Icon(Icons.map_outlined),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              onPressed: () => open(rollId: roll.id),
+            ),
           PopupMenuButton<_RollAction>(
             tooltip: 'Roll actions',
             color: g.ground,

@@ -39,7 +39,7 @@ Package name: `io.github.wladikrin.grain`.
 | arm64 size history | plan 2: 20,475,232 bytes (20.5 MB; 21,524,542 bytes without `--split-debug-info --obfuscate` and cupertino_icons dropped; 19.1 MB before share_plus / file_selector / qr_flutter); plan 3: 22,262,896 bytes (22.3 MB); plan 4 before Task 8: 22,345,232; after Task 8: 21,265,732; after Task 10: 21,262,803; final: 21,338,033 |
 | Size limit | Plan target "< 20 MB" (~20): the total stays above it, accepted: what remains is `libflutter.so` (11.3 MB) and `libapp.so` (7.0 MB) |
 | Task 8 size levers | `libsqlite3.so` 1,749,952 → 1,153,752 bytes (vendored 3.54.1, `-Os`, gc-sections); 4 × `InterTight-*.ttf` 1,231,268 → 294,756 bytes stored (subsets) |
-| Permissions (`aapt2 dump permissions`) | `CAMERA`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, plus the app's own non-network `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`; no `INTERNET` |
+| Permissions (`aapt2 dump permissions`) | `CAMERA`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`, plus the app's own non-network `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`; no `INTERNET` (before the map; since the map, `INTERNET` too, see 12.5) |
 | Play Services / Firebase | 0 `com/google/android/gms` or `com/google/firebase` matches in the dex files |
 | Reproducibility | two clean builds: every APK entry byte-identical, incl. `libapp.so` and `libsqlite3.so`; see `docs/release.md` |
 | Offline source build | SQLite built from source with no network (verified on the host in a network namespace) |
@@ -288,6 +288,13 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 7.25 | Cold start as in 1.7 with an active roll of 72 frames; read `TotalTime` and `adb logcat -d \| grep Displayed` (startup loads settings, gear library, snapshot dir, gear and rolls in parallel) | The meter is up in 1.5 s or less; TotalTime ____ ms | |
 | 7.26 | At 360 px width (display size set small), Start roll: look at the two side-by-side Under / Over latitude dials (32 px values) on colour negative (−2 / +3) and after a few detents to −2½ / +3½ | Values and their neighbours fit; nothing overflows or overlaps; a swipe on one dial never moves the other | |
 | 7.27 | Start roll on colour negative, move only the Under dial, then switch the type to Slide | Under keeps the value you set; Over follows the type (+½) | |
+| 7.28 | Location on, log frames in two places and save a reading; Rolls > Map (Online map off) | The offline map: paper land, muted water, ink country borders, place names that thin out as you zoom out; it opens fitted to all points; frames are filled red dots, the reading a red ring; "Natural Earth" at the bottom left; no camera indicator while it is open | |
+| 7.29 | On that map: pinch, pan, tap a frame dot, tap the card; back; tap "Show all"; use the filter to show one roll, then Saved readings | Smooth; the card names the roll, frame, film, camera, date and time and opens the frame editor; Show all fits the points again; the filter shows only that roll or the readings. In dark mode the map is dark too. A roll's Map action (roll screen) shows only that roll | |
+| 7.30 | A roll with no located frame: open its Map; a phone with nothing located: Rolls > Map | A text explains turning on Settings > Save location | |
+| 7.31 | Online map off: watch `adb shell dumpsys netstats detail` (or a firewall log such as NetGuard / GrapheneOS's) for Grain while metering, logging and using the map | No traffic from Grain at all | |
+| 7.32 | Settings > Online map (OpenStreetMap) on; open the map | OSM tiles load over the offline outlines (inverted in dark mode); "© OpenStreetMap contributors" shows at the bottom left; panning loads only what is on screen | |
+| 7.33 | Online map on, airplane mode (or Wi-Fi off and no data); open the map and pan to a new area | The offline outlines and markers still show where tiles are missing; no error dialog, no crash; tiles seen before come from the cache | |
+| 7.34 | GrapheneOS: revoke Grain's Network permission (App info > Permissions), online map on; open the map | Same as 7.33: offline layers, no errors; the meter works as before | |
 
 ## 8. Export roll, export/import everything, auto-backup restore
 
@@ -304,7 +311,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 8.7 | Import the same zip again | "Added 0 rolls, 0 saved readings, 0 profiles. Skipped N already on this phone." and nothing is duplicated | |
 | 8.8 | Import with a roll active on this phone | The imported active roll is listed as finished; the roll here stays active | |
 | 8.9 | Pick a file that is not a zip (e.g. a photo or a text file) | "Can't import" with "Not a Grain backup"; nothing changes | |
-| 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, frame orientation, camera-shake warning and click sound follow the file; Appearance, calibration and location stay as they were | |
+| 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, frame orientation, camera-shake warning and click sound follow the file; Appearance, calibration, location and the online map stay as they were | |
 | 8.11 | Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |
 | 8.12 | Create a roll, log and edit a frame, export the roll (CSV and backup zip) on the current build | All work | |
 | 8.14 | Roll export sheet (a roll with snapshots) > Save to device; save into the Downloads root, then again into Drive | The sheet reads "Save to device puts the files in one zip, which can go anywhere, Downloads too."; the system save picker (not a folder picker) suggests roll-N-<film>.zip and accepts the Downloads root; the zip is there and unzips to the CSV, the JSON and the -snapshots.zip; the snackbar says "Saved roll-N-<film>.zip" and the sheet closes | |
@@ -324,7 +331,7 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 |---|---|---|---|
 | 9.1 | Deny the camera twice, then tap "Open settings"; grant the camera there and come back | The preview starts with no restart | |
 | 9.2 | Block the location permission, then in Settings turn Save location on | The snackbar offers "Open settings"; grant there, return, and the Save location switch can be turned on | |
-| 9.3 | Settings > Licences | A licence page headed Grain, 1.0.0, GPLv3; the list has ZXing core, Inter Tight, SQLite and Grain gear library besides the Flutter packages; ZXing core opens the full Apache License 2.0 text | |
+| 9.3 | Settings > Licences | A licence page headed Grain, 1.0.0, GPLv3; the list has ZXing core, Inter Tight, SQLite, Grain gear library and Natural Earth besides the Flutter packages; ZXing core opens the full Apache License 2.0 text | |
 | 9.4 | Settings > Appearance: Dark, then Light, then System; with System, switch the phone's dark theme in quick settings | The whole app follows at once: near-black ground with off-white text in dark, paper in light; status and navigation bar icons stay readable; the viewfinder box stays black in both | |
 | 9.5 | Dark: open every screen (meter, rolls, a roll, frame editor, gear pickers and editors, share sheet, scan, export sheet, Settings, Licences) and every dialog and snackbar | No light-mode leftovers, nothing unreadable (e.g. dark text on dark) | |
 | 9.6 | Phone in dark theme, cold-start the app | No white flash before the meter appears | |
@@ -358,8 +365,8 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 12.1 | Look at the launcher icon on the Pixel home screen | Paper ground, ink aperture disc, red dot in the middle | |
 | 12.2 | Switch themed icons on (Settings, Wallpaper & style) | The icon becomes the monochrome aperture, tinted by the wallpaper | |
 | 12.3 | App info | Shows version 1.0.0 | |
-| 12.4 | `ls -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` | About 21.4 MB (21,405,109 bytes at 98d3bf7; accepted above the plan's ~20 MB) | |
-| 12.5 | `$ANDROID_HOME/build-tools/*/aapt2 dump permissions` on the APK | CAMERA, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION and DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION only; no INTERNET | |
+| 12.4 | `ls -l build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` | About 22.6 MB (22,593,768 bytes with the map: +~1.0 MB over 21.6 MB, of it 446 KB the compressed basemap and the rest flutter_map code; 21,405,109 bytes at 98d3bf7; accepted above the plan's ~20 MB) | |
+| 12.5 | `$ANDROID_HOME/build-tools/*/aapt2 dump permissions` on the APK | CAMERA, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION, INTERNET and DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION only. INTERNET is for the map's OpenStreetMap tiles alone: with Settings > Online map off (the default) no connection is made (check with 7.31) | |
 | 12.6 | `unzip -p <apk> 'classes*.dex' \| grep -a -c -e 'com/google/android/gms' -e 'com/google/firebase'` | `0` | |
 | 12.7 | Unsigned F-Droid build. On a fresh clone run `flutter build apk --release` once first (it writes `android/gradlew`, which is not in the repository). Then `cd android && GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease`; sign `build/app/outputs/apk/release/app-release-unsigned.apk` with your own key (`apksigner sign --ks ~/grain-release.jks <apk>`) and install it (uninstall first if the installed app has another key) | It builds and runs like the release APK. It is one universal, unobfuscated APK, so its size and bytes are not comparable with the split release APKs (see `docs/release.md`) | |
 

@@ -47,7 +47,7 @@ It also knows the photographer's actual gear (camera bodies, lenses) and keeps a
 
 - Open source; distributed on F-Droid and GitHub releases, Play Store optional. No proprietary dependencies (no Google Play Services, no Firebase) so F-Droid accepts it.
 - Lightweight: target installed APK under ~20 MB per ABI.
-- Works fully offline.
+- Works fully offline. The meter never uses the network. The one exception is opt-in: the map of logged locations can show OpenStreetMap tiles when Settings > Online map is turned on (off by default), so the app requests the `INTERNET` permission for that alone; with it off, Grain makes no network connection and the map uses bundled Natural Earth outlines.
 - The user has not written Kotlin or Flutter before; they will mostly steer and review. Code must be readable and well structured, with a README explaining how to build and run.
 - Flutter is not yet installed on the dev machine (Arch Linux); setup is part of the work.
 - **Development and test device: Google Pixel 10.** It is the reference device for performance targets and metering accuracy. Minimum Android version: Android 10 / API 29 *(my call — broad enough for older phones, recent enough for modern Camera2 features)*. Features the Pixel has but others may lack (ultra-wide camera, rich haptics) need graceful fallbacks.
@@ -152,6 +152,7 @@ Repo layout: `library/bodies/<make>/<id>.json`, `library/lenses/<mount>/<id>.jso
 - **Roll view** lists frames with thumbnails; allows edit of any field, insert blank frame, delete frame, renumber from a frame. "Finish roll" closes it.
 - **Snapshot:** taken from the running preview at log time (no shutter delay), downscaled to ~1000 px long edge, JPEG ~100 KB, stored in app-private storage, not the gallery. On by default; setting to turn off. Not taken when the viewfinder is hidden *(builder's call — or use the stream anyway; see open questions)*. Individual snapshots can be deleted.
 - **Location:** off by default, opt-in in settings; if off, no location is stored anywhere, including the snapshot.
+- **Map:** the Rolls screen's Map button shows every located frame and saved reading (filterable by roll); a roll's Map action shows only its frames. Frames are filled accent dots, readings accent rings; a tap shows a card (roll, frame, date, camera) that opens the editor. The basemap is bundled Natural Earth 1:50m land, lakes and borders with 1:10m place names (about 0.5 MB); OpenStreetMap raster tiles draw over it only with the online map setting on, with an identifying User-Agent, the "© OpenStreetMap contributors" attribution and no prefetching.
 
 **Storage and backup:** everything (rolls, frames, saved readings, user profiles, favorites, settings) lives in the app's own on-device database; nothing has to be exported to be kept. The app opts into Android's automatic backup for the database and settings (snapshots excluded because of Android's size cap). Settings also offers **Export everything / Import everything**: a single file (zip with JSON + snapshots) that restores fully on any phone. Import merges by stable IDs and never silently overwrites.
 
@@ -159,7 +160,7 @@ Repo layout: `library/bodies/<make>/<id>.json`, `library/lenses/<mount>/<id>.jso
 
 ### 5.5 Settings
 
-Backup: export everything / import everything (see §5.4) · Calibration offset · haptics on/off · click sound on/off · snapshots on/off · location on/off · camera-shake warning on/off · default viewfinder on/off (remembered) · units/display details at builder's discretion.
+Backup: export everything / import everything (see §5.4) · Calibration offset · haptics on/off · click sound on/off · snapshots on/off · location on/off · camera-shake warning on/off · online map (OpenStreetMap) on/off, off by default and kept on this phone · default viewfinder on/off (remembered) · units/display details at builder's discretion.
 
 ## 6. Performance targets
 

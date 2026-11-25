@@ -73,7 +73,10 @@ void main() {
     await Future<void>.delayed(Duration.zero);
   });
 
-  Future<void> pumpScreen(WidgetTester t) async {
+  Future<void> pumpScreen(
+    WidgetTester t, {
+    void Function({String? rollId})? onOpenMap,
+  }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
     addTearDown(t.view.reset);
@@ -86,6 +89,7 @@ void main() {
           haptics: _Haptics(),
           rollId: roll.id,
           onExport: (_) {},
+          onOpenMap: onOpenMap,
         ),
       ),
     );
@@ -110,6 +114,17 @@ void main() {
   List<String> labels(WidgetTester t) => [
     for (final f in rolls.activeFrames) f.label,
   ];
+
+  testWidgets('the map action opens the map of this roll', (t) async {
+    await start(t);
+    await pumpScreen(t);
+    expect(find.byTooltip('Map of this roll'), findsNothing);
+    final opened = <String?>[];
+    await pumpScreen(t, onOpenMap: ({rollId}) => opened.add(rollId));
+    await t.tap(find.byTooltip('Map of this roll'));
+    await settle(t);
+    expect(opened, [roll.id]);
+  });
 
   testWidgets('push is prominent and frames list in order', (t) async {
     await start(t, pushThirds: 3);

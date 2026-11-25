@@ -19,7 +19,12 @@ of each roll. There is no paywall, no ads and no tracking.
   favourites) and QR sharing of profiles.
 - Rolls and a frame log with a reference snapshot per frame.
 - CSV, JSON and zip export of rolls, and backup and restore.
-- Works offline: no network access, no ads, no tracking, no Google Play Services.
+- A map of where frames and readings were logged (with Save location on),
+  drawn from bundled Natural Earth outlines.
+- Works offline: no ads, no tracking, no Google Play Services. The meter never
+  uses the network. The app holds the INTERNET permission only for the map's
+  optional OpenStreetMap tiles, and goes online only with Settings > Online
+  map (OpenStreetMap) turned on; it is off by default.
 
 ## Screenshots
 

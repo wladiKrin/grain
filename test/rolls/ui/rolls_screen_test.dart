@@ -94,12 +94,20 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       });
 
-  Future<void> pumpScreen(WidgetTester t) async {
+  Future<void> pumpScreen(
+    WidgetTester t, {
+    void Function({String? rollId})? onOpenMap,
+  }) async {
     bigView(t);
     await t.pumpWidget(
       MaterialApp(
         theme: grainTheme(),
-        home: RollsScreen(rolls: rolls, gear: gear, haptics: _Haptics()),
+        home: RollsScreen(
+          rolls: rolls,
+          gear: gear,
+          haptics: _Haptics(),
+          onOpenMap: onOpenMap,
+        ),
       ),
     );
     await settle(t);
@@ -152,6 +160,23 @@ void main() {
     await settle(t);
     expect(find.text('Roll 1'), findsOneWidget); // app bar of RollScreen
     expect(find.text('Box speed · ISO 400'), findsOneWidget);
+  });
+
+  testWidgets('the Map button opens the map of every roll, and a roll '
+      'passes it on to its own map', (t) async {
+    await roll(t, 'Ilford HP5 Plus', frames: 1);
+    await pumpScreen(t);
+    expect(find.byTooltip('Map'), findsNothing);
+    final opened = <String?>[];
+    await pumpScreen(t, onOpenMap: ({rollId}) => opened.add(rollId));
+    await t.tap(find.byTooltip('Map'));
+    await settle(t);
+    expect(opened, [null]);
+    await t.tap(find.text('Roll 1 · Ilford HP5 Plus'));
+    await settle(t);
+    await t.tap(find.byTooltip('Map of this roll'));
+    await settle(t);
+    expect(opened, [null, rolls.rolls.single.id]);
   });
 
   testWidgets('the + button opens the roll editor', (t) async {
