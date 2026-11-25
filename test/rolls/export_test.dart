@@ -223,7 +223,14 @@ void main() {
   });
 
   for (final (label, result, message, closes) in [
-    ('saved', null, 'Saved 2 files', true),
+    ('saved', null, 'Saved roll-4-ilford-hp5-plus.zip', true),
+    // The provider's name, not the one asked for.
+    (
+      'renamed',
+      const Saved(['roll-4-ilford-hp5-plus (1).zip']),
+      'Saved roll-4-ilford-hp5-plus (1).zip',
+      true,
+    ),
     ('failed', const SaveFailed('no space'), "Couldn't save: no space", false),
     ('cancelled', const SaveCancelled(), null, false),
   ]) {
@@ -272,6 +279,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Share'), findsOneWidget);
+      expect(
+        find.text(
+          'Save to device puts the files in one zip, which can go anywhere, '
+          'Downloads too.',
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Save to device'));
       for (var i = 0; i < 50 && platform.saves.isEmpty; i++) {
         await tester.runAsync(
@@ -280,9 +294,17 @@ void main() {
         await tester.pump();
       }
       await tester.pumpAndSettle();
+      // One zip, so it can be saved anywhere (Downloads too).
       expect(platform.saves.single, [
-        ('roll-4-ilford-hp5-plus.csv', 'text/csv'),
-        ('roll-4-ilford-hp5-plus.json', 'application/json'),
+        ('roll-4-ilford-hp5-plus.zip', 'application/zip'),
+      ]);
+      final zip = ZipDecoder().decodeBytes(
+        File('${platform.exportDir!.path}/roll-4-ilford-hp5-plus.zip')
+            .readAsBytesSync(),
+      );
+      expect(zip.files.map((f) => f.name), [
+        'roll-4-ilford-hp5-plus.csv',
+        'roll-4-ilford-hp5-plus.json',
       ]);
       expect(platform.sharedPaths, isEmpty);
       expect(
@@ -297,7 +319,36 @@ void main() {
     });
   }
 
+  test('bundleRoll puts every file of the export in one zip', () async {
+    final d = dirs();
+    d.store.file('a.jpg').writeAsBytesSync([1, 2, 3]);
+    final files = await exportRoll(
+      r4,
+      [fr(1, 'a.jpg'), fr(2, null)],
+      out: d.out,
+      store: d.store,
+      withSnapshots: true,
+    );
+    final bundle = await bundleRoll(r4, files, out: d.out);
+    expect(base(bundle), 'roll-4-ilford-hp5-plus.zip');
+    final zip = ZipDecoder().decodeBytes(bundle.readAsBytesSync());
+    expect(zip.files.map((f) => f.name), [
+      'roll-4-ilford-hp5-plus.csv',
+      'roll-4-ilford-hp5-plus.json',
+      'roll-4-ilford-hp5-plus-snapshots.zip',
+    ]);
+    for (final (i, f) in files.indexed) {
+      expect(zip.files[i].content, f.readAsBytesSync());
+    }
+    // The snapshots zip is stored, not compressed again.
+    expect(zip.files.last.compression, CompressionType.none);
+    final inner = ZipDecoder().decodeBytes(zip.files.last.content);
+    expect(inner.files.single.name, 'frame-1.jpg');
+  });
+
   test('mimeOf and savedMessage', () {
+    expect(mimeOf('a.jpg'), 'image/jpeg');
+    expect(mimeOf('a.txt'), 'text/plain');
     expect(mimeOf('a.zip'), 'application/zip');
     expect(mimeOf('a.CSV'), 'text/csv');
     expect(mimeOf('a'), 'application/octet-stream');

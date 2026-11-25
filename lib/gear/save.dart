@@ -31,12 +31,16 @@ String mimeOf(String name) {
     'csv' => 'text/csv',
     'json' => 'application/json',
     'zip' => 'application/zip',
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'txt' => 'text/plain',
     _ => 'application/octet-stream',
   };
 }
 
 /// The `grain/save` channel: one file asks for a place to create it, several
-/// ask for a folder (Android storage access framework).
+/// ask for a folder (Android storage access framework). [Saved] carries the
+/// names the files got there: the user may rename one in the picker, and a
+/// provider renames a name that is taken ("a (1).zip").
 class SaveChannel {
   const SaveChannel();
 

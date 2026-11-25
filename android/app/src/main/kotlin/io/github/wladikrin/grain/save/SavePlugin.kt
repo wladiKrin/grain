@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -21,7 +22,9 @@ import java.util.concurrent.Executors
  * or {status: "cancelled"}; `error("save", message)` on failure. One file opens the system
  * "create document" picker; several open a folder picker and each is created in it. The storage
  * access framework needs no permission, and no URI grant is kept. Bytes are copied on a worker
- * thread. A name that is taken is renamed by the provider, never overwritten.
+ * thread. A name that is taken is renamed by the provider, never overwritten; `names` are the
+ * names the documents got. A failed save removes the documents it created. Grain saves one file
+ * (a roll as one zip), since Android 11+ will not let a folder pick choose the Downloads root.
  */
 class SavePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
@@ -107,20 +110,25 @@ class SavePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware
         }
         worker.execute {
             try {
-                if (p.tree) {
-                    val parent = DocumentsContract.buildDocumentUriUsingTree(
-                        uri,
-                        DocumentsContract.getTreeDocumentId(uri),
-                    )
-                    for (item in p.items) {
-                        val doc = DocumentsContract.createDocument(resolver, parent, item.mime, item.name)
-                            ?: throw IllegalStateException("Couldn't create ${item.name} in that folder.")
-                        copy(resolver, item.path, doc)
-                    }
+                val parent = if (p.tree) {
+                    DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri))
                 } else {
-                    copy(resolver, p.items[0].path, uri)
+                    null
                 }
-                main.post { p.result.success(mapOf("status" to "saved", "names" to p.items.map { it.name })) }
+                val docs = SaveIo.saveAll(
+                    p.items,
+                    // One file: the picker already made the document, so a failed write removes it too.
+                    create = { item ->
+                        if (parent == null) uri else DocumentsContract.createDocument(resolver, parent, item.mime, item.name)
+                    },
+                    write = { item, doc -> copy(resolver, item.path, doc) },
+                    delete = { DocumentsContract.deleteDocument(resolver, it) },
+                    nameOf = { it.name },
+                )
+                val names = docs.mapIndexed { i, doc ->
+                    SaveIo.shownName(displayName(resolver, doc), p.items[i].name)
+                }
+                main.post { p.result.success(mapOf("status" to "saved", "names" to names)) }
             } catch (e: Exception) {
                 main.post { p.result.error("save", e.message ?: e.javaClass.simpleName, null) }
             }
@@ -129,9 +137,17 @@ class SavePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware
     }
 
     private fun copy(resolver: ContentResolver, path: String, to: Uri) {
-        val out = resolver.openOutputStream(to, "wt")
-            ?: throw IllegalStateException("Couldn't open the file to write.")
-        out.use { o -> File(path).inputStream().use { it.copyTo(o) } }
+        SaveIo.openTruncating { mode -> resolver.openOutputStream(to, mode) }
+            .use { o -> File(path).inputStream().use { it.copyTo(o) } }
+    }
+
+    /** The name the provider gave [doc]: the user may rename it in the picker, a taken name gets " (1)". */
+    private fun displayName(resolver: ContentResolver, doc: Uri): String? = try {
+        resolver.query(doc, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getString(0) else null
+        }
+    } catch (e: Exception) {
+        null
     }
 
     private companion object {

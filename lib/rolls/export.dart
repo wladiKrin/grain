@@ -64,12 +64,30 @@ Future<List<File>> exportRoll(
   return files;
 }
 
+/// The files of one [exportRoll] bundled into `<base>.zip` in [out], for a
+/// save to the device: one file can be created anywhere, the Downloads root
+/// included, which a folder pick on Android 11+ cannot. The snapshots zip is
+/// stored as it is, not compressed again.
+Future<File> bundleRoll(Roll r, List<File> files, {required Directory out}) {
+  final zip = File('${out.path}/${rollFileBase(r)}.zip');
+  final entries = [for (final f in files) (f.path, f.uri.pathSegments.last)];
+  return Isolate.run(() async {
+    await _zip(zip.path, entries);
+    return zip;
+  });
+}
+
 Future<void> _zip(String path, List<(String, String)> entries) async {
   final enc = ZipFileEncoder()..create(path);
   try {
     for (final (src, name) in entries) {
       try {
-        await enc.addFile(File(src), name);
+        final packed = name.toLowerCase().endsWith('.zip');
+        await enc.addFile(
+          File(src),
+          name,
+          packed ? ZipFileEncoder.store : null,
+        );
       } on FileSystemException {
         // vanished since the check: skip it
       }

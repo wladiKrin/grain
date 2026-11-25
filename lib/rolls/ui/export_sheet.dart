@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../gear/platform.dart';
 import '../../gear/save.dart';
+import '../../ui/theme.dart';
 import '../export.dart';
 import '../model.dart';
 import '../roll_controller.dart';
@@ -71,7 +72,8 @@ class _ExportSheetState extends State<_ExportSheet> {
       );
       final paths = [for (final f in files) f.path];
       if (save) {
-        final r = await widget.platform.saveFiles(paths);
+        final zip = await bundleRoll(widget.roll, files, out: dir);
+        final r = await widget.platform.saveFiles([zip.path]);
         if (!mounted) return;
         switch (r) {
           case Saved(:final names):
@@ -147,6 +149,12 @@ class _ExportSheetState extends State<_ExportSheet> {
                   ),
                 ),
               ],
+            ),
+            Text(
+              'Save to device puts the files in one zip, which can go '
+              'anywhere, Downloads too.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.grain.secondary, fontSize: 13),
             ),
           ],
         ),

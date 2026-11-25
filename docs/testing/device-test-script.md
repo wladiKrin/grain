@@ -299,10 +299,12 @@ For rows that need a roll of 72 frames (7.25) or 40+ frames with snapshots
 | 8.10 | Import with "Use the settings from the file" ticked | Haptics, viewfinder default, snapshots, histogram, frame orientation, camera-shake warning and click sound follow the file; Appearance, calibration and location stay as they were | |
 | 8.11 | Pick the backup from a cloud provider (Drive) instead of local storage | Import works (the file is copied, streamed, before reading) | |
 | 8.12 | Create a roll, log and edit a frame, export the roll (CSV and backup zip) on the current build | All work | |
-| 8.14 | Roll export sheet > Save to device; pick a folder in Downloads, then one in Drive | The system folder picker opens; the three files (CSV, JSON, snapshots zip) appear in the folder; the snackbar says "Saved 3 files" and the sheet closes | |
-| 8.15 | Settings > Export everything > Save to device; choose a location | The picker suggests grain-backup-<date>.zip; the file is there and opens as a zip; the snackbar says "Saved grain-backup-<date>.zip" | |
+| 8.14 | Roll export sheet (a roll with snapshots) > Save to device; save into the Downloads root, then again into Drive | The sheet reads "Save to device puts the files in one zip, which can go anywhere, Downloads too."; the system save picker (not a folder picker) suggests roll-N-<film>.zip and accepts the Downloads root; the zip is there and unzips to the CSV, the JSON and the -snapshots.zip; the snackbar says "Saved roll-N-<film>.zip" and the sheet closes | |
+| 8.15 | Settings > Export everything > Save to device; rename the file in the picker (e.g. to my-backup.zip) | The picker suggests grain-backup-<date>.zip; the file is there under the new name and opens as a zip; the snackbar names the file as saved ("Saved my-backup.zip") | |
 | 8.16 | Start Save to device (roll sheet and Export everything), then back out of the picker | Nothing happens: no snackbar, the sheet stays usable | |
-| 8.17 | Save the same roll to the same folder twice | The second time the files get a renamed copy (e.g. "(1)"); nothing is overwritten | |
+| 8.17 | Save the same roll to the same folder twice | The second time the provider renames it (e.g. "roll-N-<film> (1).zip") and the snackbar shows that name; nothing is overwritten | |
+| 8.17a | Save to device into a third-party provider (e.g. Material Files, Nextcloud, an SD card) | Saves; a provider that rejects the "wt" write mode gets "w" instead, and the file has exactly the export's bytes (unzips cleanly) | |
+| 8.17b | Save to device onto storage with less free space than the zip (e.g. a nearly full SD card), or pull the SD card while it saves | "Couldn't save: <reason>"; no empty or partial file is left in the chosen place | |
 | 8.18 | Choose Share in the roll sheet and in Export everything | The share sheet opens as before | |
 | 8.13 | The auto-backup restore uninstalls the app, so it is step 13, at the end | — | |
 
