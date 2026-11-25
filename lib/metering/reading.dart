@@ -16,6 +16,12 @@ const double clipHigh = 0.95, clipLow = 0.002;
 /// Share of the region's pixels at the top code that counts as clipped.
 const double clipShare = 0.02;
 
+/// With clipped highlights the native loop steps the region down to this
+/// luma (its CLIP_FLOOR), and takes no step smaller than [minStepEv]: a
+/// region with more than [clipShare] clipped and at least
+/// [clipFloor]·2^[minStepEv] is one the loop still re-exposes.
+const double clipFloor = 0.1, minStepEv = 0.1;
+
 /// Which exposure a frame's stats come from.
 enum MeterEngine {
   /// Grain set exposure time and ISO itself, AE off.
@@ -158,7 +164,10 @@ class Reading {
 
 /// Null for a frame whose metadata or lumas cannot give a finite EV
 /// (non-positive aperture, exposure or ISO; non-finite values), or a manual
-/// frame whose region is clipped while the loop can still re-expose.
+/// frame whose region is clipped while the loop can still re-expose: more
+/// than [clipShare] of it at the top code counts too. A [held] frame is
+/// never re-exposed, so it gives the clipped region's bound flagged over or
+/// under instead.
 ///
 /// AE: EV100 = log2(N²/t) − log2(ISO·boost/100/100) + log2(region / frame).
 /// Manual: the same exposure term + log2(region / [midGrey]); the frame's own
@@ -167,6 +176,7 @@ Reading? readingFrom(
   MeterStats s, {
   required MeterArea area,
   double calibration = 0,
+  bool held = false,
 }) {
   if (!(s.aperture.isFinite && s.aperture > 0) ||
       s.exposureNs <= 0 ||
@@ -184,7 +194,13 @@ Reading? readingFrom(
       _log2(phoneIso / 100);
   final region = area == MeterArea.spot ? s.spotLuma : s.cropLuma;
   if (s.engine == MeterEngine.manual) {
-    return _manualReading(s, area, region, evExposure + calibration);
+    return _manualReading(
+      s,
+      area,
+      region,
+      evExposure + calibration,
+      held: held,
+    );
   }
   final ev100 =
       evExposure +
@@ -208,13 +224,15 @@ Reading? readingFrom(
 
 /// Over when the region is clipped bright at the loop's shortest exposure,
 /// under when it is black at its longest; a clipped region the loop can
-/// still re-expose gives no reading (the next frames will).
+/// still re-expose gives no reading (the next frames will), or, from a
+/// [held] frame that no frame will replace, the bound with its flag.
 Reading? _manualReading(
   MeterStats s,
   MeterArea area,
   double region,
-  double evAtMidGrey,
-) {
+  double evAtMidGrey, {
+  required bool held,
+}) {
   final ev100 = evAtMidGrey + _log2(math.max(region, _lumaFloor) / midGrey);
   if (!ev100.isFinite) return null;
   final clip = area == MeterArea.spot ? s.spotClip : s.cropClip;
@@ -223,6 +241,13 @@ Reading? _manualReading(
   if (s.atMaxExposure && region <= clipLow) {
     return Reading(ev100, RangeFlag.under);
   }
-  if (region >= clipHigh || region <= clipLow) return null;
+  // Clipped pixels pull the mean down: such a frame under-reads, and the
+  // loop is about to step down anyway.
+  final relooks =
+      clip > clipShare && region >= clipFloor * math.pow(2, minStepEv);
+  if (region >= clipHigh || region <= clipLow || relooks) {
+    if (!held) return null;
+    return Reading(ev100, bright ? RangeFlag.over : RangeFlag.under);
+  }
   return Reading(ev100, RangeFlag.ok);
 }

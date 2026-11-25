@@ -453,7 +453,10 @@ class MeterController extends ChangeNotifier {
     cameraError = error is PlatformException
         ? (error.message ?? error.code)
         : error.toString();
-    if (!held) reading = null;
+    if (!held) {
+      reading = null;
+      _shown = null;
+    }
     _updateHistogram();
     if (!_disposed) notifyListeners();
   }
@@ -462,13 +465,38 @@ class MeterController extends ChangeNotifier {
   bool get apertureAssumed =>
       (held ? _frozenStats : _latest)?.apertureAssumed ?? false;
 
+  /// The frame, area and hold the shown [reading] comes from.
+  ({MeterStats stats, MeterArea area, bool held})? _shown;
+
+  /// [reading] from the shown frame. A spot or area the frame cannot read
+  /// (clipped in a frame exposed for the old region) keeps the last reading,
+  /// with the calibration in use, until a frame reads it; a held frame,
+  /// which no frame replaces, gives the clipped region's bound flagged ▲/▼.
   void _derive() {
     final s = held ? _frozenStats : _latest;
     if (s == null) {
       reading = null;
+      _shown = null;
       return;
     }
-    reading = readingFrom(s, area: area, calibration: _calibrationEv);
+    final r = readingFrom(
+      s,
+      area: area,
+      calibration: _calibrationEv,
+      held: held,
+    );
+    final last = _shown;
+    if (r == null && last != null) {
+      reading = readingFrom(
+        last.stats,
+        area: last.area,
+        calibration: _calibrationEv,
+        held: last.held,
+      );
+      return;
+    }
+    reading = r;
+    _shown = r == null ? null : (stats: s, area: area, held: held);
   }
 
   /// Recomputes [histogram] from the shown frame: the band is the film's

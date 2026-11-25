@@ -111,12 +111,99 @@ void main() {
         )!.flag,
         RangeFlag.over,
       );
-      // Not at the minimum: the loop still steps down.
+      // Not at the minimum: the loop still steps down, so no reading.
       expect(
         readingFrom(
           manualStats(crop: .2, cropClip: .1),
           area: MeterArea.average,
-        )!.flag,
+        ),
+        isNull,
+      );
+    });
+
+    test(
+      'clipped highlights the loop still steps down for give no reading',
+      () {
+        // A bright window: 40 % of the crop at the top code pulls the mean
+        // down, the EV would under-read.
+        expect(
+          readingFrom(
+            manualStats(crop: .7, cropClip: .4),
+            area: MeterArea.average,
+          ),
+          isNull,
+        );
+        expect(
+          readingFrom(
+            manualStats(spot: .3, spotClip: .05),
+            area: MeterArea.spot,
+          ),
+          isNull,
+        );
+        // The same share in the other region does not matter.
+        expect(
+          readingFrom(
+            manualStats(crop: .3, spotClip: .5),
+            area: MeterArea.average,
+          )!.flag,
+          RangeFlag.ok,
+        );
+        // At most [clipShare] clipped still reads.
+        expect(
+          readingFrom(
+            manualStats(crop: .3, cropClip: .02),
+            area: MeterArea.average,
+          )!.flag,
+          RangeFlag.ok,
+        );
+      },
+    );
+
+    test('clipped highlights at the loop\'s floor still read', () {
+      // The loop stops stepping down at [clipFloor]: a lamp in the frame
+      // must not blank the meter for good.
+      for (final crop in [.1, .105, .06]) {
+        expect(
+          readingFrom(
+            manualStats(crop: crop, cropClip: .1),
+            area: MeterArea.average,
+          )!.flag,
+          RangeFlag.ok,
+          reason: 'crop $crop',
+        );
+      }
+      expect(
+        readingFrom(
+          manualStats(crop: .108, cropClip: .1),
+          area: MeterArea.average,
+        ),
+        isNull,
+      );
+    });
+
+    test('a held frame gives a clipped region\'s bound, flagged', () {
+      final bright = readingFrom(
+        manualStats(spot: .97, spotClip: .9),
+        area: MeterArea.spot,
+        held: true,
+      )!;
+      expect(bright.flag, RangeFlag.over);
+      expect(bright.ev100, closeTo(midEv + log2(.97 / .18), 1e-9));
+      final glare = readingFrom(
+        manualStats(crop: .4, cropClip: .3),
+        area: MeterArea.average,
+        held: true,
+      )!;
+      expect(glare.flag, RangeFlag.over);
+      final dark = readingFrom(
+        manualStats(spot: .001),
+        area: MeterArea.spot,
+        held: true,
+      )!;
+      expect(dark.flag, RangeFlag.under);
+      // An unclipped region reads as usual.
+      expect(
+        readingFrom(manualStats(), area: MeterArea.spot, held: true)!.flag,
         RangeFlag.ok,
       );
     });

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grain/meter/meter_controller.dart';
 import 'package:grain/exposure/mode.dart';
+import 'package:grain/exposure/solver.dart';
 import 'package:grain/metering/fov.dart';
 import 'package:grain/metering/histogram.dart';
 import 'package:grain/metering/reading.dart';
@@ -367,6 +368,70 @@ void main() {
     expect(c.reading!.ev100, closeTo(frozen + 1, 1e-9));
     c.toggleHold(); // released: the newest frame
     expect(c.reading!.ev100, closeTo(frozen + 2, 1e-3));
+  });
+
+  group('a spot the frame cannot read', () {
+    Future<void> runManual() async {
+      await c.resume();
+      src.emit(manualStats(crop: .18, spot: .18));
+      await settle();
+    }
+
+    test('keeps the last reading until a frame reads the new spot', () async {
+      await runManual();
+      final before = c.reading!.ev100;
+      // The new spot is a window, white in the frame exposed for the crop.
+      src.emit(manualStats(crop: .18, spot: .99, spotClip: 1));
+      await settle();
+      c.tapSpot(const Offset(.3, .3));
+      expect(c.area, MeterArea.spot);
+      expect(c.reading, isNotNull);
+      expect(c.reading!.ev100, closeTo(before, 1e-9));
+      // The calibration still applies to the kept reading.
+      c.calibrationEv = 1;
+      expect(c.reading!.ev100, closeTo(before + 1, 1e-9));
+      // Frames still exposed for the old region are skipped.
+      src.emit(manualStats(spot: .99, spotClip: 1));
+      await settle();
+      expect(c.reading!.ev100, closeTo(before + 1, 1e-9));
+      // The loop re-exposed for the spot: it reads there.
+      src.emit(manualStats(exposureNs: 1250000, spot: .18));
+      await settle();
+      expect(c.reading!.ev100, closeTo(before + 1 + 3, 1e-9));
+      expect(c.reading!.flag, RangeFlag.ok);
+    });
+
+    test('clearSpot back to a clipped crop keeps the reading too', () async {
+      await runManual();
+      c.tapSpot(const Offset(.3, .3));
+      final spotEv = c.reading!.ev100;
+      src.emit(manualStats(crop: .99, cropClip: 1, spot: .18));
+      await settle();
+      c.clearSpot();
+      expect(c.reading!.ev100, closeTo(spotEv, 1e-9));
+    });
+
+    test('while held, a clipped spot shows its bound flagged ▲/▼', () async {
+      await runManual();
+      src.emit(manualStats(crop: .18, spot: .99, spotClip: 1));
+      await settle();
+      c.toggleHold();
+      final held = c.reading!.ev100;
+      c.tapSpot(const Offset(.3, .3));
+      expect(c.reading!.flag, RangeFlag.over);
+      expect(c.reading!.ev100, greaterThan(held));
+      c.clearSpot();
+      expect(c.reading!.flag, RangeFlag.ok);
+      expect(c.reading!.ev100, closeTo(held, 1e-9));
+    });
+
+    test('a camera error drops the kept reading', () async {
+      await runManual();
+      src.fail(StateError('gone'));
+      await settle();
+      c.tapSpot(const Offset(.3, .3));
+      expect(c.reading, isNull);
+    });
   });
 
   group('histogram', () {
