@@ -124,6 +124,80 @@ void main() {
     expect(find.text('f/5.6 · 1/125'), findsNWidgets(3));
   });
 
+  testWidgets('a single-camera roll names no camera on its frames', (t) async {
+    await start(t);
+    await pumpScreen(t);
+    expect(find.text('Canon A-1 · 36 frames · first frame 1'), findsOneWidget);
+    expect(find.textContaining('Canon A-1 ·'), findsOneWidget);
+  });
+
+  testWidgets('a multi-camera roll names each frame camera', (t) async {
+    await start(t, n: 1);
+    await t.runAsync(() async {
+      await rolls.continueRoll(roll.id, libBody('nikon-fm2'));
+      await rolls.logFrame(const Exposure(aperture: 8));
+    });
+    await pumpScreen(t);
+    expect(
+      find.text('Canon A-1 → Nikon FM2 · 36 frames · first frame 1'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(RegExp(r'^Canon A-1 · \d')), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^Nikon FM2 · \d')), findsOneWidget);
+  });
+
+  testWidgets('a blank inserted after a frame takes its camera', (t) async {
+    await start(t, n: 1);
+    await t.runAsync(() async {
+      await rolls.continueRoll(roll.id, libBody('canon-ae1'));
+      await rolls.logFrame(const Exposure(aperture: 8));
+    });
+    await pumpScreen(t);
+    await rowMenu(t, '1', 'Insert blank after');
+    expect(
+      [for (final f in rolls.activeFrames) f.bodyId],
+      ['canon-a1', 'canon-a1', 'canon-ae1'],
+    );
+    expect(find.text('Canon A-1'), findsOneWidget);
+  });
+
+  testWidgets('Edit roll corrects the camera of the frames on it', (t) async {
+    await start(t, n: 2);
+    final second = rolls.activeFrames[1];
+    await t.runAsync(
+      () => rolls.updateFrame(
+        second.copyWith(
+          bodyId: () => 'canon-ae1',
+          bodyMake: 'Canon',
+          bodyModel: 'AE-1',
+        ),
+      ),
+    );
+    await pumpScreen(t);
+    await rollMenu(t, 'Edit roll');
+    await settle(t);
+    final camera = find.text('Canon A-1').last;
+    await t.ensureVisible(camera);
+    await t.tap(camera);
+    await t.pumpAndSettle();
+    expect(find.text('Pentax 67'), findsNothing);
+    await t.tap(find.text('Nikon FM2').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Save'));
+    await t.pumpAndSettle();
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(rolls.active!.bodyId, 'nikon-fm2');
+    expect(
+      [for (final f in rolls.activeFrames) f.bodyId],
+      ['nikon-fm2', 'canon-ae1'],
+    );
+    expect(
+      find.text('Nikon FM2 → Canon AE-1 · 36 frames · first frame 1'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('box speed roll shows the box speed line', (t) async {
     await start(t);
     await pumpScreen(t);

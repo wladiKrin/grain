@@ -4,14 +4,16 @@ import '../../ui/theme.dart';
 import '../../gear/model.dart';
 import '../model.dart';
 
-enum BodyChangeChoice { moveRoll, finishAndStart, meterOnly }
+enum BodyChangeChoice { continueRoll, finishAndStart, meterOnly }
 
 /// Asked once another body is selected while a roll is active in a different
-/// one. The roll can move to [to] when that takes the same film format. Not
+/// one. The roll can continue in [to] from frame [nextLabel] when that takes
+/// the same film format; earlier frames keep their camera. Not
 /// barrier-dismissible: the user decides.
 Future<BodyChangeChoice?> showBodyChangeDialog(
   BuildContext context, {
   required Roll roll,
+  required String nextLabel,
   Body? to,
 }) => showDialog<BodyChangeChoice>(
   context: context,
@@ -29,8 +31,11 @@ Future<BodyChangeChoice?> showBodyChangeDialog(
       if (to != null && to.format == roll.format)
         TextButton(
           style: TextButton.styleFrom(minimumSize: const Size(44, 48)),
-          onPressed: () => Navigator.pop(c, BodyChangeChoice.moveRoll),
-          child: Text('Move roll ${roll.number} to the ${to.displayName}'),
+          onPressed: () => Navigator.pop(c, BodyChangeChoice.continueRoll),
+          child: Text(
+            'Continue roll ${roll.number} in the ${to.displayName} '
+            'from frame $nextLabel',
+          ),
         ),
       TextButton(
         style: TextButton.styleFrom(minimumSize: const Size(44, 48)),

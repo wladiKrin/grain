@@ -176,6 +176,7 @@ class _RollScreenState extends State<RollScreen> {
               rolls: rolls,
               haptics: widget.haptics,
               initial: roll,
+              bodies: _bodiesFor(roll),
             ),
           ),
         );
@@ -197,12 +198,11 @@ class _RollScreenState extends State<RollScreen> {
     }
   }
 
-  List<Lens> _lensesFor(Roll roll) {
-    final id = roll.bodyId;
-    if (id == null) return const [];
-    final body = widget.gear.bodies.where((b) => b.id == id).firstOrNull;
-    return body == null ? const [] : widget.gear.lensesFor(body.mount);
-  }
+  /// Bodies that take the roll's film.
+  List<Body> _bodiesFor(Roll roll) => [
+    for (final b in widget.gear.bodies)
+      if (b.format == roll.format) b,
+  ];
 
   void _open(Roll roll, Frame f) => Navigator.push(
     context,
@@ -211,12 +211,13 @@ class _RollScreenState extends State<RollScreen> {
         rolls: widget.rolls,
         roll: roll,
         frame: f,
-        lenses: _lensesFor(roll),
+        bodies: _bodiesFor(roll),
+        lensesFor: widget.gear.lensesFor,
       ),
     ),
   );
 
-  Widget _header(Roll roll, MaterialLocalizations loc) {
+  Widget _header(Roll roll, List<Frame> frames, MaterialLocalizations loc) {
     final pushed = roll.pushThirds != 0;
     final dates = [
       'Started ${loc.formatMediumDate(roll.startedAt.toLocal())}',
@@ -245,7 +246,7 @@ class _RollScreenState extends State<RollScreen> {
             ),
           const SizedBox(height: 4),
           Text(
-            '${roll.bodyName} · ${roll.size} frames · '
+            '${camerasLabel(roll, frames)} · ${roll.size} frames · '
             'first frame ${roll.startFrame.label}',
             style: TextStyle(color: g.secondary, fontSize: 15),
           ),
@@ -260,7 +261,13 @@ class _RollScreenState extends State<RollScreen> {
     );
   }
 
-  Widget _row(Roll roll, Frame f, int i, MaterialLocalizations loc) {
+  Widget _row(
+    Roll roll,
+    Frame f,
+    int i,
+    MaterialLocalizations loc, {
+    required bool multiCamera,
+  }) {
     final e = f.exposure;
     final over = overrun(roll, f.number);
     final settings = [
@@ -282,7 +289,12 @@ class _RollScreenState extends State<RollScreen> {
       );
     }
     final differs = e.iso != null && e.iso != roll.exposedIso;
-    final detail = [if (lens.isNotEmpty) lens, ?time].join(' · ');
+    // Only a roll shot with more than one camera names each frame's.
+    final detail = [
+      if (multiCamera) f.bodyName,
+      if (lens.isNotEmpty) lens,
+      ?time,
+    ].join(' · ');
     return InkWell(
       onTap: () => _open(roll, f),
       child: ConstrainedBox(
@@ -412,6 +424,7 @@ class _RollScreenState extends State<RollScreen> {
     if (roll == null) return const Scaffold();
     final loc = MaterialLocalizations.of(context);
     final frames = _frames ?? const <Frame>[];
+    final multi = isMultiCamera(roll, frames);
     return Scaffold(
       appBar: AppBar(
         title: Text('Roll ${roll.number}'),
@@ -447,8 +460,9 @@ class _RollScreenState extends State<RollScreen> {
       ),
       body: ListView.builder(
         itemCount: frames.length + 1,
-        itemBuilder: (context, i) =>
-            i == 0 ? _header(roll, loc) : _row(roll, frames[i - 1], i - 1, loc),
+        itemBuilder: (context, i) => i == 0
+            ? _header(roll, frames, loc)
+            : _row(roll, frames[i - 1], i - 1, loc, multiCamera: multi),
       ),
     );
   }

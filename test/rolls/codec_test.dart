@@ -20,6 +20,9 @@ Frame frame({
   rollId: 'r',
   position: 0,
   number: number,
+  bodyId: 'b1',
+  bodyMake: 'Canon',
+  bodyModel: 'A-1',
   exposure:
       exposure ??
       const Exposure(
@@ -52,7 +55,8 @@ void main() {
     ]);
     expect(
       csv.startsWith(
-        '﻿roll,film,film_type,box_iso,push_stops,exposed_iso,body,frame,',
+        '﻿roll,film,film_type,box_iso,push_stops,exposed_iso,body,'
+        'camera_make,camera_model,frame,',
       ),
       isTrue,
     );
@@ -65,7 +69,7 @@ void main() {
     final csv = rollToCsv(r4, [frame()]);
     expect(
       row(csv, 1),
-      '4,Ilford HP5 Plus,bw-neg,400,+1.33,1000,Canon A-1,12,2026-11-21T14:03:22,+01:00,5.6,1/125,0.008,1000,FD 50mm f/1.8,50,aperture-priority,12.3,,52.52,13.405,,abc.jpg',
+      '4,Ilford HP5 Plus,bw-neg,400,+1.33,1000,Canon A-1,Canon,A-1,12,2026-11-21T14:03:22,+01:00,5.6,1/125,0.008,1000,FD 50mm f/1.8,50,aperture-priority,12.3,,52.52,13.405,,abc.jpg',
     );
   });
 
@@ -82,8 +86,8 @@ void main() {
     final f = frame(exposure: const Exposure(offset: -0.5))
         .copyWith(utcOffsetMinutes: () => -330);
     final r = row(rollToCsv(r4, [f]), 1).split(',');
-    expect(r[9], '-05:30');
-    expect(r[18], '-0.50');
+    expect(r[11], '-05:30');
+    expect(r[20], '-0.50');
   });
 
   test('blank frame is an empty row with its number', () {
@@ -92,11 +96,14 @@ void main() {
       rollId: 'r',
       position: 0,
       number: 7,
+      bodyId: 'b1',
+      bodyMake: 'Canon',
+      bodyModel: 'A-1',
       updatedAt: t0,
     );
     expect(
       row(rollToCsv(r4, [blank]), 1),
-      '4,Ilford HP5 Plus,bw-neg,400,+1.33,1000,Canon A-1,7,,,,,,,,,,,,,,,',
+      '4,Ilford HP5 Plus,bw-neg,400,+1.33,1000,Canon A-1,Canon,A-1,7,,,,,,,,,,,,,,,',
     );
   });
 
@@ -195,10 +202,10 @@ void main() {
     );
     final csv = rollToCsv(roll(number: 4), [f]);
     final cols = row(csv, 1).split(',');
-    expect(cols[14], "'+cmd");
-    expect(cols[11], "'@x");
-    expect(cols[18], '-0.50');
-    expect(cols[21], "'=SUM(A1)");
+    expect(cols[16], "'+cmd");
+    expect(cols[13], "'@x");
+    expect(cols[20], '-0.50');
+    expect(cols[23], "'=SUM(A1)");
     final tab = rollToCsv(roll(number: 4), [frame(note: '\tx')]);
     expect(tab, contains(",'\tx,"));
     final neg = rollToCsv(roll(pushThirds: -2), [frame()]);
@@ -212,8 +219,8 @@ void main() {
   test('null utc offset invents no offset', () {
     final f = frame().copyWith(utcOffsetMinutes: () => null);
     final cols = row(rollToCsv(r4, [f]), 1).split(',');
-    expect(cols[8], '2026-11-21T13:03:22');
-    expect(cols[9], '');
+    expect(cols[10], '2026-11-21T13:03:22');
+    expect(cols[11], '');
     final j = (rollToJson(r4, [f])['frames'] as List).single as Map;
     expect(j['takenAt'], '2026-11-21T13:03:22.000Z');
     expect(rollFromJson(rollToJson(r4, [f])).$2.single, f);
@@ -252,5 +259,85 @@ void main() {
         reason: '$key $bad',
       );
     }
+  });
+
+  group('cameras', () {
+    final fm2 = frame(number: 13)
+        .copyWith(bodyId: () => 'fm2', bodyMake: 'Nikon', bodyModel: 'FM2');
+
+    test('CSV names each frame camera next to the roll cameras', () {
+      final csv = rollToCsv(r4, [frame(), fm2]);
+      expect(row(csv, 1).split(',').sublist(6, 10), [
+        'Canon A-1 → Nikon FM2',
+        'Canon',
+        'A-1',
+        '12',
+      ]);
+      expect(row(csv, 2).split(',').sublist(6, 10), [
+        'Canon A-1 → Nikon FM2',
+        'Nikon',
+        'FM2',
+        '13',
+      ]);
+    });
+
+    test('CSV camera columns are formula-guarded', () {
+      final f = frame().copyWith(bodyMake: '=Evil', bodyModel: '+1');
+      final cols = row(rollToCsv(r4, [f]), 1).split(',');
+      expect(cols[7], "'=Evil");
+      expect(cols[8], "'+1");
+    });
+
+    test('JSON frames carry their camera; the roll lists its cameras', () {
+      final j = rollToJson(r4, [frame(), fm2]);
+      final frames = (j['frames'] as List).cast<Map>();
+      expect(frames[0]['body'], {'id': 'b1', 'make': 'Canon', 'model': 'A-1'});
+      expect(frames[1]['body'], {'id': 'fm2', 'make': 'Nikon', 'model': 'FM2'});
+      final r = j['roll'] as Map;
+      expect(r['body'], {
+        'id': 'b1',
+        'make': 'Canon',
+        'model': 'A-1',
+        'format': '135',
+      });
+      expect(r['bodies'], [
+        {'id': 'b1', 'make': 'Canon', 'model': 'A-1'},
+        {'id': 'fm2', 'make': 'Nikon', 'model': 'FM2'},
+      ]);
+      expect(rollFromJson(j).$2, [frame(), fm2]);
+    });
+
+    test('a single-camera roll lists one camera', () {
+      final r = rollToJson(r4, [frame()])['roll'] as Map;
+      expect(r['bodies'], [
+        {'id': 'b1', 'make': 'Canon', 'model': 'A-1'},
+      ]);
+    });
+
+    test('an older file without frame cameras takes the roll camera', () {
+      final j = rollToJson(r4, [fm2]);
+      for (final f in j['frames'] as List) {
+        (f as Map).remove('body');
+      }
+      (j['roll'] as Map).remove('bodies');
+      final f = rollFromJson(j).$2.single;
+      expect(f.bodyId, 'b1');
+      expect(f.bodyName, 'Canon A-1');
+    });
+
+    test('a bad frame camera is refused with a path', () {
+      final j = rollToJson(r4, [frame()]);
+      ((j['frames'] as List).single as Map)['body'] = {'id': 'x'};
+      expect(
+        () => rollFromJson(j),
+        throwsA(
+          isA<RollFormatException>().having(
+            (e) => e.message,
+            'message',
+            startsWith('frames[0].body.make:'),
+          ),
+        ),
+      );
+    });
   });
 }

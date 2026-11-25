@@ -10,6 +10,7 @@ import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
+import 'generated/schema_v4.dart' as v4;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -176,4 +177,86 @@ void main() {
       );
     },
   );
+
+  test('migration from v3 to v4 gives each frame its roll camera', () async {
+    v3.RollsData rollAt(String id, String? bodyId, String make, String model) =>
+        v3.RollsData(
+          id: id,
+          number: id == 'r1' ? 1 : 2,
+          filmStock: 'Ilford HP5 Plus',
+          filmType: 'bw-neg',
+          boxIso: 400,
+          pushThirds: 0,
+          bodyId: bodyId,
+          bodyMake: make,
+          bodyModel: model,
+          format: '135',
+          size: 36,
+          startFrame: '1',
+          notes: '',
+          status: 'finished',
+          startedAt: 1795255200,
+          updatedAt: 1795255300,
+        );
+    final oldRolls = [
+      rollAt('r1', 'canon-a1', 'Canon', 'A-1'),
+      rollAt('r2', null, '', ''),
+    ];
+    v3.FramesData oldFrame(String id, String rollId, int n) => v3.FramesData(
+      id: id,
+      rollId: rollId,
+      position: n,
+      number: n + 1,
+      aperture: 5.6,
+      shutter: '1/125',
+      note: 'n$n',
+      updatedAt: 1795255400,
+    );
+    final oldFrames = [
+      oldFrame('f1', 'r1', 0),
+      oldFrame('f2', 'r1', 1),
+      oldFrame('f3', 'r2', 0),
+    ];
+    v4.FramesData newFrame(
+      String id,
+      String rollId,
+      int n,
+      String? bodyId,
+      String make,
+      String model,
+    ) => v4.FramesData(
+      id: id,
+      rollId: rollId,
+      position: n,
+      number: n + 1,
+      aperture: 5.6,
+      shutter: '1/125',
+      note: 'n$n',
+      updatedAt: 1795255400,
+      bodyId: bodyId,
+      bodyMake: make,
+      bodyModel: model,
+    );
+    final expectedFrames = [
+      newFrame('f1', 'r1', 0, 'canon-a1', 'Canon', 'A-1'),
+      newFrame('f2', 'r1', 1, 'canon-a1', 'Canon', 'A-1'),
+      newFrame('f3', 'r2', 0, null, '', ''),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 3,
+      newVersion: 4,
+      createOld: v3.DatabaseAtV3.new,
+      createNew: v4.DatabaseAtV4.new,
+      openTestedDatabase: GrainDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.rolls, oldRolls);
+        batch.insertAll(oldDb.frames, oldFrames);
+      },
+      validateItems: (newDb) async {
+        expect(await newDb.select(newDb.frames).get(), expectedFrames);
+        expect(await newDb.select(newDb.rolls).get(), hasLength(2));
+      },
+    );
+  });
 }

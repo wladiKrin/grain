@@ -30,7 +30,12 @@ void main() {
     await t.pump();
   }
 
-  Future<void> pumpEditor(WidgetTester t, {Body? body, Roll? initial}) async {
+  Future<void> pumpEditor(
+    WidgetTester t, {
+    Body? body,
+    Roll? initial,
+    List<Body> bodies = const [],
+  }) async {
     t.view.physicalSize = const Size(1080, 2400);
     t.view.devicePixelRatio = 2.75;
     addTearDown(t.view.reset);
@@ -42,6 +47,7 @@ void main() {
           haptics: _Haptics(),
           body: body,
           initial: initial,
+          bodies: bodies,
         ),
       ),
     );
@@ -219,6 +225,36 @@ void main() {
     expect(u.bodyId, 'canon-a1');
     expect(u.status, RollStatus.finished);
     expect(rolls.active!.number, 2);
+  });
+
+  testWidgets('editing offers the camera, a correction for its frames', (
+    t,
+  ) async {
+    await startHp5(t);
+    await t.runAsync(() => rolls.logFrame(const Exposure(aperture: 8)));
+    final ae1 = libBody('canon-ae1');
+    await pumpEditor(t, initial: rolls.active!, bodies: [a1, ae1]);
+    expect(find.text('Camera'), findsOneWidget);
+    final camera = find.text('Canon A-1').last;
+    await t.ensureVisible(camera);
+    await t.tap(camera);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Canon AE-1').last);
+    await t.pumpAndSettle();
+    await save(t);
+    expect(rolls.active!.bodyId, 'canon-ae1');
+    expect(rolls.active!.bodyName, 'Canon AE-1');
+    expect(rolls.activeFrames.single.bodyId, 'canon-ae1');
+  });
+
+  testWidgets('a roll camera not offered stays as it is', (t) async {
+    await startHp5(t);
+    await pumpEditor(t, initial: rolls.active!, bodies: [libBody('canon-ae1')]);
+    expect(find.text('Canon A-1'), findsOneWidget);
+    await typeFilm(t, 'Ilford FP4 Plus');
+    await save(t);
+    expect(rolls.active!.bodyId, 'canon-a1');
+    expect(rolls.active!.filmStock, 'Ilford FP4 Plus');
   });
 
   testWidgets('latitude follows the film type until a dial is moved', (

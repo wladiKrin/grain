@@ -198,6 +198,129 @@ void main() {
     expect(rolls.activeFrames.map((f) => f.number), [5, 6, 7, 8]);
   });
 
+  group('cameras', () {
+    final a1 = body('a1', 'A-1');
+    final ae1 = body('ae1', 'AE-1');
+    final f1 = body('f1', 'F-1');
+
+    List<String?> cams() => [for (final f in rolls.activeFrames) f.bodyId];
+
+    test('a logged frame records the camera it was logged with', () async {
+      final roll = await start(b: a1);
+      final f = await rolls.logFrame(e);
+      expect(f.bodyId, 'a1');
+      expect(f.bodyName, 'Canon A-1');
+      expect((await repo.frames(roll.id)).single.bodyId, 'a1');
+    });
+
+    test('continuing in another camera changes only the next frames', () async {
+      final roll = await start(b: a1);
+      await rolls.logFrame(e);
+      await rolls.logFrame(e);
+      await rolls.continueRoll(roll.id, ae1);
+      expect(rolls.active!.bodyId, 'ae1');
+      expect(rolls.active!.bodyName, 'Canon AE-1');
+      expect(cams(), ['a1', 'a1']);
+      expect(rolls.logsFor(ae1), isTrue);
+      expect(rolls.logsFor(a1), isFalse);
+      await rolls.logFrame(e);
+      expect(cams(), ['a1', 'a1', 'ae1']);
+      expect([for (final f in await repo.frames(roll.id)) f.bodyId], cams());
+      expect((await repo.rolls()).single.bodyId, 'ae1');
+    });
+
+    test('roll cameras: one, two in order, and a count beyond', () async {
+      final roll = await start(b: a1);
+      await rolls.logFrame(e);
+      expect(rolls.camerasLabelOf(rolls.active!), 'Canon A-1');
+      expect(isMultiCamera(rolls.active!, rolls.activeFrames), isFalse);
+      // Loaded in another camera, nothing shot there yet: two cameras.
+      await rolls.continueRoll(roll.id, ae1);
+      expect(rolls.camerasLabelOf(rolls.active!), 'Canon A-1 → Canon AE-1');
+      expect(isMultiCamera(rolls.active!, rolls.activeFrames), isTrue);
+      await rolls.logFrame(e);
+      await rolls.continueRoll(roll.id, f1);
+      await rolls.logFrame(e);
+      expect(rolls.camerasLabelOf(rolls.active!), '3 cameras');
+      expect(
+        [for (final c in rollCameras(rolls.active!, rolls.activeFrames)) c.id],
+        ['a1', 'ae1', 'f1'],
+      );
+    });
+
+    test('an inserted blank takes the camera of the frame before', () async {
+      final roll = await start(b: a1);
+      await rolls.logFrame(e);
+      await rolls.continueRoll(roll.id, ae1);
+      await rolls.logFrame(e);
+      await rolls.continueRoll(roll.id, f1);
+      // After frame 1 (A-1), at the start (the roll's F-1), at the end (AE-1).
+      await rolls.insertBlank(roll.id, 1);
+      expect(cams(), ['a1', 'a1', 'ae1']);
+      await rolls.insertBlank(roll.id, 0);
+      expect(cams(), ['f1', 'a1', 'a1', 'ae1']);
+      await rolls.insertBlank(roll.id, 4);
+      expect(cams(), ['f1', 'a1', 'a1', 'ae1', 'ae1']);
+      expect(rolls.activeFrames[0].bodyName, 'Canon F-1');
+    });
+
+    test(
+      'correcting the roll camera moves the frames that were on it',
+      () async {
+        final roll = await start(b: a1);
+        await rolls.logFrame(e);
+        final elsewhere = await rolls.logFrame(e);
+        await rolls.updateFrame(
+          elsewhere.copyWith(
+            bodyId: () => 'f1',
+            bodyMake: 'Canon',
+            bodyModel: 'F-1',
+          ),
+        );
+        await rolls.logFrame(e);
+        await rolls.updateRoll(
+          rolls.active!.copyWith(
+            bodyId: () => 'ae1',
+            bodyMake: 'Canon',
+            bodyModel: 'AE-1',
+          ),
+        );
+        expect(rolls.active!.bodyId, 'ae1');
+        // The frame explicitly on the F-1 stays there.
+        expect(cams(), ['ae1', 'f1', 'ae1']);
+        expect(rolls.activeFrames.first.bodyName, 'Canon AE-1');
+        expect([for (final f in await repo.frames(roll.id)) f.bodyId], cams());
+        expect((await repo.rolls()).single.bodyId, 'ae1');
+      },
+    );
+
+    test('an edit that keeps the camera leaves the frames alone', () async {
+      final roll = await start(b: a1);
+      await rolls.logFrame(e);
+      await rolls.continueRoll(roll.id, ae1);
+      await rolls.updateRoll(rolls.active!.copyWith(notes: 'n'));
+      expect(cams(), ['a1']);
+      expect(rolls.active!.notes, 'n');
+    });
+
+    test('correcting a roll whose frames are not loaded yet', () async {
+      final roll = await start(b: a1);
+      await rolls.logFrame(e);
+      final again = make();
+      await again.load();
+      await again.finishRoll(roll.id);
+      final other = make();
+      await other.load();
+      final r = other.rolls.single;
+      await other.updateRoll(
+        r.copyWith(bodyId: () => 'ae1', bodyMake: 'Canon', bodyModel: 'AE-1'),
+      );
+      expect((await repo.frames(roll.id)).single.bodyId, 'ae1');
+      other.dispose();
+      again.dispose();
+    });
+  });
+
   test('logsFor follows the roll body', () async {
     final a1 = body('a1', 'A-1');
     await start(b: a1);

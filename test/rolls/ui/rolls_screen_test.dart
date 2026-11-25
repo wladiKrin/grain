@@ -135,6 +135,16 @@ void main() {
     expect(find.textContaining('—/'), findsNothing);
   });
 
+  testWidgets('a roll shot in two cameras lists both', (t) async {
+    final r = await roll(t, 'Ilford HP5 Plus', frames: 1);
+    await t.runAsync(() async {
+      await rolls.continueRoll(r.id, libBody('nikon-fm2'));
+      await rolls.logFrame(const Exposure(aperture: 8));
+    });
+    await pumpScreen(t);
+    expect(find.text('Canon A-1 → Nikon FM2 · 2/36'), findsOneWidget);
+  });
+
   testWidgets('tapping a roll opens the roll view', (t) async {
     await roll(t, 'Ilford HP5 Plus', frames: 2);
     await pumpScreen(t);

@@ -207,21 +207,45 @@ class RollController extends ChangeNotifier {
     });
   }
 
+  /// Saves an edit of roll [r]. A changed camera is a correction: the frames
+  /// that were on the roll's old camera move to the new one with it; frames
+  /// shot with another camera stay as they are.
   Future<void> updateRoll(Roll r) {
+    final old = _rolls.where((x) => x.id == r.id).firstOrNull;
+    if (old == null || old.bodyId == r.bodyId) return _saveRoll(r);
+    return _withFrames(r.id, () {
+      final u = _saveRollInMemory(r);
+      final next = [
+        for (final f in _frames[r.id]!)
+          if (f.bodyId == old.bodyId)
+            u.onCamera(f).copyWith(updatedAt: u.updatedAt)
+          else
+            f,
+      ];
+      return _apply(r.id, next, roll: u);
+    });
+  }
+
+  Roll _saveRollInMemory(Roll r) {
     final u = r.copyWith(updatedAt: _now());
     _rolls = [
       for (final x in _rolls)
         if (x.id == u.id) u else x,
     ];
+    return u;
+  }
+
+  Future<void> _saveRoll(Roll r) {
+    final u = _saveRollInMemory(r);
     notifyListeners();
     return _enqueue(() => _repo.saveRoll(u));
   }
 
-  /// Moves roll [id] to [body]: its next frames log there. Frames already
-  /// logged keep their settings.
-  Future<void> moveRoll(String id, Body body) {
+  /// Continues roll [id] in [body] from its next frame: the next frames log
+  /// there, frames already logged keep their camera.
+  Future<void> continueRoll(String id, Body body) {
     final r = _rolls.firstWhere((x) => x.id == id);
-    return updateRoll(
+    return _saveRoll(
       r.copyWith(
         bodyId: () => body.id,
         bodyMake: body.make,
@@ -270,6 +294,10 @@ class RollController extends ChangeNotifier {
 
   /// Frames logged in a roll, once its frames are loaded (see [framesOf]).
   int? frameCount(String rollId) => _frames[rollId]?.length;
+
+  /// The cameras of [r] for display (see [camerasLabel]), once its frames
+  /// are loaded; until then the camera it is in now.
+  String camerasLabelOf(Roll r) => camerasLabel(r, _frames[r.id] ?? const []);
 
   Future<List<Frame>> framesOf(String rollId) async {
     final cached = _frames[rollId];
@@ -424,6 +452,9 @@ class RollController extends ChangeNotifier {
       rollId: roll.id,
       position: list.length,
       number: numbering.nextNumber(roll, list),
+      bodyId: roll.bodyId,
+      bodyMake: roll.bodyMake,
+      bodyModel: roll.bodyModel,
       exposure: e,
       takenAt: ids.atSecond(now),
       utcOffsetMinutes: now.timeZoneOffset.inMinutes,
@@ -588,11 +619,13 @@ class RollController extends ChangeNotifier {
     return _enqueue(() => _repo.saveFrames([u]));
   }
 
-  /// Swaps in [next] for [rollId] and saves what changed (plus deletions).
+  /// Swaps in [next] for [rollId] and saves what changed (plus deletions,
+  /// and [roll] in the same transaction).
   Future<void> _apply(
     String rollId,
     List<Frame> next, {
     List<String> deleted = const [],
+    Roll? roll,
   }) {
     final old = {for (final f in _frames[rollId] ?? <Frame>[]) f.id: f};
     final changed = [
@@ -603,6 +636,7 @@ class RollController extends ChangeNotifier {
     notifyListeners();
     return _enqueue(
       () => _repo.transaction(() async {
+        if (roll != null) await _repo.saveRoll(roll);
         if (deleted.isNotEmpty) await _repo.deleteFrames(deleted);
         if (changed.isNotEmpty) await _repo.saveFrames(changed);
       }),
@@ -619,6 +653,7 @@ class RollController extends ChangeNotifier {
   Future<void> insertBlank(String rollId, int position) =>
       _withFrames(rollId, () {
         final frames = _frames[rollId]!;
+        final roll = _rolls.where((r) => r.id == rollId).firstOrNull;
         if (position < 0 || position > frames.length) return Future.value();
         return _apply(
           rollId,
@@ -628,6 +663,7 @@ class RollController extends ChangeNotifier {
             id: _newId(),
             rollId: rollId,
             now: _now(),
+            camera: roll?.camera ?? const RollCamera(null, '', ''),
           ),
         );
       });

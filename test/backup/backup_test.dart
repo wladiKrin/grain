@@ -831,4 +831,133 @@ void main() {
     expect(report.rollsCopied, 1);
     expect(report.rollsSkipped, 1);
   });
+
+  group('frame cameras', () {
+    /// A roll of three frames: two in my A-1, then continued in the AE-1.
+    Future<Phone> multiCameraPhone() async {
+      final p = Phone();
+      final body = await p.gear.saveUser(myBody());
+      final r = await p.rolls.startRoll(
+        filmStock: 'Kodak Portra 400',
+        filmType: FilmType.colorNeg,
+        boxIso: 400,
+        pushThirds: 0,
+        body: body,
+        size: 36,
+        startFrame: StartFrame.one,
+      );
+      await p.rolls.logFrame(exposure);
+      await p.rolls.logFrame(exposure);
+      await p.rolls.continueRoll(r.id, libBody('canon-ae1'));
+      await p.rolls.logFrame(exposure);
+      await settleSnapshots(p.rolls);
+      return p;
+    }
+
+    List<String?> cams(Phone p) => [
+      for (final f in p.rolls.activeFrames) f.bodyId,
+    ];
+
+    /// The backup of [p] as JSON, changed by [edit], read back.
+    Future<BackupContents> editedBackup(
+      Phone p,
+      void Function(Map<String, Object?> top) edit,
+    ) async {
+      final file = await writeBackup(
+        out: tempDir('grain-out'),
+        gear: p.gear,
+        rolls: p.rolls,
+        settings: p.settings,
+        now: DateTime(2026, 11, 21),
+      );
+      final zip = ZipDecoder().decodeStream(InputFileStream(file.path));
+      final top = jsonDecode(
+        utf8.decode(zip.findFile('grain-backup.json')!.content),
+      ) as Map<String, Object?>;
+      edit(top);
+      return readBackup(
+        zipOf({
+          for (final f in zip.files)
+            if (f.isFile) f.name: f.content,
+          'grain-backup.json': jsonBytes(top),
+        }),
+      );
+    }
+
+    test('the backup carries each frame camera and restores it', () async {
+      final a = await multiCameraPhone();
+      final c = await exportFrom(a);
+      expect(
+        [for (final f in c.rolls.single.$2) f.bodyId],
+        ['my-a1', 'my-a1', 'canon-ae1'],
+      );
+      final b = Phone();
+      await importInto(b, c);
+      expect(cams(b), ['my-a1', 'my-a1', 'canon-ae1']);
+      expect(b.rolls.active!.bodyId, 'canon-ae1');
+      final again = await importInto(b, c);
+      expect(again.rollsSkipped, 1);
+      expect(again.rollsAdded + again.rollsCopied, 0);
+      expect(b.rolls.rolls, hasLength(1));
+    });
+
+    test('a frame changed only in its camera is a different roll', () async {
+      final a = await multiCameraPhone();
+      final c = await exportFrom(a);
+      final b = Phone();
+      await importInto(b, c);
+      final f = b.rolls.activeFrames.first;
+      await b.rolls.updateFrame(
+        f.copyWith(bodyId: () => 'canon-a1', bodyModel: 'A-1'),
+      );
+      final report = await importInto(b, c);
+      expect(report.rollsCopied, 1);
+      final again = await importInto(b, c);
+      expect(again.rollsCopied + again.rollsAdded, 0);
+    });
+
+    test('an older backup without frame cameras takes the roll camera, '
+        'matches the frames here and re-imports as identical', () async {
+      final a = await filledPhone();
+      final c = await editedBackup(a, (top) {
+        for (final r in top['rolls'] as List) {
+          (((r as Map)['roll']) as Map).remove('bodies');
+          for (final f in r['frames'] as List) {
+            (f as Map).remove('body');
+          }
+        }
+      });
+      for (final (r, frames) in c.rolls) {
+        expect(frames.every((f) => f.bodyId == r.bodyId), isTrue);
+        expect(frames.every((f) => f.bodyName == r.bodyName), isTrue);
+      }
+      // The same rolls as on the phone that made it.
+      final home = await importInto(a, c);
+      expect(home.rollsSkipped, 2);
+      expect(home.rollsAdded + home.rollsCopied, 0);
+      final b = Phone();
+      expect((await importInto(b, c)).rollsAdded, 2);
+      final again = await importInto(b, c);
+      expect(again.rollsSkipped, 2);
+      expect(again.rollsAdded + again.rollsCopied, 0);
+      // And the new-format backup of the same phone matches too.
+      final current = await importInto(b, await exportFrom(a));
+      expect(current.rollsSkipped, 2);
+    });
+
+    test('a renamed body profile reaches the frame cameras', () async {
+      final a = await multiCameraPhone();
+      final c = await exportFrom(a);
+      final b = Phone();
+      // A different body under the same id here: the backup's is suffixed.
+      await b.gear.saveUser(myBody(model: 'A-1 (other)'));
+      await importInto(b, c);
+      final r = b.rolls.rolls.single;
+      final frames = await b.rolls.framesOf(r.id);
+      expect(frames[0].bodyId, isNot('my-a1'));
+      expect(frames[0].bodyId, frames[1].bodyId);
+      expect(frames[2].bodyId, 'canon-ae1');
+      expect(b.gear.bodies.any((x) => x.id == frames[0].bodyId), isTrue);
+    });
+  });
 }

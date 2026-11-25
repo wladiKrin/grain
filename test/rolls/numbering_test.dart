@@ -51,6 +51,27 @@ void main() {
     );
   });
 
+  test('an inserted blank takes the camera of the frame before', () {
+    const fm2 = RollCamera('fm2', 'Nikon', 'FM2');
+    final fs = frames([1, 2]);
+    final mid = insertBlankAt(fs, 1, id: 'b', rollId: 'r', now: t0);
+    expect(mid[1].bodyId, 'b1');
+    final first = insertBlankAt(
+      fs,
+      0,
+      id: 'b',
+      rollId: 'r',
+      now: t0,
+      camera: fm2,
+    );
+    expect(first[0].bodyId, 'fm2');
+    expect(first[0].bodyName, 'Nikon FM2');
+    expect(
+      insertBlankAt([], 0, id: 'b', rollId: 'r', now: t0).single.bodyId,
+      isNull,
+    );
+  });
+
   test('insert on an empty list uses the given rollId', () {
     final out = insertBlankAt([], 0, id: 'b', rollId: 'rr', now: t0);
     expect(out.single.rollId, 'rr');

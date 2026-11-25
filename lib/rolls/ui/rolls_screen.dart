@@ -108,7 +108,7 @@ class _RollsScreenState extends State<RollsScreen> {
     final count = widget.rolls.frameCount(r.id);
     final detail = [
       if (r.pushThirds != 0) pushLabel(r.pushThirds),
-      r.bodyName,
+      widget.rolls.camerasLabelOf(r),
       '${count ?? '—'}/${r.size}',
     ].join(' · ');
     return InkWell(

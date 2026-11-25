@@ -20,16 +20,19 @@ int overrun(Roll roll, int number) => math.max(0, number - roll.size);
 
 /// Inserts a blank at [position]; it takes the number of the frame now at
 /// [position] (or the next number at the end), later frames move up by one.
+/// It takes the camera of the frame before it, or [camera] at the start.
 List<Frame> insertBlankAt(
   List<Frame> frames,
   int position, {
   required String id,
   required String rollId,
   required DateTime now,
+  RollCamera camera = const RollCamera(null, '', ''),
 }) {
   final number = position < frames.length
       ? frames[position].number
       : (frames.isEmpty ? 1 : frames.last.number + 1);
+  final c = position > 0 ? frames[position - 1].camera : camera;
   return [
     ...frames.sublist(0, position),
     Frame(
@@ -37,6 +40,9 @@ List<Frame> insertBlankAt(
       rollId: rollId,
       position: position,
       number: number,
+      bodyId: c.id,
+      bodyMake: c.make,
+      bodyModel: c.model,
       updatedAt: now,
     ),
     for (final f in frames.sublist(position))

@@ -92,6 +92,27 @@ void main() {
         expect((await repo.rolls()).length, 3);
       });
 
+      test('each frame keeps its own camera', () async {
+        await repo.saveRoll(_roll('r', bodyId: 'canon-a1'));
+        final a1 = _frame('f0', 'r', 0).copyWith(
+          bodyId: () => 'canon-a1',
+          bodyMake: 'Canon',
+          bodyModel: 'A-1',
+        );
+        final fm2 = _frame('f1', 'r', 1).copyWith(
+          bodyId: () => 'nikon-fm2',
+          bodyMake: 'Nikon',
+          bodyModel: 'FM2',
+        );
+        final none = _frame('f2', 'r', 2);
+        await repo.saveFrames([a1, fm2, none]);
+        final got = await repo.frames('r');
+        expect(got, [a1, fm2, none]);
+        expect(got[1].bodyName, 'Nikon FM2');
+        expect(got[2].bodyId, isNull);
+        expect(got[2].bodyName, 'No camera');
+      });
+
       test('latitude overrides persist', () async {
         await repo.saveRoll(_roll('a').copyWith(latitudeUnderHalves: () => -2));
         final r = (await repo.rolls()).single;

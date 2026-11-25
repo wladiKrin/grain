@@ -2182,6 +2182,39 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _bodyIdMeta = const VerificationMeta('bodyId');
+  @override
+  late final GeneratedColumn<String> bodyId = GeneratedColumn<String>(
+    'body_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _bodyMakeMeta = const VerificationMeta(
+    'bodyMake',
+  );
+  @override
+  late final GeneratedColumn<String> bodyMake = GeneratedColumn<String>(
+    'body_make',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _bodyModelMeta = const VerificationMeta(
+    'bodyModel',
+  );
+  @override
+  late final GeneratedColumn<String> bodyModel = GeneratedColumn<String>(
+    'body_model',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     mode,
@@ -2208,6 +2241,9 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
     rollId,
     position,
     number,
+    bodyId,
+    bodyMake,
+    bodyModel,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2384,6 +2420,24 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
     } else if (isInserting) {
       context.missing(_numberMeta);
     }
+    if (data.containsKey('body_id')) {
+      context.handle(
+        _bodyIdMeta,
+        bodyId.isAcceptableOrUnknown(data['body_id']!, _bodyIdMeta),
+      );
+    }
+    if (data.containsKey('body_make')) {
+      context.handle(
+        _bodyMakeMeta,
+        bodyMake.isAcceptableOrUnknown(data['body_make']!, _bodyMakeMeta),
+      );
+    }
+    if (data.containsKey('body_model')) {
+      context.handle(
+        _bodyModelMeta,
+        bodyModel.isAcceptableOrUnknown(data['body_model']!, _bodyModelMeta),
+      );
+    }
     return context;
   }
 
@@ -2489,6 +2543,18 @@ class $FramesTable extends Frames with TableInfo<$FramesTable, FrameRow> {
         DriftSqlType.int,
         data['${effectivePrefix}number'],
       )!,
+      bodyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_id'],
+      ),
+      bodyMake: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_make'],
+      )!,
+      bodyModel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}body_model'],
+      )!,
     );
   }
 
@@ -2528,6 +2594,11 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
   final String rollId;
   final int position;
   final int number;
+
+  /// The camera the frame was shot with (null: no camera); since v4.
+  final String? bodyId;
+  final String bodyMake;
+  final String bodyModel;
   const FrameRow({
     this.mode,
     this.aperture,
@@ -2553,6 +2624,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     required this.rollId,
     required this.position,
     required this.number,
+    this.bodyId,
+    required this.bodyMake,
+    required this.bodyModel,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2619,6 +2693,11 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     map['roll_id'] = Variable<String>(rollId);
     map['position'] = Variable<int>(position);
     map['number'] = Variable<int>(number);
+    if (!nullToAbsent || bodyId != null) {
+      map['body_id'] = Variable<String>(bodyId);
+    }
+    map['body_make'] = Variable<String>(bodyMake);
+    map['body_model'] = Variable<String>(bodyModel);
     return map;
   }
 
@@ -2678,6 +2757,11 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       rollId: Value(rollId),
       position: Value(position),
       number: Value(number),
+      bodyId: bodyId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(bodyId),
+      bodyMake: Value(bodyMake),
+      bodyModel: Value(bodyModel),
     );
   }
 
@@ -2711,6 +2795,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       rollId: serializer.fromJson<String>(json['rollId']),
       position: serializer.fromJson<int>(json['position']),
       number: serializer.fromJson<int>(json['number']),
+      bodyId: serializer.fromJson<String?>(json['bodyId']),
+      bodyMake: serializer.fromJson<String>(json['bodyMake']),
+      bodyModel: serializer.fromJson<String>(json['bodyModel']),
     );
   }
   @override
@@ -2741,6 +2828,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       'rollId': serializer.toJson<String>(rollId),
       'position': serializer.toJson<int>(position),
       'number': serializer.toJson<int>(number),
+      'bodyId': serializer.toJson<String?>(bodyId),
+      'bodyMake': serializer.toJson<String>(bodyMake),
+      'bodyModel': serializer.toJson<String>(bodyModel),
     };
   }
 
@@ -2769,6 +2859,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     String? rollId,
     int? position,
     int? number,
+    Value<String?> bodyId = const Value.absent(),
+    String? bodyMake,
+    String? bodyModel,
   }) => FrameRow(
     mode: mode.present ? mode.value : this.mode,
     aperture: aperture.present ? aperture.value : this.aperture,
@@ -2798,6 +2891,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     rollId: rollId ?? this.rollId,
     position: position ?? this.position,
     number: number ?? this.number,
+    bodyId: bodyId.present ? bodyId.value : this.bodyId,
+    bodyMake: bodyMake ?? this.bodyMake,
+    bodyModel: bodyModel ?? this.bodyModel,
   );
   FrameRow copyWithCompanion(FramesCompanion data) {
     return FrameRow(
@@ -2833,6 +2929,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
       rollId: data.rollId.present ? data.rollId.value : this.rollId,
       position: data.position.present ? data.position.value : this.position,
       number: data.number.present ? data.number.value : this.number,
+      bodyId: data.bodyId.present ? data.bodyId.value : this.bodyId,
+      bodyMake: data.bodyMake.present ? data.bodyMake.value : this.bodyMake,
+      bodyModel: data.bodyModel.present ? data.bodyModel.value : this.bodyModel,
     );
   }
 
@@ -2862,7 +2961,10 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
           ..write('id: $id, ')
           ..write('rollId: $rollId, ')
           ..write('position: $position, ')
-          ..write('number: $number')
+          ..write('number: $number, ')
+          ..write('bodyId: $bodyId, ')
+          ..write('bodyMake: $bodyMake, ')
+          ..write('bodyModel: $bodyModel')
           ..write(')'))
         .toString();
   }
@@ -2893,6 +2995,9 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
     rollId,
     position,
     number,
+    bodyId,
+    bodyMake,
+    bodyModel,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -2921,7 +3026,10 @@ class FrameRow extends DataClass implements Insertable<FrameRow> {
           other.id == this.id &&
           other.rollId == this.rollId &&
           other.position == this.position &&
-          other.number == this.number);
+          other.number == this.number &&
+          other.bodyId == this.bodyId &&
+          other.bodyMake == this.bodyMake &&
+          other.bodyModel == this.bodyModel);
 }
 
 class FramesCompanion extends UpdateCompanion<FrameRow> {
@@ -2949,6 +3057,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
   final Value<String> rollId;
   final Value<int> position;
   final Value<int> number;
+  final Value<String?> bodyId;
+  final Value<String> bodyMake;
+  final Value<String> bodyModel;
   final Value<int> rowid;
   const FramesCompanion({
     this.mode = const Value.absent(),
@@ -2975,6 +3086,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     this.rollId = const Value.absent(),
     this.position = const Value.absent(),
     this.number = const Value.absent(),
+    this.bodyId = const Value.absent(),
+    this.bodyMake = const Value.absent(),
+    this.bodyModel = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FramesCompanion.insert({
@@ -3002,6 +3116,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     required String rollId,
     required int position,
     required int number,
+    this.bodyId = const Value.absent(),
+    this.bodyMake = const Value.absent(),
+    this.bodyModel = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : updatedAt = Value(updatedAt),
        id = Value(id),
@@ -3033,6 +3150,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     Expression<String>? rollId,
     Expression<int>? position,
     Expression<int>? number,
+    Expression<String>? bodyId,
+    Expression<String>? bodyMake,
+    Expression<String>? bodyModel,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -3060,6 +3180,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
       if (rollId != null) 'roll_id': rollId,
       if (position != null) 'position': position,
       if (number != null) 'number': number,
+      if (bodyId != null) 'body_id': bodyId,
+      if (bodyMake != null) 'body_make': bodyMake,
+      if (bodyModel != null) 'body_model': bodyModel,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3089,6 +3212,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     Value<String>? rollId,
     Value<int>? position,
     Value<int>? number,
+    Value<String?>? bodyId,
+    Value<String>? bodyMake,
+    Value<String>? bodyModel,
     Value<int>? rowid,
   }) {
     return FramesCompanion(
@@ -3116,6 +3242,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
       rollId: rollId ?? this.rollId,
       position: position ?? this.position,
       number: number ?? this.number,
+      bodyId: bodyId ?? this.bodyId,
+      bodyMake: bodyMake ?? this.bodyMake,
+      bodyModel: bodyModel ?? this.bodyModel,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3195,6 +3324,15 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
     if (number.present) {
       map['number'] = Variable<int>(number.value);
     }
+    if (bodyId.present) {
+      map['body_id'] = Variable<String>(bodyId.value);
+    }
+    if (bodyMake.present) {
+      map['body_make'] = Variable<String>(bodyMake.value);
+    }
+    if (bodyModel.present) {
+      map['body_model'] = Variable<String>(bodyModel.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3228,6 +3366,9 @@ class FramesCompanion extends UpdateCompanion<FrameRow> {
           ..write('rollId: $rollId, ')
           ..write('position: $position, ')
           ..write('number: $number, ')
+          ..write('bodyId: $bodyId, ')
+          ..write('bodyMake: $bodyMake, ')
+          ..write('bodyModel: $bodyModel, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5774,6 +5915,9 @@ typedef $$FramesTableCreateCompanionBuilder = FramesCompanion Function({
   required String rollId,
   required int position,
   required int number,
+  Value<String?> bodyId,
+  Value<String> bodyMake,
+  Value<String> bodyModel,
   Value<int> rowid,
 });
 typedef $$FramesTableUpdateCompanionBuilder = FramesCompanion Function({
@@ -5801,6 +5945,9 @@ typedef $$FramesTableUpdateCompanionBuilder = FramesCompanion Function({
   Value<String> rollId,
   Value<int> position,
   Value<int> number,
+  Value<String?> bodyId,
+  Value<String> bodyMake,
+  Value<String> bodyModel,
   Value<int> rowid,
 });
 
@@ -5947,6 +6094,21 @@ class $$FramesTableFilterComposer
 
   ColumnFilters<int> get number => $composableBuilder(
     column: $table.number,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyId => $composableBuilder(
+    column: $table.bodyId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyMake => $composableBuilder(
+    column: $table.bodyMake,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bodyModel => $composableBuilder(
+    column: $table.bodyModel,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6098,6 +6260,21 @@ class $$FramesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get bodyId => $composableBuilder(
+    column: $table.bodyId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bodyMake => $composableBuilder(
+    column: $table.bodyMake,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bodyModel => $composableBuilder(
+    column: $table.bodyModel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$RollsTableOrderingComposer get rollId {
     final $$RollsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -6208,6 +6385,15 @@ class $$FramesTableAnnotationComposer
   GeneratedColumn<int> get number =>
       $composableBuilder(column: $table.number, builder: (column) => column);
 
+  GeneratedColumn<String> get bodyId =>
+      $composableBuilder(column: $table.bodyId, builder: (column) => column);
+
+  GeneratedColumn<String> get bodyMake =>
+      $composableBuilder(column: $table.bodyMake, builder: (column) => column);
+
+  GeneratedColumn<String> get bodyModel =>
+      $composableBuilder(column: $table.bodyModel, builder: (column) => column);
+
   $$RollsTableAnnotationComposer get rollId {
     final $$RollsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -6284,6 +6470,9 @@ class $$FramesTableTableManager
                 Value<String> rollId = const Value.absent(),
                 Value<int> position = const Value.absent(),
                 Value<int> number = const Value.absent(),
+                Value<String?> bodyId = const Value.absent(),
+                Value<String> bodyMake = const Value.absent(),
+                Value<String> bodyModel = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FramesCompanion(
                 mode: mode,
@@ -6310,6 +6499,9 @@ class $$FramesTableTableManager
                 rollId: rollId,
                 position: position,
                 number: number,
+                bodyId: bodyId,
+                bodyMake: bodyMake,
+                bodyModel: bodyModel,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6338,6 +6530,9 @@ class $$FramesTableTableManager
                 required String rollId,
                 required int position,
                 required int number,
+                Value<String?> bodyId = const Value.absent(),
+                Value<String> bodyMake = const Value.absent(),
+                Value<String> bodyModel = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FramesCompanion.insert(
                 mode: mode,
@@ -6364,6 +6559,9 @@ class $$FramesTableTableManager
                 rollId: rollId,
                 position: position,
                 number: number,
+                bodyId: bodyId,
+                bodyMake: bodyMake,
+                bodyModel: bodyModel,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

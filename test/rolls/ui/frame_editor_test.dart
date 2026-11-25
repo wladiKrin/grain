@@ -18,6 +18,8 @@ void main() {
   late Roll roll;
   late Frame frame;
   final a1 = libBody('canon-a1');
+  final ae1 = libBody('canon-ae1');
+  final fm2 = libBody('nikon-fm2');
   final fd28 = libLens('canon-fd-28-2.8');
   final fd50 = libLens('canon-fd-50-1.8');
 
@@ -89,7 +91,8 @@ void main() {
                   rolls: rolls,
                   roll: roll,
                   frame: frame,
-                  lenses: [fd28, fd50],
+                  bodies: [a1, ae1, fm2],
+                  lensesFor: (m) => m == a1.mount ? [fd28, fd50] : const [],
                 ),
               ),
             ),
@@ -215,5 +218,65 @@ void main() {
     await save(t);
     expect(saved().exposure.lensId, 'gone');
     expect(saved().exposure.lensName, 'Old 35mm f/2');
+  });
+
+  testWidgets('the camera field defaults to the frame camera', (t) async {
+    await start(t);
+    expect(frame.bodyId, 'canon-a1');
+    await pumpEditor(t);
+    expect(
+      find.descendant(
+        of: find.byType(InputDecorator).first,
+        matching: find.text('Canon A-1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Camera'), findsOneWidget);
+  });
+
+  testWidgets('a frame moves to another camera of the format', (t) async {
+    await start(t);
+    await pumpEditor(t);
+    await t.tap(find.text('Canon A-1').first);
+    await t.pumpAndSettle();
+    expect(find.text('Nikon FM2'), findsWidgets);
+    await t.tap(find.text('Canon AE-1').last);
+    await t.pumpAndSettle();
+    await save(t);
+    expect(saved().bodyId, 'canon-ae1');
+    expect(saved().bodyName, 'Canon AE-1');
+    // Same mount: the lens stays.
+    expect(saved().exposure.lensId, fd50.id);
+    // The roll stays in its camera.
+    expect(rolls.active!.bodyId, 'canon-a1');
+  });
+
+  testWidgets('another mount keeps the frame lens as it was', (t) async {
+    await start(t);
+    await pumpEditor(t);
+    await t.tap(find.text('Canon A-1').first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Nikon FM2').last);
+    await t.pumpAndSettle();
+    expect(find.text(fd50.name), findsOneWidget);
+    await save(t);
+    expect(saved().bodyId, 'nikon-fm2');
+    expect(saved().exposure.lensName, fd50.name);
+  });
+
+  testWidgets('a frame camera not offered is kept', (t) async {
+    await start(t);
+    await t.runAsync(
+      () => rolls.updateFrame(
+        frame.copyWith(bodyId: () => 'gone', bodyMake: 'Old', bodyModel: 'Box'),
+      ),
+    );
+    frame = rolls.activeFrames.single;
+    await pumpEditor(t);
+    expect(find.text('Old Box'), findsOneWidget);
+    await enter(t, 'Note', 'kept');
+    await save(t);
+    expect(saved().bodyId, 'gone');
+    expect(saved().bodyName, 'Old Box');
   });
 }

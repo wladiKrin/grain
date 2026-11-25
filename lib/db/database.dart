@@ -112,6 +112,11 @@ class Frames extends Table with ExposureColumns {
   IntColumn get position => integer()();
   IntColumn get number => integer()();
 
+  /// The camera the frame was shot with (null: no camera); since v4.
+  TextColumn get bodyId => text().nullable()();
+  TextColumn get bodyMake => text().withDefault(const Constant(''))();
+  TextColumn get bodyModel => text().withDefault(const Constant(''))();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -149,7 +154,7 @@ class GrainDatabase extends _$GrainDatabase {
   factory GrainDatabase.open() => GrainDatabase(driftDatabase(name: 'grain'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -164,6 +169,18 @@ class GrainDatabase extends _$GrainDatabase {
       from2To3: (m, schema) async {
         await m.addColumn(schema.rolls, schema.rolls.latitudeUnderHalves);
         await m.addColumn(schema.rolls, schema.rolls.latitudeOverHalves);
+      },
+      from3To4: (m, schema) async {
+        await m.addColumn(schema.frames, schema.frames.bodyId);
+        await m.addColumn(schema.frames, schema.frames.bodyMake);
+        await m.addColumn(schema.frames, schema.frames.bodyModel);
+        // Frames so far were all shot with their roll's camera.
+        await customStatement(
+          'UPDATE frames SET (body_id, body_make, body_model) = '
+          '(SELECT body_id, body_make, body_model FROM rolls '
+          'WHERE rolls.id = frames.roll_id) '
+          'WHERE roll_id IN (SELECT id FROM rolls)',
+        );
       },
     ),
     beforeOpen: (details) async {

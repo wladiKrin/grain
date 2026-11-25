@@ -96,12 +96,21 @@ Map<String, Object?> _exposureJson(Exposure e) => {
 
 String _utcIso(DateTime d) => d.toUtc().toIso8601String();
 
+Map<String, Object?> _cameraJson(RollCamera c) => {
+  'id': c.id,
+  'make': c.make,
+  'model': c.model,
+};
+
 /// A roll with its frames as JSON carrying everything needed to write EXIF
-/// later: roll.body → Make/Model, frame.takenAt → DateTimeOriginal +
+/// later: frame.body → Make/Model, frame.takenAt → DateTimeOriginal +
 /// OffsetTimeOriginal, frame.aperture → FNumber, frame.exposureTime →
 /// ExposureTime, frame.iso → PhotographicSensitivity, frame.focalLength →
 /// FocalLength, frame.lens → LensMake/LensModel, frame.location → GPS*,
 /// roll.film (box speed, push/pull) and frame.number for the film frame.
+/// roll.body is the camera the roll is in now (where its next frames go) and
+/// roll.bodies every camera it was shot with, in order of first use; a file
+/// without frame.body had every frame in roll.body.
 Map<String, Object?> rollToJson(Roll r, List<Frame> frames) => {
   'schema': 1,
   'type': 'grain-roll',
@@ -119,6 +128,7 @@ Map<String, Object?> rollToJson(Roll r, List<Frame> frames) => {
       'latitudeOverHalves': r.latitudeOverHalves,
     },
     'body': _bodyJson(r.bodyId, r.bodyMake, r.bodyModel, r.format),
+    'bodies': [for (final c in rollCameras(r, frames)) _cameraJson(c)],
     'size': r.size,
     'startFrame': r.startFrame.label,
     'status': r.status.name,
@@ -133,6 +143,7 @@ Map<String, Object?> rollToJson(Roll r, List<Frame> frames) => {
         'id': f.id,
         'position': f.position,
         'number': f.label,
+        'body': _cameraJson(f.camera),
         'takenAt': f.takenAt == null
             ? null
             : f.utcOffsetMinutes == null
@@ -344,12 +355,25 @@ void _header(Map<String, Object?> m, String type) {
     final number =
         parseFrameLabel(_str(f, 'number', p)) ??
         _bad('${p}number', 'not a frame number');
+    // Older files have no frame camera: the frame was in the roll's.
+    var camera = roll.camera;
+    if (f['body'] != null) {
+      final b = _map(f['body'], '${p}body');
+      camera = RollCamera(
+        _strOrNull(b, 'id', '${p}body.'),
+        _str(b, 'make', '${p}body.'),
+        _str(b, 'model', '${p}body.'),
+      );
+    }
     frames.add(
       Frame(
         id: _str(f, 'id', p),
         rollId: id,
         position: _int(f, 'position', p),
         number: number,
+        bodyId: camera.id,
+        bodyMake: camera.make,
+        bodyModel: camera.model,
         exposure: _exposure(f, p),
         takenAt: _dateOrNull(f, 'takenAt', p),
         utcOffsetMinutes: _intOrNull(f, 'utcOffsetMinutes', p),
@@ -386,7 +410,8 @@ SavedReading readingFromJson(Object? json) {
 // ---- CSV ----
 
 const csvHeader =
-    'roll,film,film_type,box_iso,push_stops,exposed_iso,body,frame,date_time,'
+    'roll,film,film_type,box_iso,push_stops,exposed_iso,body,camera_make,'
+    'camera_model,frame,date_time,'
     'utc_offset,aperture,shutter,exposure_time_s,iso,lens,focal_mm,mode,'
     'metered_ev,offset_stops,latitude,longitude,note,snapshot';
 
@@ -416,8 +441,11 @@ String _pushStops(int thirds) {
 String _exposureSeconds(double? v) =>
     v == null ? '' : _trim(v.toStringAsPrecision(6));
 
+/// One row per frame. `body` is the roll's camera ([camerasLabel]);
+/// `camera_make` and `camera_model` the frame's own (EXIF Make, Model).
 String rollToCsv(Roll r, List<Frame> frames) {
   final b = StringBuffer('\uFEFF')..write('$csvHeader\r\n');
+  final body = camerasLabel(r, frames);
   for (final f in frames) {
     final e = f.exposure;
     final off = f.utcOffsetMinutes;
@@ -429,7 +457,9 @@ String rollToCsv(Roll r, List<Frame> frames) {
       '${r.boxIso}',
       _pushStops(r.pushThirds),
       '${r.exposedIso}',
-      _text(r.bodyName),
+      _text(body),
+      _text(f.bodyMake),
+      _text(f.bodyModel),
       f.label,
       f.takenAt == null ? '' : _local(f.takenAt!, off ?? 0),
       f.takenAt == null || off == null ? '' : offsetLabel(off),

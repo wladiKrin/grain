@@ -16,6 +16,8 @@ import '../../ui/stops_text.dart';
 
 const _sizeChips = [12, 24, 36, 72];
 
+const _keptBody = '\u0000kept';
+
 /// −9 … +9 thirds, labelled in stops.
 final List<ScaleValue> _pushScale = [
   for (var t = -9; t <= 9; t++)
@@ -43,6 +45,7 @@ class RollEditorScreen extends StatefulWidget {
     required this.haptics,
     this.body,
     this.initial,
+    this.bodies = const [],
   });
 
   final RollController rolls;
@@ -53,6 +56,9 @@ class RollEditorScreen extends StatefulWidget {
 
   /// The roll being edited.
   final Roll? initial;
+
+  /// Bodies the edited roll's camera can be corrected to (its format).
+  final List<Body> bodies;
 
   @override
   State<RollEditorScreen> createState() => _RollEditorScreenState();
@@ -72,6 +78,9 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
   late int _size;
   late bool _customSize;
   late StartFrame _start;
+
+  /// The edited roll's camera: a body id, or [_keptBody] for its own.
+  String _bodyKey = _keptBody;
   String? _error;
   bool _saving = false;
 
@@ -94,6 +103,8 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
     _custom = TextEditingController(text: '$_size');
     _start = last?.startFrame ?? StartFrame.one;
     _notes = TextEditingController(text: e?.notes ?? '');
+    final id = e?.bodyId;
+    if (id != null && widget.bodies.any((b) => b.id == id)) _bodyKey = id;
   }
 
   @override
@@ -164,7 +175,17 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
         // Whatever happened to the roll since the editor opened (it may have
         // been finished) stays; only the form's fields are written.
         final current = widget.rolls.rolls.where((r) => r.id == e.id);
-        saved = (current.isEmpty ? e : current.first).copyWith(
+        var base = current.isEmpty ? e : current.first;
+        final body = widget.bodies.where((b) => b.id == _bodyKey).firstOrNull;
+        // A new camera here corrects the roll's (see RollController.updateRoll).
+        if (body != null && body.id != e.bodyId) {
+          base = base.copyWith(
+            bodyId: () => body.id,
+            bodyMake: body.make,
+            bodyModel: body.model,
+          );
+        }
+        saved = base.copyWith(
           filmStock: film,
           filmType: _type,
           boxIso: _box,
@@ -400,13 +421,24 @@ class _RollEditorScreenState extends State<RollEditorScreen> {
                     ),
             ),
             const EditorSection('Body'),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                e?.bodyName ?? _newBodyName,
-                style: const TextStyle(fontSize: 16),
+            if (e != null && widget.bodies.isNotEmpty)
+              EditorDropdown<String>(
+                label: 'Camera',
+                value: _bodyKey,
+                items: {
+                  for (final b in widget.bodies) b.id: b.displayName,
+                  if (_bodyKey == _keptBody) _keptBody: e.bodyName,
+                },
+                onChanged: (k) => setState(() => _bodyKey = k),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  e?.bodyName ?? _newBodyName,
+                  style: const TextStyle(fontSize: 16),
+                ),
               ),
-            ),
             const EditorSection('Frames'),
             Wrap(
               spacing: 8,

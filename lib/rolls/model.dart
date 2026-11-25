@@ -164,6 +164,43 @@ class Exposure {
 String _bodyName(String? bodyId, String make, String model) =>
     bodyId == null ? 'No camera' : '$make $model';
 
+/// A camera as a roll or a frame records it: the library id (null is no
+/// camera) and the name it had then.
+class RollCamera {
+  const RollCamera(this.id, this.make, this.model);
+
+  final String? id;
+  final String make;
+  final String model;
+
+  String get name => _bodyName(id, make, model);
+
+  @override
+  bool operator ==(Object other) => other is RollCamera && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+/// Every camera of a roll, in order of first use, the one it is in now
+/// included (last when no frame was shot with it yet).
+List<RollCamera> rollCameras(Roll r, List<Frame> frames) =>
+    {for (final f in frames) f.camera, r.camera}.toList();
+
+/// A roll is attributed to one camera only when every frame, and the camera
+/// it is in now, is that camera.
+bool isMultiCamera(Roll r, List<Frame> frames) =>
+    frames.any((f) => f.bodyId != r.bodyId);
+
+/// The roll's camera for lists and headers: one name, "Canon A-1 → Nikon
+/// FM2" for two, "3 cameras" beyond.
+String camerasLabel(Roll r, List<Frame> frames) {
+  final c = rollCameras(r, frames);
+  return c.length <= 2
+      ? c.map((x) => x.name).join(' → ')
+      : '${c.length} cameras';
+}
+
 class Roll {
   const Roll({
     required this.id,
@@ -209,7 +246,16 @@ class Roll {
   final DateTime? finishedAt;
   final DateTime updatedAt;
 
+  /// The camera the roll is loaded in now: where the next frames go.
   String get bodyName => _bodyName(bodyId, bodyMake, bodyModel);
+  RollCamera get camera => RollCamera(bodyId, bodyMake, bodyModel);
+
+  /// A frame of this roll on its current camera.
+  Frame onCamera(Frame f) => f.copyWith(
+    bodyId: () => bodyId,
+    bodyMake: bodyMake,
+    bodyModel: bodyModel,
+  );
 
   FilmLatitude get latitude {
     final d = FilmLatitude.forType(filmType);
@@ -311,6 +357,9 @@ class Frame {
     required this.rollId,
     required this.position,
     required this.number,
+    this.bodyId,
+    this.bodyMake = '',
+    this.bodyModel = '',
     this.exposure = Exposure.blank,
     this.takenAt,
     this.utcOffsetMinutes,
@@ -324,6 +373,11 @@ class Frame {
   final String rollId;
   final int position;
   final int number;
+
+  /// The camera the frame was shot with; null is no camera.
+  final String? bodyId;
+  final String bodyMake;
+  final String bodyModel;
   final Exposure exposure;
   final DateTime? takenAt;
   final int? utcOffsetMinutes;
@@ -335,12 +389,17 @@ class Frame {
   final DateTime updatedAt;
 
   String get label => frameLabel(number);
+  String get bodyName => _bodyName(bodyId, bodyMake, bodyModel);
+  RollCamera get camera => RollCamera(bodyId, bodyMake, bodyModel);
 
   List<Object?> get _fields => [
     id,
     rollId,
     position,
     number,
+    bodyId,
+    bodyMake,
+    bodyModel,
     exposure,
     takenAt,
     utcOffsetMinutes,
@@ -355,6 +414,9 @@ class Frame {
     String? rollId,
     int? position,
     int? number,
+    String? Function()? bodyId,
+    String? bodyMake,
+    String? bodyModel,
     Exposure? exposure,
     DateTime? Function()? takenAt,
     int? Function()? utcOffsetMinutes,
@@ -367,6 +429,9 @@ class Frame {
     rollId: rollId ?? this.rollId,
     position: position ?? this.position,
     number: number ?? this.number,
+    bodyId: bodyId != null ? bodyId() : this.bodyId,
+    bodyMake: bodyMake ?? this.bodyMake,
+    bodyModel: bodyModel ?? this.bodyModel,
     exposure: exposure ?? this.exposure,
     takenAt: takenAt != null ? takenAt() : this.takenAt,
     utcOffsetMinutes: utcOffsetMinutes != null

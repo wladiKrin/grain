@@ -116,7 +116,9 @@ DateTime finishTimeFor(Roll r, List<Frame> frames) {
   return last ?? r.startedAt;
 }
 
-/// A roll as compared on import: ids, frames' roll ids, snapshot names and
+/// A roll as compared on import (frame cameras included; an older backup's
+/// frames take the roll's camera, as the v4 database did for frames here):
+/// ids, frames' roll ids, snapshot names and
 /// every updatedAt left out (ids and names change when a record is copied or
 /// a snapshot renamed; a snapshot is an attachment, not part of the log;
 /// updatedAt moves on a no-op save or a snapshot delete). [loose] also leaves
@@ -229,7 +231,10 @@ MergePlan planMerge({
   final rolls = <(Roll, List<Frame>)>[];
   for (final (r0, f0) in incoming.rolls) {
     final r = r0.copyWith(bodyId: () => body(r0.bodyId));
-    final frames = [for (final f in f0) f.copyWith(exposure: lens(f.exposure))];
+    final frames = [
+      for (final f in f0)
+        f.copyWith(bodyId: () => body(f.bodyId), exposure: lens(f.exposure)),
+    ];
     final local = rollsHere[r.id];
     final match = local == null
         ? null

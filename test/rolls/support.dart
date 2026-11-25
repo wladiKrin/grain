@@ -41,6 +41,9 @@ List<Frame> frames(List<int> numbers) => [
       rollId: 'r',
       position: i,
       number: numbers[i],
+      bodyId: 'b1',
+      bodyMake: 'Canon',
+      bodyModel: 'A-1',
       updatedAt: t0,
     ),
 ];

@@ -117,23 +117,48 @@ void main() {
     expect(gear.body, ae1);
   });
 
-  testWidgets('the roll can move to another body of the same format', (
+  testWidgets('the roll continues in another body of the same format from '
+      'the next frame', (t) async {
+    await pumpApp(t);
+    await t.tap(find.text('Log frame 1'));
+    await settle(t);
+    await t.tap(find.text('Log frame 2'));
+    await settle(t);
+    await pickBody(t, 'Canon AE-1');
+    expect(find.textContaining('Move roll'), findsNothing);
+    await t.tap(find.text('Continue roll 1 in the Canon AE-1 from frame 3'));
+    await settle(t);
+    expect(rolls.active!.bodyId, 'canon-ae1');
+    expect(rolls.active!.bodyName, 'Canon AE-1');
+    // Frames already shot stay in the A-1.
+    expect(
+      [for (final f in rolls.activeFrames) f.bodyId],
+      ['canon-a1', 'canon-a1'],
+    );
+    expect(find.text('Log frame 3'), findsOneWidget);
+    await t.tap(find.text('Log frame 3'));
+    await settle(t);
+    expect(rolls.activeFrames.last.bodyId, 'canon-ae1');
+    expect(rolls.camerasLabelOf(rolls.active!), 'Canon A-1 → Canon AE-1');
+  });
+
+  testWidgets('continuing an empty roll makes it a single-camera roll', (
     t,
   ) async {
     await pumpApp(t);
     await pickBody(t, 'Canon AE-1');
-    await t.tap(find.text('Move roll 1 to the Canon AE-1'));
+    await t.tap(find.text('Continue roll 1 in the Canon AE-1 from frame 1'));
     await settle(t);
-    expect(rolls.active!.bodyId, 'canon-ae1');
-    expect(rolls.active!.bodyName, 'Canon AE-1');
-    expect(find.text('Log frame 1'), findsOneWidget);
+    expect(rolls.camerasLabelOf(rolls.active!), 'Canon AE-1');
   });
 
-  testWidgets('no move to a body of another format', (t) async {
+  testWidgets('no continuing in a body of another format', (t) async {
     await pumpApp(t);
     await pickBody(t, 'Pentax 67');
     expect(find.text('Roll 1 is in the Canon A-1'), findsOneWidget);
-    expect(find.textContaining('Move roll'), findsNothing);
+    expect(find.textContaining('Continue roll'), findsNothing);
+    expect(find.text("Meter only (don't log)"), findsOneWidget);
+    expect(find.text(startAnother), findsOneWidget);
   });
 
   testWidgets('cycling the camera chip away from the roll asks too', (t) async {

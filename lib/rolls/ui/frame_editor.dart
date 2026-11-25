@@ -15,6 +15,9 @@ import '../../ui/stops_text.dart';
 const _noLens = '';
 const _keptLens = '\u0000kept';
 
+/// The frame's own camera when it is not among the bodies offered.
+const _keptBody = '\u0000kept';
+
 String _num(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v';
 
 double? _decimal(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
@@ -42,15 +45,19 @@ class FrameEditorScreen extends StatefulWidget {
     required this.rolls,
     required this.roll,
     required this.frame,
-    required this.lenses,
+    required this.bodies,
+    required this.lensesFor,
   });
 
   final RollController rolls;
   final Roll roll;
   final Frame frame;
 
-  /// Lenses for the roll body's mount.
-  final List<Lens> lenses;
+  /// Bodies that take the roll's film, for the Camera field.
+  final List<Body> bodies;
+
+  /// Lenses for a mount.
+  final List<Lens> Function(String mount) lensesFor;
 
   @override
   State<FrameEditorScreen> createState() => _FrameEditorScreenState();
@@ -66,6 +73,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
   late final TextEditingController _focal;
   late final TextEditingController _note;
   late String _lensKey;
+  late String _bodyKey;
   MeterMode? _mode;
   DateTime? _takenAt;
   late int _offset;
@@ -73,6 +81,14 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
   String? _saveError;
 
   Exposure get _e => widget.frame.exposure;
+
+  Body? get _body => widget.bodies.where((b) => b.id == _bodyKey).firstOrNull;
+
+  /// Lenses for the chosen camera's mount; none for a camera not offered.
+  List<Lens> get _lenses {
+    final b = _body;
+    return b == null ? const [] : widget.lensesFor(b.mount);
+  }
 
   @override
   void initState() {
@@ -90,7 +106,11 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
     _takenAt = _frame.takenAt;
     _offset =
         _frame.utcOffsetMinutes ?? DateTime.now().timeZoneOffset.inMinutes;
-    if (e.lensId != null && widget.lenses.any((l) => l.id == e.lensId)) {
+    final id = _frame.bodyId;
+    _bodyKey = id != null && widget.bodies.any((b) => b.id == id)
+        ? id
+        : _keptBody;
+    if (e.lensId != null && _lenses.any((l) => l.id == e.lensId)) {
       _lensKey = e.lensId!;
     } else if (e.lensId != null || e.lensName != null) {
       _lensKey = _keptLens;
@@ -214,7 +234,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
         lensName: () => null,
       );
     } else if (_lensKey != _keptLens) {
-      final l = widget.lenses.firstWhere((l) => l.id == _lensKey);
+      final l = _lenses.firstWhere((l) => l.id == _lensKey);
       e = e.copyWith(
         lensId: () => l.id,
         lensMake: () => l.make,
@@ -232,8 +252,17 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
     });
     try {
       final note = _note.text.trim();
+      final body = _body;
+      var f = _frame;
+      if (body != null) {
+        f = f.copyWith(
+          bodyId: () => body.id,
+          bodyMake: body.make,
+          bodyModel: body.model,
+        );
+      }
       await widget.rolls.updateFrame(
-        _frame.copyWith(
+        f.copyWith(
           exposure: _exposure(),
           takenAt: () => _takenAt,
           utcOffsetMinutes: () => _takenAt == null ? null : _offset,
@@ -247,6 +276,15 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// Another camera may take other lenses: a lens not in its mount is kept
+  /// only when it is the frame's own.
+  void _setBody(String k) => setState(() {
+    _bodyKey = k;
+    if (_lensKey == _noLens || _lensKey == _keptLens) return;
+    if (_lenses.any((l) => l.id == _lensKey)) return;
+    _lensKey = _lensKey == _e.lensId ? _keptLens : _noLens;
+  });
 
   Future<void> _removeLocation() async {
     await widget.rolls.deleteFrameLocation(widget.roll.id, _frame.id);
@@ -311,8 +349,12 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
     final loc = MaterialLocalizations.of(context);
     final lenses = <String, String>{
       _noLens: 'No lens',
-      for (final l in widget.lenses) l.id: _lensLabel(l),
+      for (final l in _lenses) l.id: _lensLabel(l),
       if (_lensKey == _keptLens) _keptLens: _e.lensName ?? 'Unknown lens',
+    };
+    final bodies = <String, String>{
+      for (final b in widget.bodies) b.id: b.displayName,
+      if (_bodyKey == _keptBody) _keptBody: _frame.bodyName,
     };
     final fix = _frame.location;
     final measured = _measured;
@@ -333,6 +375,12 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            EditorDropdown<String>(
+              label: 'Camera',
+              value: _bodyKey,
+              items: bodies,
+              onChanged: _setBody,
+            ),
             _field('Aperture', _aperture, _apertureError, number: true),
             _field('Shutter', _shutter, _shutterError),
             _field('ISO', _iso, _isoError, number: true, wholeNumber: true),
@@ -343,7 +391,7 @@ class _FrameEditorScreenState extends State<FrameEditorScreen> {
               onChanged: (k) => setState(() {
                 _lensKey = k;
                 if (k != _noLens && k != _keptLens) {
-                  final l = widget.lenses.firstWhere((l) => l.id == k);
+                  final l = _lenses.firstWhere((l) => l.id == k);
                   if (!l.isZoom) _focal.text = _num(l.focalMin);
                 }
               }),
