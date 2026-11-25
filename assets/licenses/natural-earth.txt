@@ -1,0 +1,13 @@
+Natural Earth: free vector and raster map data, naturalearthdata.com.
+
+Terms of use: all versions of Natural Earth raster and vector map data are
+in the public domain. You may use the maps in any manner, including
+modifying the content and design, electronic dissemination, and offset
+printing. The primary authors, Tom Patterson and Nathaniel Vaughn Kelso, and
+all other contributors renounce all financial claim to the maps and invite
+you to use them for personal, educational, and commercial purposes. No
+permission is needed to use Natural Earth. Crediting the authors is
+unnecessary.
+
+Grain bundles the 1:50m land, lakes and land boundary lines and the 1:10m
+populated places of Natural Earth 5.1.2, re-encoded (tool/basemap/).

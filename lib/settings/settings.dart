@@ -20,6 +20,7 @@ class Settings extends ChangeNotifier {
     required this._shakeWarning,
     required this._clickSound,
     required this._theme,
+    required this._onlineMap,
   }) : _calibrationThirds = thirds,
        _viewfinderOn = vf;
 
@@ -37,6 +38,7 @@ class Settings extends ChangeNotifier {
   static const _kShake = 'shakeWarning';
   static const _kClick = 'clickSound';
   static const _kTheme = 'themeChoice';
+  static const _kOnlineMap = 'onlineMap';
 
   /// Calibration range in thirds of a stop (±3 EV).
   static const maxThirds = 9;
@@ -58,6 +60,7 @@ class Settings extends ChangeNotifier {
       theme:
           ThemeChoice.values.asNameMap()[p.getString(_kTheme)] ??
           ThemeChoice.system,
+      onlineMap: p.getBool(_kOnlineMap) ?? false,
     );
   }
 
@@ -74,6 +77,7 @@ class Settings extends ChangeNotifier {
   bool _shakeWarning = false;
   bool _clickSound = false;
   ThemeChoice _theme = ThemeChoice.system;
+  bool _onlineMap = false;
 
   /// -9..9.
   int get calibrationThirds => _calibrationThirds;
@@ -105,6 +109,10 @@ class Settings extends ChangeNotifier {
 
   /// Light, dark, or follow the system.
   ThemeChoice get theme => _theme;
+
+  /// Draw OpenStreetMap tiles over the built-in basemap. The only thing in
+  /// Grain that goes online; this phone's choice, not in backups.
+  bool get onlineMap => _onlineMap;
 
   Future<void> setCalibrationThirds(int v) async {
     v = v.clamp(-maxThirds, maxThirds);
@@ -184,8 +192,16 @@ class Settings extends ChangeNotifier {
     await _prefs?.setString(_kTheme, v.name);
   }
 
+  Future<void> setOnlineMap(bool v) async {
+    if (v == _onlineMap) return;
+    _onlineMap = v;
+    notifyListeners();
+    await _prefs?.setBool(_kOnlineMap, v);
+  }
+
   /// The settings a backup carries. Calibration belongs to this phone's
-  /// sensor and location to its owner's choice: neither travels.
+  /// sensor, location and the online map to its owner's choice: none
+  /// travels.
   Map<String, Object?> backupMap() => {
     _kHaptics: _haptics,
     _kViewfinder: _viewfinderOn,

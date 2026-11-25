@@ -41,6 +41,8 @@ dependencies:
   qr_flutter: ^4.1.0
   uuid: ^4.6.0
   archive: ^4.7.1
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 dev_dependencies:
   flutter_test:
@@ -90,6 +92,7 @@ flutter:
 
   assets:
     - assets/licenses/
+    - assets/map/
     - library/bodies/canon/
     - library/bodies/leica/
     - library/bodies/minolta/

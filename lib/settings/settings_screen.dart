@@ -189,6 +189,13 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (v) => _setLocation(context, v),
             ),
             const _Divider(),
+            _SwitchRow(
+              label: 'Online map (OpenStreetMap)',
+              subtitle: 'Loads map tiles from openstreetmap.org. Off: the map uses only the outlines built into Grain and nothing goes online.',
+              value: settings.onlineMap,
+              onChanged: settings.setOnlineMap,
+            ),
+            const _Divider(),
             _ThemeRow(value: settings.theme, onChanged: settings.setTheme),
             const _Divider(),
             if (engineSwitch) ...[

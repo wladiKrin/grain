@@ -69,6 +69,8 @@ void main() {
     expect(find.byType(SettingsScreen), findsOneWidget);
     expect(SystemChrome.latestStyle, dark);
 
+    await tester.scrollUntilVisible(find.text('Light'), 200);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Light'));
     await tester.pumpAndSettle();
     expect(SystemChrome.latestStyle, grainOverlayStyle(Brightness.light));

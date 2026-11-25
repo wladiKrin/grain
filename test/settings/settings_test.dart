@@ -92,6 +92,23 @@ void main() {
     expect(s.backupMap().containsKey('phoneAe'), isFalse);
   });
 
+  test('the online map defaults off, persists, and stays out of backups and '
+      'off when a backup names it', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await Settings.load();
+    expect(s.onlineMap, isFalse);
+    expect(Settings.inMemory().onlineMap, isFalse);
+    await s.setOnlineMap(true);
+    final r = await Settings.load();
+    expect(r.onlineMap, isTrue);
+    expect(r.backupMap().containsKey('onlineMap'), isFalse);
+    await s.setOnlineMap(false);
+    final fresh = await Settings.load();
+    await fresh.applyBackupMap({'onlineMap': true});
+    expect(fresh.onlineMap, isFalse);
+    expect((await Settings.load()).onlineMap, isFalse);
+  });
+
   test(
     'the frame defaults sideways, persists and travels in the backup',
     () async {

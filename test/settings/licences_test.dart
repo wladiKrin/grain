@@ -40,5 +40,6 @@ void main() {
     expect(ours['Inter Tight'], contains('SIL OPEN FONT LICENSE Version 1.1'));
     expect(ours['SQLite'], contains('May you do good and not evil.'));
     expect(ours['Grain gear library'], contains('CC0 1.0 Universal'));
+    expect(ours['Natural Earth'], contains('in the public domain'));
   });
 }

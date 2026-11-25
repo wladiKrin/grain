@@ -160,6 +160,30 @@ void main() {
     expect(loc.calls, 0);
   });
 
+  testWidgets('the online map switch starts off and asks nothing', (
+    tester,
+  ) async {
+    final s = Settings.inMemory();
+    final loc = FakeLocation();
+    await tester.pumpWidget(_app(s, loc));
+    await _reveal(tester, find.text('Online map (OpenStreetMap)'));
+    expect(
+      find.textContaining('Off: the map uses only the outlines built into'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<Switch>(_switchOf('Online map (OpenStreetMap)')).value,
+      isFalse,
+    );
+    await tester.tap(find.text('Online map (OpenStreetMap)'));
+    await tester.pump();
+    expect(s.onlineMap, isTrue);
+    expect(loc.permissionRequests, 0);
+    await tester.tap(find.text('Online map (OpenStreetMap)'));
+    await tester.pump();
+    expect(s.onlineMap, isFalse);
+  });
+
   testWidgets('turning location off does not ask', (tester) async {
     final s = Settings.inMemory();
     await s.setLocation(true);
@@ -388,6 +412,7 @@ void main() {
       'Inter Tight',
       'SQLite',
       'Grain gear library',
+      'Natural Earth',
     ]);
   });
 }
