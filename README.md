@@ -7,16 +7,18 @@ cameras and lenses you actually own, and keeps a frame-by-frame log of every
 roll. Free software (GPLv3): no account, no ads, no tracking, no paywall, and
 no Google Play Services.
 
-<p align="center">
-  <img src="docs/screenshots/1-meter_dark.png" width="240" alt="The meter in dark mode, average metering with the histogram and the film's latitude: f/2.8 and a metered 1/250">
-  <img src="docs/screenshots/2-meter_light.png" width="240" alt="The meter in light mode: Pentax 67 with Roll 3 loaded, a spot on a backlit plant, f/2.8 and a metered 1/8">
-  <img src="docs/screenshots/3-roll.png" width="240" alt="A roll of Velvia 50 on the Pentax 67: five frames with thumbnails, settings, lens and time">
-</p>
-<p align="center">
-  <img src="docs/screenshots/4-map.png" width="240" alt="The map of logged frames around Lisbon, a frame's card open">
-  <img src="docs/screenshots/5-styles.png" width="240" alt="Map styles: Offline, Streets, Minimal, Muted, Standard and Topographic">
-  <img src="docs/screenshots/6-library.png" width="240" alt="The gear library with favourite cameras">
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/screenshots/1-meter_dark.png" width="240" alt="The meter in dark mode, average metering with the histogram and the film's latitude: f/2.8 and a metered 1/250"><br><sub>Average metering, dark mode</sub></td>
+    <td align="center"><img src="docs/screenshots/2-meter_light.png" width="240" alt="The meter in light mode: Pentax 67 with Roll 3 loaded, a spot on a backlit plant, f/2.8 and a metered 1/8"><br><sub>Spot metering, light mode</sub></td>
+    <td align="center"><img src="docs/screenshots/3-roll.png" width="240" alt="A roll of Velvia 50 on the Pentax 67: five frames with thumbnails, settings, lens and time"><br><sub>A roll and its frames</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/4-map.png" width="240" alt="The map of logged frames around Lisbon, a frame's card open"><br><sub>Map of logged frames</sub></td>
+    <td align="center"><img src="docs/screenshots/5-styles.png" width="240" alt="Map styles: Offline, Streets, Minimal, Muted, Standard and Topographic"><br><sub>Map styles, offline first</sub></td>
+    <td align="center"><img src="docs/screenshots/6-library.png" width="240" alt="The gear library with favourite cameras"><br><sub>Gear library</sub></td>
+  </tr>
+</table>
 
 <sub>Screenshots use demo data (`tool/demo/demo_backup_test.dart`).</sub>
 
