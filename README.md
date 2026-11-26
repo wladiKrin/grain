@@ -8,8 +8,8 @@ roll. Free software (GPLv3): no account, no ads, no tracking, no paywall, and
 no Google Play Services.
 
 <p align="center">
-  <img src="docs/screenshots/1-meter_light.png" width="240" alt="The meter in light mode: Pentax 67 with Roll 3 loaded, viewfinder with histogram, AVG | SPOT and EV, f/2.8 and a metered 1/4">
-  <img src="docs/screenshots/2-meter_dark.png" width="240" alt="The same meter in dark mode">
+  <img src="docs/screenshots/1-meter_light.png" width="240" alt="The meter in light mode: Pentax 67 with Roll 3 loaded, a spot on a backlit plant, f/2.8 and a metered 1/8">
+  <img src="docs/screenshots/2-meter_dark.png" width="240" alt="The meter in dark mode, with the histogram and the film's latitude">
   <img src="docs/screenshots/3-roll.png" width="240" alt="A roll of Velvia 50 on the Pentax 67: five frames with thumbnails, settings, lens and time">
 </p>
 <p align="center">
