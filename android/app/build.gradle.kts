@@ -1,3 +1,4 @@
+import com.android.build.api.variant.FilterConfiguration
 import java.util.Properties
 
 plugins {
@@ -38,10 +39,8 @@ android {
         applicationId = "io.github.wladikrin.grain"
         minSdk = 29
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
+        // The build number from pubspec.yaml; the APKs get grainVersionCode()
+        // (androidComponents below), not this value.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -81,6 +80,32 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+}
+
+// versionCode = build number * 1000 + ABI code, ABI last as F-Droid wants it:
+// build 5 gives 5001 (armeabi-v7a), 5002 (arm64-v8a) and 5004 (x86_64); an
+// APK without an ABI filter (no --split-per-abi) gets 5000. This replaces
+// Flutter's own split scheme (1000 * ABI + build): Flutter sets the per-ABI
+// versionCode in its onVariants callback, registered when the plugin is
+// applied in plugins {}, and this callback runs after it, so it wins. The
+// recipe's versionCodes and VercodeOperation must follow the same scheme
+// (test/release/version_code_test.dart, docs/release.md).
+val grainAbiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86_64" to 4)
+
+fun grainVersionCode(build: Int, abi: String?): Int {
+    require(build in 1..2_000_000) { "build number $build: versionCode would overflow" }
+    val abiCode = if (abi == null) 0 else requireNotNull(grainAbiCodes[abi]) { "no versionCode for ABI $abi" }
+    return build * 1000 + abiCode
+}
+
+androidComponents {
+    onVariants { variant ->
+        val build = flutter.versionCode
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == FilterConfiguration.FilterType.ABI }?.identifier
+            output.versionCode.set(grainVersionCode(build, abi))
         }
     }
 }
