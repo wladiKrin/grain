@@ -20,4 +20,17 @@ void main() {
     expect(gradle, contains('return build * 1000 + abiCode'));
     expect(gradle, contains('output.versionCode.set(grainVersionCode(build, abi))'));
   });
+
+  test('the release build is not obfuscated', () {
+    for (final f in ['README.md', 'docs/release.md']) {
+      final builds = File(f)
+          .readAsLinesSync()
+          .where((l) => l.contains('flutter build') || l.contains('build apk'));
+      expect(builds, isNotEmpty, reason: f);
+      for (final l in builds) {
+        expect(l, isNot(contains('--obfuscate')), reason: '$f: $l');
+        expect(l, isNot(contains('--split-debug-info')), reason: '$f: $l');
+      }
+    }
+  });
 }

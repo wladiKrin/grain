@@ -3,12 +3,13 @@
 ## Release command
 
 ```
-flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
+flutter build apk --release --split-per-abi
 ```
 
-The APKs land in `build/app/outputs/flutter-apk/`. Keep `build/symbols/` of
-every build you ship: `flutter symbolize` needs it to read that build's stack
-traces.
+The APKs land in `build/app/outputs/flutter-apk/`. The release is not
+obfuscated (no `--obfuscate`, no `--split-debug-info`): Grain is FLOSS, so
+obfuscation gains nothing, and F-Droid's reproducible build compares with a
+plain build.
 
 With `--split-per-abi` Flutter adds `1000 * abi` to the version code, so
 versionCode 1 becomes `1001` (armeabi-v7a), `2001` (arm64-v8a) and `4001`
@@ -86,12 +87,9 @@ cd android && GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease
 `build/app/outputs/apk/release/app-release-unsigned.apk`; F-Droid signs it with
 its own key.
 
-This plain Gradle build is not the same build as the published APKs: it passes
-none of `--split-per-abi`, `--obfuscate` and `--split-debug-info`, so it is one
-universal, unobfuscated APK. Do not compare it with the published split APKs.
-Compare like with like: two plain Gradle builds, or a Gradle build with the
-same options as the release command,
-`GRAIN_UNSIGNED=1 ./gradlew :app:assembleRelease -Psplit-per-abi=true -Pdart-obfuscation=true -Psplit-debug-info="$PWD/../build/symbols"` (an absolute path).
+This plain Gradle build is not the same build as the published APKs: it does
+not pass `--split-per-abi`, so it is one universal APK. Do not compare it with
+the published split APKs.
 
 ## Reproducible builds
 
@@ -99,7 +97,7 @@ same options as the release command,
 - `ndkVersion` comes from Flutter, so the NDK follows the Flutter version.
 - SQLite is vendored (`third_party/`) and compiled from source; the build
   needs no download for it.
-- Build with `--split-debug-info=build/symbols --obfuscate`.
+- No `--obfuscate` and no `--split-debug-info`.
 - Build from a clean checkout, in the same absolute path each time (paths can
   end up in native binaries).
 - To compare, do two clean builds (`flutter clean` between them, or two fresh

@@ -130,7 +130,7 @@ and a box to tick for each step; there is no automated device test.
 ## Release build
 
 ```
-flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
+flutter build apk --release --split-per-abi
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 

@@ -17,7 +17,7 @@ One ordered session for the first run on a real phone.
 
 ```
 adb devices            # the phone is listed as "device", not "unauthorized"
-flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
+flutter build apk --release --split-per-abi
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
@@ -80,7 +80,7 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 # on the phone: make the roll, frames, saved reading and own lens
 git checkout main
 flutter clean
-flutter build apk --release --split-per-abi --split-debug-info=build/symbols --obfuscate
+flutter build apk --release --split-per-abi
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
