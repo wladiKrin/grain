@@ -13,9 +13,19 @@ traces.
 With `--split-per-abi` Flutter adds `1000 * abi` to the version code, so
 versionCode 1 becomes `1001` (armeabi-v7a), `2001` (arm64-v8a) and `4001`
 (x86_64) in the three APKs. Bump `version:` in `pubspec.yaml` (and `appVersion`
-in `lib/version.dart`) for each release, and add
-`fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, where
-`<versionCode>` is the number after the `+` in `pubspec.yaml`.
+in `lib/version.dart`) for each release, and add the release's "What's new"
+text as `fastlane/metadata/android/en-US/changelogs/<code>.txt` for each of
+the three APK version codes, `1000 + N`, `2000 + N` and `4000 + N`, where `N`
+is the number after the `+` in `pubspec.yaml` (for `1.0.1+2`: `1002.txt`,
+`2002.txt` and `4002.txt`, the same text; at most 500 characters). F-Droid
+shows the file for the versionCode it built. `changelogs/1.txt` is the 1.0.0
+text from before this rule; F-Droid shows no changelog for 1.0.0.
+
+Phone screenshots for F-Droid are in
+`fastlane/metadata/android/en-US/images/phoneScreenshots/` (1080 px wide,
+status and navigation bars cropped, demo data only; see
+`tool/demo/demo_backup_test.dart`). F-Droid reads the store metadata from the
+tagged source, so changes show from the next release.
 
 ## Signing
 
@@ -253,4 +263,5 @@ For a new release: tag `vX.Y.Z` with a higher `version: X.Y.Z+N` in
 on its own and adds the three builds. F-Droid's `fdroid update` takes the "What's new"
 text from `changelogs/<versionCode>.txt` for a built versionCode (1001, 2001,
 4001; `CurrentVersionCode` is 4001) or from `changelogs/default.txt`, so
-the current `changelogs/1.txt` is not shown there.
+`changelogs/1.txt` is not shown there; from the next release on, add the
+three per-ABI files (see "Release command").
