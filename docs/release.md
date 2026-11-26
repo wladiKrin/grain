@@ -38,6 +38,10 @@ keyAlias=grain
 keyPassword=…
 ```
 
+Current keytool (JDK 9 and later) writes a PKCS12 keystore and asks for one
+password only: the key uses the keystore's password, so `keyPassword` is the
+same as `storePassword`.
+
 `android/key.properties` and `*.jks` / `*.keystore` are gitignored. Never
 commit them.
 
