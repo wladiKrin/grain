@@ -113,10 +113,8 @@ same options as the release command,
 - No anti-feature is expected: the online map styles use free services
   (OpenStreetMap, OpenFreeMap, OpenTopoMap), are off by default, and
   nothing is tracked.
-- `docs/fdroid/io.github.wladikrin.grain.yml` is a draft recipe for
-  fdroiddata: build it with fdroidserver first (it needs a `v1.0.0` tag,
-  JDK 21 on the build server, and the release built unsigned; adjust the
-  `output` path to the unsigned build if F-Droid signs it).
+- `docs/fdroid/io.github.wladikrin.grain.yml` is the fdroiddata recipe; it
+  passed `fdroid build` locally (see "Submitting to F-Droid" below).
 - The map is drawn by MapLibre Native for Android 13.7.1 (BSD-2, the
   `org.maplibre.gl:android-sdk-opengl` AAR from Maven Central, with a
   prebuilt `libmaplibre.so`) through the official `maplibre_gl` plugin
@@ -160,3 +158,99 @@ extracted trees is empty), including `lib/arm64-v8a/libapp.so`
 (sha256 `bed1fbe8...8df5`). The APK files themselves differ in their sha256
 (same size, 21,262,803 bytes); the cause was not investigated (zip container
 metadata or the signature are the likely places), and no entry differs. Compare unsigned APKs for a bit-exact check; that was not done here.
+
+## Submitting to F-Droid
+
+The recipe is `docs/fdroid/io.github.wladikrin.grain.yml`; the merge-request
+text is `docs/fdroid/merge-request.md`. F-Droid builds from the tag's full
+commit hash, signs with its own key (no `AllowedAPKSigningKeys`) and ships
+three APKs: armeabi-v7a (1001), arm64-v8a (2001), x86_64 (4001).
+
+What the recipe does, and why:
+
+- `flutter@3.50.1` srclib and JDK 21 from apt (`sudo`), as the build needs.
+- `flutter pub get --enforce-lockfile` into `.pub-cache` in the source tree,
+  so the scanner sees every Dart package.
+- maplibre_gl's Play Services code is deleted in `prebuild` (the
+  `com.google.android.gms` lines of its `android/build.gradle` and its
+  `android/src/gms`), as other fdroiddata Flutter recipes with maplibre_gl
+  do. `maplibre_gl.playServicesLocation=false` already keeps it out of the
+  build, but the scanner reads the files, not Gradle's conditions, and
+  would fail on them.
+- `scanignore: assets/map/basemap.bin`: the bundled offline map is binary
+  data (Natural Earth, public domain, made by `tool/basemap/`), which the
+  scanner would otherwise flag as an unknown binary.
+- `scandelete: .pub-cache`: lets the scanner remove the binaries it flags in
+  downloaded packages (gradle wrapper jars, test fixtures, devtools assets)
+  instead of failing, the usual fdroiddata Flutter setting.
+- `GRAIN_UNSIGNED=1` and `flutter build apk --release --split-per-abi
+  --target-platform=android-<abi>`, one build per ABI. Update checks use
+  tags `v*` and read `version:` from `pubspec.yaml`; `VercodeOperation`
+  maps the build number to the three versionCodes.
+
+### Local test
+
+The scripts in `docs/fdroid/local-test/` follow fdroiddata's `.gitlab-ci.yml`
+jobs (`fdroid build`, `check apk`, `fdroid lint`, `rewritemeta`,
+`checkupdates`). They pin fdroidserver and fdroid-bootstrap-buildserver to
+the commits that `.gitlab-ci.yml` pinned on 2026-11-26; take the current ones
+from it when re-running. Run from the Grain repository root:
+
+```
+W=/tmp/grain-fdroid          # any scratch directory
+mkdir -p $W/out
+git clone --depth 1 https://gitlab.com/fdroid/fdroiddata.git $W/fdroiddata
+cp docs/fdroid/io.github.wladikrin.grain.yml $W/fdroiddata/metadata/
+sed -i '/^#/d' $W/fdroiddata/metadata/io.github.wladikrin.grain.yml
+
+# fdroid lint, rewritemeta (must leave the file unchanged), checkupdates
+docker run --rm --name grain-fdroid-static \
+  -v $W/fdroiddata:/src:ro -v $PWD/docs/fdroid/local-test:/scripts:ro -v $W/out:/out \
+  debian:trixie-slim bash /scripts/static.sh
+
+# fdroid build for each versionCode, then fdroid scanner and APK checks
+docker run -d --name grain-fdroid-build \
+  -v $W/fdroiddata:/src:ro -v $PWD/docs/fdroid/local-test:/scripts:ro -v $W/out:/out \
+  registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie sleep infinity
+docker exec grain-fdroid-build bash /scripts/setup.sh
+docker exec grain-fdroid-build bash /scripts/build.sh \
+  io.github.wladikrin.grain:1001 io.github.wladikrin.grain:2001 io.github.wladikrin.grain:4001
+docker exec grain-fdroid-build bash /scripts/checkapk.sh
+docker cp grain-fdroid-build:/builds/fdroiddata/tmp $W/apks   # the unsigned APKs
+docker rm -f grain-fdroid-build
+```
+
+Each build prints `BUILD OK <appid>:<versionCode>`; `checkapk.sh` prints
+`scanner exit: 0`, the permissions and `gms classes in dex: 0` per APK. The
+APKs are unsigned, so `apksigner` reports "DOES NOT VERIFY"; that is
+expected. The buildserver image is about 2.4 GB; the build container grew
+to about 11 GB, and each ABI took 3 to 5 minutes after the first-time setup
+(Flutter SDK clone and Android SDK packages).
+
+Result on 2026-11-26 (commit `ea8f76cd`, tag `v1.0.0`): all three builds and
+the scanner passed; lint, rewritemeta and checkupdates had no findings. The
+only scanner warnings are the devtools Roboto fonts inside the `drift` and
+`shared_preferences` packages in `.pub-cache` (not part of the app). Each APK
+asks for `CAMERA`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`,
+`INTERNET` and AndroidX's `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, and has
+no `com/google/android/gms` classes.
+
+### Merge request
+
+1. Fork https://gitlab.com/fdroid/fdroiddata on GitLab; keep the fork public
+   and the branch unprotected.
+2. On a new branch, add `metadata/io.github.wladikrin.grain.yml` (the recipe
+   without its comment header), and nothing else. Commit as
+   "New app: Grain".
+3. Push the branch and open a merge request against `fdroid/fdroiddata`
+   `master`, titled "New app: Grain", with the "Default" template; paste
+   `docs/fdroid/merge-request.md` below its comment as the description.
+4. Wait for the pipeline; fix or explain anything it or the Reports tab
+   shows, then tick the Pipeline boxes. Answer reviewers in the MR.
+
+For a new release: tag `vX.Y.Z` with a higher `version: X.Y.Z+N` in
+`pubspec.yaml`; once the app is in, F-Droid's checkupdates picks up the tag
+on its own and adds the three builds. F-Droid's `fdroid update` takes the "What's new"
+text from `changelogs/<versionCode>.txt` for a built versionCode (1001, 2001,
+4001; `CurrentVersionCode` is 4001) or from `changelogs/default.txt`, so
+the current `changelogs/1.txt` is not shown there.
