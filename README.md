@@ -1,40 +1,79 @@
 # Grain
 
-Grain is a free, open-source lightmeter for film photographers on Android
-(iOS is not built yet). It meters with the phone camera, changes any value with
-one swipe, knows your actual cameras and lenses, and keeps a frame-by-frame log
-of each roll. There is no paywall, no ads and no tracking.
+**A light meter and roll log for film photographers, on Android.**
+
+Grain meters with the phone camera, changes any value with one swipe, knows the
+cameras and lenses you actually own, and keeps a frame-by-frame log of every
+roll. Free software (GPLv3): no account, no ads, no tracking, no paywall, and
+no Google Play Services.
+
+<p align="center">
+  <img src="docs/screenshots/1-meter_light.png" width="240" alt="The meter in light mode: Pentax 67 with Roll 3 loaded, viewfinder with histogram, AVG | SPOT and EV, f/2.8 and a metered 1/4">
+  <img src="docs/screenshots/2-meter_dark.png" width="240" alt="The same meter in dark mode">
+  <img src="docs/screenshots/3-roll.png" width="240" alt="A roll of Velvia 50 on the Pentax 67: five frames with thumbnails, settings, lens and time">
+</p>
+<p align="center">
+  <img src="docs/screenshots/4-map.png" width="240" alt="The map of logged frames around Lisbon, a frame's card open">
+  <img src="docs/screenshots/5-styles.png" width="240" alt="Map styles: Offline, Streets, Minimal, Muted, Standard and Topographic">
+  <img src="docs/screenshots/6-library.png" width="240" alt="The gear library with favourite cameras">
+</p>
+
+<sub>Screenshots use demo data (`tool/demo/demo_backup_test.dart`).</sub>
 
 ## Features
 
-- One-swipe dials: one value per detent, in your camera's steps (full, half or
-  third stops), with haptic feedback.
-- Average metering over what the lens sees (centre-weighted) and spot metering
-  (tap the preview).
-- Aperture priority, shutter priority and manual modes, plus a free mode with
-  no gear restrictions.
-- Viewfinder crop.
-- Histogram with film latitude markers.
-- Gear library (bundled community bodies and lenses, your own profiles,
-  favourites) and QR sharing of profiles.
-- Rolls and a frame log with a reference snapshot per frame.
-- CSV, JSON and zip export of rolls, and backup and restore.
-- A map of where frames and readings were logged (with Save location on),
-  drawn by MapLibre Native (vector rendering on the GPU): offline from
-  bundled Natural Earth outlines and place names, or in an online style.
-- Works offline: no ads, no tracking, no Google Play Services. The meter never
-  uses the network. The app holds the INTERNET permission only for the map's
-  optional online styles, and goes online only with one chosen (Settings >
-  Map, or the map's layers button); the default style is Offline, with which
-  MapLibre is told there is no network and every request is refused before
-  it leaves the phone. The styles load from one of tiles.openfreemap.org
-  (Streets, Minimal: OpenFreeMap's vector styles),
-  tile.openstreetmap.org (Standard, Muted) or opentopomap.org
-  (Topographic), and nothing else. No Mapbox SDK, no API key, no telemetry.
+### Metering
+- **One-swipe dials.** One value per detent, in your camera's own steps (full,
+  half or third stops), with haptic ticks, a stronger one on full stops; a
+  fast swipe keeps spinning and stops on a value.
+- **Average or spot.** Average over what your lens sees (centre-weighted), or
+  tap the preview for a spot; the AVG | SPOT switch shows which, with the EV
+  right beside it.
+- **Aperture priority, shutter priority, manual and free modes.** In manual,
+  a match-needle scale shows how far your settings are from the meter.
+- **Its own exposure loop.** Grain sets the camera's exposure itself instead of
+  trusting the phone's auto-exposure, so dim scenes read true, and it adapts
+  from a dark room to daylight in well under a second. Antibanding under
+  artificial light.
+- **Viewfinder with your lens's framing** on your camera's film format, sideways
+  or upright, switching to the ultra-wide or the phone's zoom as the lens needs.
+- **Histogram** of the frame with your film's latitude, and an optional
+  camera-shake warning.
 
-## Screenshots
+### Your gear
+- A bundled library of bodies and lenses, plus your own profiles and
+  favourites; the dials offer only what your camera and lens can set.
+- Camera and lens chips: tap to cycle favourites.
+- Share a profile as a QR code or a file.
 
-To be added after the first device session.
+### Rolls
+- Start a roll with its film, ISO and push or pull, then **Log frame** with one
+  tap (Undo for a moment after), or **Skip frame** for a shot taken without a
+  reading.
+- A small reference snapshot and, if you like, the location with each frame.
+- **A camera per frame:** continue a roll in another body of the same format
+  from any frame on.
+- Edit, insert and delete frames; export a roll as CSV, JSON (EXIF-ready) and a
+  zip of its snapshots; back up and restore everything.
+
+### Map
+- See where you logged frames and readings, drawn smoothly by MapLibre Native.
+- **Offline by default:** built-in Natural Earth outlines and place names, no
+  network at all.
+- Optional online styles: Streets and Minimal (OpenFreeMap vector maps), Muted,
+  Standard and Topographic (OpenStreetMap, OpenTopoMap).
+- The same points as a list, for TalkBack and for everyone.
+
+### Looks and privacy
+- A quiet, paper-like design in light or dark, following the system.
+- The meter never uses the network. The app holds the INTERNET permission only
+  for the map's optional online styles and goes online only with one chosen
+  (Settings > Map, or the map's layers button); with the default Offline style
+  MapLibre is told there is no network and every request is refused before it
+  leaves the phone. The online styles load from tiles.openfreemap.org
+  (Streets, Minimal), tile.openstreetmap.org (Standard, Muted) or
+  opentopomap.org (Topographic), and nothing else. No Mapbox SDK, no API key,
+  no telemetry.
 
 ## Build and run from source
 
@@ -148,4 +187,4 @@ notices under Settings > Licences.
 - SQLite: public domain (`assets/licenses/sqlite.txt`).
 - The gear library: CC0 1.0 (`assets/licenses/cc0-1.0.txt`).
 
-The source will be at <https://github.com/wladiKrin/grain>.
+The source is at <https://github.com/wladiKrin/grain>.
