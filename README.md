@@ -22,6 +22,20 @@ no Google Play Services.
 
 <sub>Screenshots use demo data (`tool/demo/demo_backup_test.dart`).</sub>
 
+## Install
+
+Download the APK from the **[latest release](https://github.com/wladiKrin/grain/releases/latest)**
+and open it on your phone (Android 10 or newer; allow your browser or file
+manager to install apps when asked).
+
+- `grain-<version>-arm64-v8a.apk` fits almost every phone from the last ten
+  years. `armeabi-v7a` is for older 32-bit phones, `x86_64` for emulators.
+- The APKs are signed with the release key whose certificate SHA-256 is
+  `352354f74e0d21a00e3c89721545c3f021f41d573e2a9a5394b2840ddc4410b0`
+  (check with `apksigner verify --print-certs`); the release also lists the
+  files' checksums.
+- F-Droid: submitted, coming once the review is done.
+
 ## Features
 
 ### Metering
