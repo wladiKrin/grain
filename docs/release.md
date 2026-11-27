@@ -9,24 +9,107 @@ flutter build apk --release --split-per-abi
 The APKs land in `build/app/outputs/flutter-apk/`. The release is not
 obfuscated (no `--obfuscate`, no `--split-debug-info`): Grain is FLOSS, so
 obfuscation gains nothing, and F-Droid's reproducible build compares with a
-plain build.
+plain build. This command is for your own phone; the APKs you publish come
+from `tool/release/build_release.sh` (see "Release flow").
 
-With `--split-per-abi` Flutter adds `1000 * abi` to the version code, so
-versionCode 1 becomes `1001` (armeabi-v7a), `2001` (arm64-v8a) and `4001`
-(x86_64) in the three APKs. Bump `version:` in `pubspec.yaml` (and `appVersion`
-in `lib/version.dart`) for each release, and add the release's "What's new"
-text as `fastlane/metadata/android/en-US/changelogs/<code>.txt` for each of
-the three APK version codes, `1000 + N`, `2000 + N` and `4000 + N`, where `N`
-is the number after the `+` in `pubspec.yaml` (for `1.0.1+2`: `1002.txt`,
-`2002.txt` and `4002.txt`, the same text; at most 500 characters). F-Droid
-shows the file for the versionCode it built. `changelogs/1.txt` is the 1.0.0
-text from before this rule; F-Droid shows no changelog for 1.0.0.
+### versionCode
+
+Each split APK gets `versionCode = N * 1000 + abi`, where `N` is the number
+after the `+` in `pubspec.yaml` and `abi` is 1 (armeabi-v7a), 2 (arm64-v8a)
+or 4 (x86_64): the ABI comes last, as F-Droid asks. `1.0.0+1` gives `1001`,
+`1002` and `1004`; `1.0.1+5` gives `5001`, `5002` and `5004`. A build without
+`--split-per-abi` (one universal APK) gets `N * 1000`. This replaces Flutter's
+own split scheme (`1000 * abi + N`, which gave v1.0.0 its `1001`, `2001`
+and `4001`): `android/app/build.gradle.kts` sets each output's versionCode in
+an `androidComponents.onVariants` callback, which runs after Flutter's and
+wins. `test/release/version_code_test.dart` checks that the Gradle file and
+the F-Droid recipe (versionCodes, `VercodeOperation`) agree.
+
+To check the APKs themselves:
+
+```
+for a in armeabi-v7a arm64-v8a x86_64; do
+  $ANDROID_HOME/build-tools/<version>/aapt2 dump badging build/app/outputs/flutter-apk/app-$a-release.apk | head -1
+done
+```
+
+For `1.0.0+1` this prints `versionCode='1001'`, `'1002'` and `'1004'`
+(checked 2026-11-27; with `--build-number=5`: `5001`, `5002`, `5004`, and
+`5000` for the universal APK).
+
+`N` must only grow. v1.0.0's APKs had up to `4001`, so the next release,
+1.0.1, uses `N = 5` (`version: 1.0.1+5`: `5001`, `5002`, `5004`, all above
+`4001`), and later releases count on from there.
+
+Bump `version:` in `pubspec.yaml` (and `appVersion` in `lib/version.dart`)
+for each release, and add the release's "What's new" text as
+`fastlane/metadata/android/en-US/changelogs/<code>.txt` for each of the three
+APK version codes, `N * 1000 + 1`, `+ 2` and `+ 4` (for `1.0.1+5`:
+`5001.txt`, `5002.txt` and `5004.txt`, the same text; at most 500
+characters). F-Droid shows the file for the versionCode it built.
+`changelogs/1.txt` is the 1.0.0 text from before this rule; F-Droid shows no
+changelog for 1.0.0.
 
 Phone screenshots for F-Droid are in
 `fastlane/metadata/android/en-US/images/phoneScreenshots/` (1080 px wide,
 status and navigation bars cropped, demo data only; see
 `tool/demo/demo_backup_test.dart`). F-Droid reads the store metadata from the
 tagged source, so changes show from the next release.
+
+## Release flow
+
+The published APKs are built in F-Droid's buildserver image, the same way
+F-Droid builds them, so that F-Droid can verify its own build against them
+and ship them with your signature (see "Reproducible builds").
+
+1. Set `version: X.Y.Z+N` in `pubspec.yaml` and `appVersion` in
+   `lib/version.dart`, and add the three changelog files. Commit, then tag:
+   `git tag vX.Y.Z`. The script takes the build commands from
+   `docs/fdroid/io.github.wladikrin.grain.yml` at the tag, so that file's
+   `srclibs`, `prebuild`, `build` and `output` must be the ones in
+   fdroiddata (its versionCodes and commit are not used).
+2. Build and sign (needs docker and `android/key.properties`):
+
+   ```
+   source ~/.grain-env.sh          # or any ANDROID_HOME with build-tools
+   tool/release/build_release.sh vX.Y.Z
+   ```
+
+   It builds every build entry of the recipe as it is at the tag, in
+   `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie`
+   (`tool/release/container_build.sh`): a clean checkout of the tag at
+   `/home/vagrant/build/io.github.wladikrin.grain`, Flutter cloned at its
+   tag to `/home/vagrant/build/srclib/flutter`, the recipe's own `prebuild`
+   and `build` commands as user `vagrant` with fdroid's environment
+   (`SOURCE_DATE_EPOCH` from the commit, `PUB_CACHE` in the source tree,
+   `GRADLE_USER_HOME=/home/vagrant/.gradle`, `LC_ALL=C.UTF-8`, ...). Then, on
+   the host, it checks that each unsigned APK is already zipaligned and signs
+   it with `apksigner` and the key from `android/key.properties` (the script
+   reads the file itself; passwords go to `apksigner` through environment
+   variables, not the command line). It prints each APK's certificate
+   SHA-256 and warns if it is not the recipe's `AllowedAPKSigningKeys`.
+   About 15 to 25 minutes; the container is removed afterwards.
+
+   Output in `build/release/vX.Y.Z/`: `grain-X.Y.Z-armeabi-v7a.apk`,
+   `grain-X.Y.Z-arm64-v8a.apk` and `grain-X.Y.Z-x86_64.apk` (signed), and
+   the unsigned ones in `unsigned/`. Options: a second argument onwards
+   limits the ABIs (`tool/release/build_release.sh vX.Y.Z arm64-v8a`);
+   `GRAIN_KEY_PROPERTIES=<file>` uses another properties file,
+   `GRAIN_NO_SIGN=1` only builds, `GRAIN_FDROID_IMAGE` picks another image.
+3. Push the tag and create the GitHub release `vX.Y.Z` with the three signed
+   APKs as assets, under exactly those names: the recipe's `binary` field is
+   `https://github.com/wladiKrin/grain/releases/download/v%v/grain-%v-<abi>.apk`.
+4. F-Droid's checkupdates adds the new builds on its own once the app is in;
+   until then, update the merge request's recipe (versionName, versionCode,
+   the tag's full commit hash, `CurrentVersion`, `CurrentVersionCode`).
+   F-Droid builds each APK, downloads the `binary`, copies its signature onto
+   its own build and verifies it (`fdroid build` fails if anything differs);
+   it then publishes your signed APK. Never re-sign or replace an uploaded
+   asset afterwards.
+
+The recipe's `AllowedAPKSigningKeys` is the SHA-256 of the release
+certificate (`apksigner verify --print-certs <apk>`, "Signer #1 certificate
+SHA-256 digest"): `352354f74e0d21a00e3c89721545c3f021f41d573e2a9a5394b2840ddc4410b0`.
 
 ## Signing
 
@@ -93,16 +176,45 @@ the published split APKs.
 
 ## Reproducible builds
 
-- Flutter is pinned to 3.50.1; build with exactly that version.
-- `ndkVersion` comes from Flutter, so the NDK follows the Flutter version.
-- SQLite is vendored (`third_party/`) and compiled from source; the build
-  needs no download for it.
+F-Droid publishes the APKs you sign, after checking that its own build of the
+same commit is byte-identical apart from the signature (`binary` and
+`AllowedAPKSigningKeys` in the recipe;
+https://f-droid.org/docs/Reproducible_Builds/). What makes that work:
+
+- `tool/release/build_release.sh` builds in F-Droid's buildserver image, at
+  F-Droid's source path (`/home/vagrant/build/io.github.wladikrin.grain`),
+  with Flutter at F-Droid's srclib path
+  (`/home/vagrant/build/srclib/flutter`), the same `PUB_CACHE`
+  (`.pub-cache` in the source tree) and the same commands and
+  environment. The source path ends up in the APK: the Dart snapshot
+  (`lib/<abi>/libapp.so`) contains
+  `file:///home/vagrant/build/io.github.wladikrin.grain/.dart_tool/flutter_build/dart_plugin_registrant.dart`,
+  so a build in any other directory differs. (The SQLite library compiled
+  through the `sqlite3` build hook and the other native libraries contain no
+  build paths.)
+- Flutter is pinned (the recipe's `flutter@3.50.1` srclib; the script
+  clones the same tag); the Flutter engine, the NDK (`ndkVersion` comes from
+  Flutter, installed by the Android Gradle plugin), the Gradle wrapper and
+  every Gradle and pub dependency are pinned by version (`pubspec.lock`,
+  `--enforce-lockfile`).
+- SQLite is vendored (`third_party/`) and compiled from source.
 - No `--obfuscate` and no `--split-debug-info`.
-- Build from a clean checkout, in the same absolute path each time (paths can
-  end up in native binaries).
-- To compare, do two clean builds (`flutter clean` between them, or two fresh
-  checkouts at the same path) and compare the APKs, for example with
-  `diffoscope`, or the unsigned APKs with `cmp`.
+- Each ABI is its own build from a clean checkout, as F-Droid builds it.
+- F-Droid copies the signature onto its own unsigned build, so the signed
+  APK must be exactly the unsigned one plus an APK Signing Block. The
+  unsigned APKs are already zipaligned (the script checks that zipalign
+  leaves them unchanged), and the script signs with
+  `apksigner sign --alignment-preserved true --v1-signing-enabled false
+  --v2-signing-enabled true --v3-signing-enabled true` and then checks
+  that only the signing block was added. `apksigner`'s defaults do not work
+  here: it re-aligns the stored entries (`--alignment-preserved false`) and
+  adds v1 files under `META-INF/`, and F-Droid's copy of that signature then
+  fails to verify (seen on 2026-11-27). minSdk 29 needs no v1 signature.
+
+To check a build yourself, compare the unsigned APKs, for example
+`cmp build/release/vX.Y.Z/unsigned/grain-X.Y.Z-arm64-v8a.apk <F-Droid's unsigned APK>`
+or `diffoscope` for the differences. "Submitting to F-Droid", "Local test",
+shows how to run F-Droid's own check.
 
 ## F-Droid notes
 
@@ -156,27 +268,27 @@ the published split APKs.
 - `tool/icon/icon.svg` is the source of the store icon:
   `rsvg-convert -w 512 -h 512 tool/icon/icon.svg -o fastlane/metadata/android/en-US/images/icon.png`.
 
-### Reproducibility spot check (2026-11-21)
-
-Two release builds of the same tree with the documented command, with
-`flutter clean` between them, in the same path. The arm64 APKs were compared
-after extraction: every entry was byte-identical (`diff -rq` of the two
-extracted trees is empty), including `lib/arm64-v8a/libapp.so`
-(sha256 `7d61b774...1a52`) and `lib/arm64-v8a/libsqlite3.so`
-(sha256 `bed1fbe8...8df5`). The APK files themselves differ in their sha256
-(same size, 21,262,803 bytes); the cause was not investigated (zip container
-metadata or the signature are the likely places), and no entry differs. Compare unsigned APKs for a bit-exact check; that was not done here.
-
 ## Submitting to F-Droid
 
 The recipe is `docs/fdroid/io.github.wladikrin.grain.yml`; the merge-request
 text is `docs/fdroid/merge-request.md`. F-Droid builds from the tag's full
-commit hash, signs with its own key (no `AllowedAPKSigningKeys`) and ships
-three APKs: armeabi-v7a (1001), arm64-v8a (2001), x86_64 (4001).
+commit hash, checks its build against the developer-signed APK at `binary`
+and ships that APK, signed with your key (`AllowedAPKSigningKeys`). Three
+APKs: armeabi-v7a (`N * 1000 + 1`), arm64-v8a (`+ 2`), x86_64 (`+ 4`).
+
+The recipe's build entries still name v1.0.0 (commit `ea8f76cd`), with the
+new versionCodes 1001, 1002 and 1004. v1.0.0 predates the versionCode scheme
+(its APKs are 1001, 2001 and 4001) and its GitHub APKs are obfuscated, so
+these entries do not build or verify as they stand. The first reproducible
+release is 1.0.1 with build number 5: once `v1.0.1` is tagged and its APKs
+are on GitHub (see "Release flow"), set the three entries to
+`versionName: 1.0.1`, versionCodes 5001, 5002 and 5004, and the tag's full
+commit hash, and `CurrentVersion: 1.0.1`, `CurrentVersionCode: 5004`.
 
 What the recipe does, and why:
 
-- `flutter@3.50.1` srclib and JDK 21 from apt (`sudo`), as the build needs.
+- `flutter@3.50.1` srclib. No `sudo`: the buildserver image already has
+  JDK 21, which the build needs.
 - `flutter pub get --enforce-lockfile` into `.pub-cache` in the source tree,
   so the scanner sees every Dart package.
 - maplibre_gl's Play Services code is deleted in `prebuild` (the
@@ -194,7 +306,13 @@ What the recipe does, and why:
 - `GRAIN_UNSIGNED=1` and `flutter build apk --release --split-per-abi
   --target-platform=android-<abi>`, one build per ABI. Update checks use
   tags `v*` and read `version:` from `pubspec.yaml`; `VercodeOperation`
-  maps the build number to the three versionCodes.
+  (`%c * 1000 + 1`, `+ 2`, `+ 4`) maps the build number to the three
+  versionCodes.
+- `binary`: the signed GitHub release asset of that ABI,
+  `https://github.com/wladiKrin/grain/releases/download/v%v/grain-%v-<abi>.apk`
+  (`%v` is the versionName). `AllowedAPKSigningKeys`: the SHA-256 of the
+  release certificate. `fdroid rewritemeta` wraps the armeabi-v7a `binary`
+  line, which is too long for one line; keep it that way.
 
 ### Local test
 
@@ -222,7 +340,7 @@ docker run -d --name grain-fdroid-build \
   registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie sleep infinity
 docker exec grain-fdroid-build bash /scripts/setup.sh
 docker exec grain-fdroid-build bash /scripts/build.sh \
-  io.github.wladikrin.grain:1001 io.github.wladikrin.grain:2001 io.github.wladikrin.grain:4001
+  io.github.wladikrin.grain:<code> ...          # the recipe's three versionCodes
 docker exec grain-fdroid-build bash /scripts/checkapk.sh
 docker cp grain-fdroid-build:/builds/fdroiddata/tmp $W/apks   # the unsigned APKs
 docker rm -f grain-fdroid-build
@@ -243,6 +361,77 @@ asks for `CAMERA`, `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`,
 `INTERNET` and AndroidX's `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, and has
 no `com/google/android/gms` classes.
 
+### Reproducibility check (before tagging)
+
+`fdroid build` with `binary` does what F-Droid's server will do: it builds,
+downloads the reference APK, copies its signature onto its own build and
+verifies it, and fails with a diffoscope report if anything differs. To run
+it on a commit before tagging, use a test recipe for the local repository,
+the APKs from `tool/release/build_release.sh` signed with a throwaway key,
+and a local HTTPS server (fdroid downloads `binary` over https only;
+`serve.sh`). From the Grain repository root, after committing:
+
+```
+W=/tmp/grain-fdroid; K=$W/key; mkdir -p $W/out $K
+keytool -genkeypair -keystore $K/test.jks -storetype PKCS12 -storepass testpass \
+  -keypass testpass -alias test -keyalg RSA -keysize 2048 -validity 1000 -dname CN=test
+printf 'storeFile=%s\nstorePassword=testpass\nkeyAlias=test\nkeyPassword=testpass\n' \
+  $K/test.jks > $K/test.properties
+GRAIN_KEY_PROPERTIES=$K/test.properties GRAIN_RELEASE_OUT=$W/release \
+  tool/release/build_release.sh                 # (a) prints the test certificate's SHA-256
+TESTCERT=<that SHA-256>
+
+git clone --depth 1 https://gitlab.com/fdroid/fdroiddata.git $W/fdroiddata
+sed -e '/^#/d' -e 's|^Repo: .*|Repo: /grain-repo|' -e "s|commit: .*|commit: $(git rev-parse HEAD)|" \
+  -e 's|https://github.com/wladiKrin/grain/releases/download/v%v/|https://localhost:8443/|' \
+  -e "s|^AllowedAPKSigningKeys: .*|AllowedAPKSigningKeys: $TESTCERT|" \
+  docs/fdroid/io.github.wladikrin.grain.yml > $W/fdroiddata/metadata/io.github.wladikrin.grain.yml
+# set the three versionCodes to the ones for pubspec.yaml's build number, if they differ
+
+docker run -d --name grain-fdroid-build -v $W/fdroiddata:/src:ro \
+  -v $PWD/docs/fdroid/local-test:/scripts:ro -v $W/out:/out \
+  -v $PWD:/grain-repo:ro -v $W/release:/serve/apks:ro \
+  registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie sleep infinity
+docker exec grain-fdroid-build bash /scripts/setup.sh
+docker exec -d grain-fdroid-build bash /scripts/serve.sh
+docker exec -e REQUESTS_CA_BUNDLE=/tmp/serve/cert.pem grain-fdroid-build bash /scripts/build.sh \
+  io.github.wladikrin.grain:1001 io.github.wladikrin.grain:1002 io.github.wladikrin.grain:1004   # (b)
+docker cp grain-fdroid-build:/builds/fdroiddata/tmp $W/fdroid-apks
+for a in 1001:armeabi-v7a 1002:arm64-v8a 1004:x86_64; do                                       # (c)
+  cmp $W/fdroid-apks/io.github.wladikrin.grain_${a%:*}.apk $W/release/unsigned/grain-*-${a#*:}.apk \
+    && echo "${a#*:} identical"
+done
+docker rm -f grain-fdroid-build
+```
+
+Each build must log "compared built binary to supplied reference binary
+successfully" and "supplied reference binary has allowed signer", then
+`BUILD OK`.
+
+Result on 2026-11-27, commit `4e19f2a` (version 1.0.0+1 in `pubspec.yaml`,
+so versionCodes 1001, 1002 and 1004), image
+`registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie` (digest
+`sha256:1ea8bef1...0dac`), fdroidserver `fa7b54e` (CI pins `a35fdfdd`
+and pulls forward):
+
+- (a) `build_release.sh` built the three APKs twice, in two fresh
+  containers, with identical results (unsigned SHA-256: armeabi-v7a
+  `018f7d66...e1a8`, arm64-v8a `a5e410b1...5fb4`, x86_64 `361dd975...9ae8`).
+- (b) `fdroid build` of 1001, 1002 and 1004 with the throwaway-signed
+  `binary`: each logged "compared built binary to supplied reference binary
+  successfully" and "supplied reference binary has allowed signer", then
+  `BUILD OK`. F-Droid's unsigned APKs had the same SHA-256 as in (a).
+- (c) `cmp`: F-Droid's unsigned APKs and the script's are byte-identical,
+  all three ABIs. `aapt2 dump badging` on F-Droid's APKs shows
+  versionCode 1001, 1002 and 1004.
+
+The first attempt failed only at the signature copy: the unsigned APKs were
+already identical, but `apksigner`'s defaults had re-aligned the signed APK
+and added v1 files (see "Reproducible builds"). Nothing in Grain's build had
+to change for byte-identical output: building at F-Droid's paths with the
+recipe's own commands was enough; no `-ffile-prefix-map`, timestamp or build
+ID changes were needed.
+
 ### Merge request
 
 1. Fork https://gitlab.com/fdroid/fdroiddata on GitLab; keep the fork public
@@ -256,10 +445,13 @@ no `com/google/android/gms` classes.
 4. Wait for the pipeline; fix or explain anything it or the Reports tab
    shows, then tick the Pipeline boxes. Answer reviewers in the MR.
 
-For a new release: tag `vX.Y.Z` with a higher `version: X.Y.Z+N` in
-`pubspec.yaml`; once the app is in, F-Droid's checkupdates picks up the tag
-on its own and adds the three builds. F-Droid's `fdroid update` takes the "What's new"
-text from `changelogs/<versionCode>.txt` for a built versionCode (1001, 2001,
-4001; `CurrentVersionCode` is 4001) or from `changelogs/default.txt`, so
-`changelogs/1.txt` is not shown there; from the next release on, add the
-three per-ABI files (see "Release command").
+For a new release, follow "Release flow": tag `vX.Y.Z` with a higher
+`version: X.Y.Z+N` in `pubspec.yaml`, build and sign with
+`tool/release/build_release.sh`, and upload the three APKs to the GitHub
+release before F-Droid builds it; once the app is in, F-Droid's
+checkupdates picks up the tag on its own and adds the three builds. F-Droid's
+`fdroid update` takes the "What's new" text from
+`changelogs/<versionCode>.txt` for a built versionCode (`N * 1000 + 1`,
+`+ 2`, `+ 4`) or from `changelogs/default.txt`, so `changelogs/1.txt` is
+not shown there; from the next release on, add the three per-ABI files (see
+"versionCode").

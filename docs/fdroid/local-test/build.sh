@@ -13,6 +13,7 @@ for build in "$@"; do
   apt-get install -qy sudo
   apt-get install -qy openjdk-21-jdk-headless
   update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
+  rm -rf $home_vagrant/build   # a failed or KEEP run leaves it; CI starts without it
   cp -R $CI_PROJECT_DIR/build $home_vagrant/build
   appid=${build%:*}
   [ -d metadata/$appid ] && cp -R metadata/$appid $home_vagrant/metadata

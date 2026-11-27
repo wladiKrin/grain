@@ -135,7 +135,9 @@ adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
 Without `android/key.properties` this is debug-signed, which is fine for your
-own phone. Signing, the unsigned F-Droid build and reproducibility notes are in
+own phone. The published APKs are built in F-Droid's build environment and
+signed by `tool/release/build_release.sh`, so that F-Droid can reproduce them;
+the release flow, signing, versionCodes and reproducibility notes are in
 [docs/release.md](docs/release.md).
 
 ## Contributing gear

@@ -92,29 +92,41 @@ meters on F-Droid, Grain:
 * [x] External repos are added as git submodules instead of srclibs. You can update git submodules without opening an MR in this repo and the submodule is covered by our scanner.
   No external repos apart from the Flutter SDK, which uses the standard
   `flutter` srclib pinned to the version the app is built with (3.50.1).
-* [ ] Enable [Reproducible Builds](https://f-droid.org/docs/Reproducible_Builds). We'll use your signature for improved security/reliability, also allowing users to switch between different channels. Do note that if you don't enable reproducible build then the apk will be signed with our key so you can't enable it later. If you can't enable this, please add the reasons here.
-  Not for now, deliberately: please sign with the F-Droid key. The GitHub
-  release APKs are built with `--obfuscate --split-debug-info`, which this
-  recipe does not use, and bit-exact reproducibility against F-Droid's
-  build environment has not been verified.
+* [x] Enable [Reproducible Builds](https://f-droid.org/docs/Reproducible_Builds). We'll use your signature for improved security/reliability, also allowing users to switch between different channels. Do note that if you don't enable reproducible build then the apk will be signed with our key so you can't enable it later. If you can't enable this, please add the reasons here.
+  Enabled: each build has `binary:` (the GitHub release asset
+  `grain-%v-<abi>.apk`) and the app has `AllowedAPKSigningKeys`. The
+  release APKs are no longer obfuscated, and are built in
+  `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie` with the
+  recipe's own commands at F-Droid's paths (`tool/release/build_release.sh`
+  in the repo), then signed. Checked locally on 2026-11-27: `fdroid build`
+  with a throwaway-signed `binary` reported all three builds as matching
+  the reference binary (its signature copied onto F-Droid's build verifies),
+  and the unsigned APKs are byte-identical (`cmp`). The first release built
+  this way is 1.0.1 (versionCodes 5001, 5002, 5004); the build entries will
+  move to it once it is tagged and its APKs are on GitHub.
 * [x] Setup abi split if the APK is large and the splitted ones can be much smaller.
-  Three builds with `--split-per-abi`: armeabi-v7a (1001), arm64-v8a (2001),
-  x86_64 (4001), the same versionCodes as the upstream release APKs
-  (Flutter's `1000 * abi + build number`), mapped by `VercodeOperation`.
+  Three builds with `--split-per-abi`, versionCode = build number * 1000 +
+  ABI (armeabi-v7a 1, arm64-v8a 2, x86_64 4), set in
+  `android/app/build.gradle.kts`, mapped by `VercodeOperation`
+  (`%c * 1000 + 1`, `+ 2`, `+ 4`).
 * [x] Only the latest versions should be kept in the metadata before it's merged. If you update the metadata, please replace the old versions with the new ones.
 * [x] Don't add any disabled versions in the metadata.
 * [x] The `commit` field should be the full hash. Please don't use tag or branch in commit.
-  `ea8f76cd31b6df46e12abed89db74ca632597e86` (tag `v1.0.0`).
+  Full hashes. They still point at `v1.0.0` until 1.0.1 is tagged (see
+  above).
 
 ### Pipeline
 
 * [ ] All pipelines should pass.
   (Tick once the MR pipeline is green.) Locally, in
   `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie` following this
-  repo's `fdroid build` CI job, on 2026-11-26: `fdroid build` passed for
-  1001, 2001 and 4001, `fdroid scanner` passed on the three APKs, and
-  `fdroid lint`, `fdroid rewritemeta` (no changes) and
-  `fdroid checkupdates --allow-dirty` (up to date) had no findings.
+  repo's `fdroid build` CI job: on 2026-11-26 `fdroid build` passed for
+  v1.0.0 (then 1001, 2001 and 4001), `fdroid scanner` passed on the three
+  APKs, and `fdroid lint`, `fdroid rewritemeta` (no changes) and
+  `fdroid checkupdates --allow-dirty` (up to date) had no findings; on
+  2026-11-27 `fdroid build` of the current source with `binary` and
+  `AllowedAPKSigningKeys` passed the reproducibility check for 1001, 1002
+  and 1004, and `fdroid lint` and `rewritemeta` passed on this recipe.
   `scanignore: assets/map/basemap.bin` is the bundled offline map, binary
   data made from public-domain Natural Earth by `tool/basemap/` in the repo.
   The remaining scanner warnings are devtools Roboto fonts inside the
