@@ -1,12 +1,25 @@
 # fdroiddata metadata for Grain. In a fork of
 # https://gitlab.com/fdroid/fdroiddata, save it as
 # metadata/io.github.wladikrin.grain.yml without this comment header.
-# Passed locally on 2026-11-26 in
-# registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie, following
-# fdroiddata's CI jobs: `fdroid build` for 1001, 2001 and 4001, `fdroid scanner`
-# on the three APKs, `fdroid lint`, `fdroid rewritemeta` (no changes) and
-# `fdroid checkupdates --allow-dirty` (up to date). See docs/release.md,
-# "Submitting to F-Droid".
+#
+# Reproducible build: F-Droid builds each APK, checks that it matches the
+# developer-signed APK at `binary` (apksigcopier copies the signature onto
+# its own build, which must then verify) and ships the developer-signed APK.
+# tool/release/build_release.sh builds the release APKs the same way, in
+# F-Droid's buildserver image, and reads the srclibs, prebuild, build and
+# output fields from this file; keep them as they are in fdroiddata. See
+# docs/release.md, "Release flow" and "Submitting to F-Droid".
+#
+# versionCode = build number * 1000 + ABI (armeabi-v7a 1, arm64-v8a 2,
+# x86_64 4), set by android/app/build.gradle.kts.
+#
+# The commit below is still v1.0.0, built before the versionCode scheme and
+# without reproducible-build support: v1.0.0's APKs are 1001, 2001 and 4001
+# and its GitHub APKs are obfuscated, so `fdroid build` of these entries fails
+# until they move to the first reproducible release, 1.0.1 (build number 5,
+# versionCodes 5001, 5002 and 5004, above the old 4001). Before updating the
+# merge request: replace versionName, versionCode and commit in all three
+# builds, and CurrentVersion / CurrentVersionCode.
 Categories:
   - Multimedia
 License: GPL-3.0-only
@@ -23,11 +36,9 @@ Builds:
   - versionName: 1.0.0
     versionCode: 1001
     commit: ea8f76cd31b6df46e12abed89db74ca632597e86
-    sudo:
-      - apt-get update
-      - apt-get install -y openjdk-21-jdk-headless
-      - update-alternatives --auto java
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+    binary: 
+      https://github.com/wladiKrin/grain/releases/download/v%v/grain-%v-armeabi-v7a.apk
     srclibs:
       - flutter@3.50.1
     prebuild:
@@ -46,13 +57,10 @@ Builds:
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm
 
   - versionName: 1.0.0
-    versionCode: 2001
+    versionCode: 1002
     commit: ea8f76cd31b6df46e12abed89db74ca632597e86
-    sudo:
-      - apt-get update
-      - apt-get install -y openjdk-21-jdk-headless
-      - update-alternatives --auto java
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+    binary: https://github.com/wladiKrin/grain/releases/download/v%v/grain-%v-arm64-v8a.apk
     srclibs:
       - flutter@3.50.1
     prebuild:
@@ -71,13 +79,10 @@ Builds:
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-arm64
 
   - versionName: 1.0.0
-    versionCode: 4001
+    versionCode: 1004
     commit: ea8f76cd31b6df46e12abed89db74ca632597e86
-    sudo:
-      - apt-get update
-      - apt-get install -y openjdk-21-jdk-headless
-      - update-alternatives --auto java
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
+    binary: https://github.com/wladiKrin/grain/releases/download/v%v/grain-%v-x86_64.apk
     srclibs:
       - flutter@3.50.1
     prebuild:
@@ -95,12 +100,14 @@ Builds:
       - export GRAIN_UNSIGNED=1
       - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform=android-x64
 
+AllowedAPKSigningKeys: 352354f74e0d21a00e3c89721545c3f021f41d573e2a9a5394b2840ddc4410b0
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v.*$
 VercodeOperation:
-  - 1000 + %c
-  - 2000 + %c
-  - 4000 + %c
+  - '%c * 1000 + 1'
+  - '%c * 1000 + 2'
+  - '%c * 1000 + 4'
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 CurrentVersion: 1.0.0
-CurrentVersionCode: 4001
+CurrentVersionCode: 1004
